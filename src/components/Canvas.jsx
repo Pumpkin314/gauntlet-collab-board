@@ -1,11 +1,47 @@
 import { useState, useRef } from 'react';
-import { Stage, Layer, Rect, Circle, Text } from 'react-konva';
+import { Stage, Layer, Rect, Text, Group } from 'react-konva';
+import { useBoard } from '../contexts/BoardContext';
 
 /**
- * Basic Konva Canvas Component
- * Demonstrates pan/zoom and basic shape rendering
+ * StickyNote Component
+ * Renders a single sticky note from Firestore data
+ */
+function StickyNote({ data }) {
+  return (
+    <Group x={data.x} y={data.y}>
+      <Rect
+        width={data.width}
+        height={data.height}
+        fill={data.color}
+        stroke="#333"
+        strokeWidth={2}
+        cornerRadius={8}
+        shadowBlur={10}
+        shadowColor="rgba(0,0,0,0.2)"
+        shadowOffset={{ x: 2, y: 2 }}
+      />
+      <Text
+        x={10}
+        y={10}
+        width={data.width - 20}
+        height={data.height - 20}
+        text={data.content}
+        fontSize={16}
+        fill="#333"
+        align="left"
+        verticalAlign="top"
+        wrap="word"
+      />
+    </Group>
+  );
+}
+
+/**
+ * Canvas Component with Sticky Notes
+ * Double-click to create sticky notes that sync via Firestore
  */
 export default function Canvas() {
+  const { objects, createStickyNote, loading } = useBoard();
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
   const stageRef = useRef(null);
@@ -48,6 +84,24 @@ export default function Canvas() {
     });
   };
 
+  // Handle double-click to create sticky note
+  const handleDblClick = (e) => {
+    // Only create on background double-click (not on existing objects)
+    if (e.target === e.target.getStage()) {
+      const stage = stageRef.current;
+      const pointerPosition = stage.getPointerPosition();
+
+      // Convert screen coordinates to canvas coordinates (accounting for pan/zoom)
+      const x = (pointerPosition.x - stagePos.x) / stageScale;
+      const y = (pointerPosition.y - stagePos.y) / stageScale;
+
+      createStickyNote(x, y);
+    }
+  };
+
+  // Filter sticky notes from objects
+  const stickyNotes = objects.filter(obj => obj.type === 'sticky');
+
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
       <Stage
@@ -57,66 +111,25 @@ export default function Canvas() {
         draggable
         onWheel={handleWheel}
         onDragEnd={handleDragEnd}
+        onDblClick={handleDblClick}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
         scaleY={stageScale}
       >
         <Layer>
-          {/* Demo shapes - will be replaced with Firestore-synced objects */}
-          <Rect
-            x={100}
-            y={100}
-            width={150}
-            height={100}
-            fill="#FFE66D"
-            stroke="#333"
-            strokeWidth={2}
-            cornerRadius={8}
-            shadowBlur={10}
-            shadowColor="rgba(0,0,0,0.2)"
-            shadowOffset={{ x: 2, y: 2 }}
-          />
-          <Text
-            x={110}
-            y={120}
-            text="Sticky Note"
-            fontSize={16}
-            fill="#333"
-          />
-
-          <Circle
-            x={400}
-            y={200}
-            radius={50}
-            fill="#4ECDC4"
-            stroke="#333"
-            strokeWidth={2}
-            shadowBlur={10}
-            shadowColor="rgba(0,0,0,0.2)"
-            shadowOffset={{ x: 2, y: 2 }}
-          />
-
-          {/* Grid dots for reference */}
-          {Array.from({ length: 20 }).map((_, i) =>
-            Array.from({ length: 20 }).map((_, j) => (
-              <Circle
-                key={`dot-${i}-${j}`}
-                x={i * 100}
-                y={j * 100}
-                radius={2}
-                fill="#ccc"
-              />
-            ))
-          )}
+          {/* Render all sticky notes from Firestore */}
+          {stickyNotes.map((note) => (
+            <StickyNote key={note.id} data={note} />
+          ))}
         </Layer>
       </Stage>
 
       {/* Canvas info overlay */}
       <div style={{
         position: 'absolute',
-        top: 10,
-        left: 10,
+        bottom: 20,
+        left: 20,
         background: 'rgba(0,0,0,0.7)',
         color: 'white',
         padding: '10px 15px',
@@ -126,10 +139,13 @@ export default function Canvas() {
       }}>
         <div>Zoom: {(stageScale * 100).toFixed(0)}%</div>
         <div>Pan: ({Math.round(stagePos.x)}, {Math.round(stagePos.y)})</div>
+        <div>Sticky Notes: {stickyNotes.length}</div>
         <div style={{ marginTop: 8, opacity: 0.7 }}>
           • Drag to pan<br/>
-          • Scroll to zoom
+          • Scroll to zoom<br/>
+          • Double-click to create sticky
         </div>
+        {loading && <div style={{ marginTop: 8, color: '#4ECDC4' }}>Loading...</div>}
       </div>
     </div>
   );
