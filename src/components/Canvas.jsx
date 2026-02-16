@@ -40,6 +40,14 @@ export default function Canvas() {
     setStagePos(newPos);
   };
 
+  // Handle stage drag (pan)
+  const handleDragEnd = (e) => {
+    setStagePos({
+      x: e.target.x(),
+      y: e.target.y(),
+    });
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
       <Stage
@@ -48,6 +56,7 @@ export default function Canvas() {
         height={window.innerHeight}
         draggable
         onWheel={handleWheel}
+        onDragEnd={handleDragEnd}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
