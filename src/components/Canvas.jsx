@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Stage, Layer, Transformer } from 'react-konva';
 import { useBoard } from '../contexts/BoardContext';
+import { useSelection } from '../contexts/SelectionContext';
 import Cursor from './Cursor';
 import ObjectRenderer from './Canvas/ObjectRenderer';
 import Toolbar from './Canvas/Toolbar';
@@ -13,7 +14,7 @@ import CircleShape from './shapes/CircleShape';
 import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
 
-// ── Register all shape types (once at module load) ────────────────────────────
+// ── Register all shape types ───────────────────────────────────────────────────
 registerShape('sticky', {
   component: StickyNote,
   defaults:  { width: 200, height: 200, color: '#FFE66D', content: 'Double-click to edit' },
@@ -40,32 +41,27 @@ registerShape('line', {
   minWidth: 0, minHeight: 0,
 });
 
-/**
- * Canvas
- * Hosts the Konva Stage. Delegates shape rendering to ObjectRenderer.
- * Cursor tool = pan mode. Creation tools = double-click to place.
- * Space held = temporary pan in any tool mode.
- */
 export default function Canvas() {
   const {
     objects, presence, createObject, updateObject,
-    deleteObject, deleteAllObjects, updateCursorPosition, loading,
+    deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchDelete, loading,
   } = useBoard();
+
+  const { selectedIds, select, toggleSelect, deselectAll, selectAll, isSelected } = useSelection();
 
   const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
   const [stageScale,      setStageScale]      = useState(1);
   const [activeTool,      setActiveTool]      = useState('cursor');
-  const [selectedId,      setSelectedId]      = useState(null);
   const [colorPickerNote, setColorPickerNote] = useState(null);
   const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
   const [spaceHeld,       setSpaceHeld]       = useState(false);
-
-  // Inline editing state
-  const [inlineEdit, setInlineEdit] = useState(null); // { id, content, x, y, w, h, scale, rotation, color }
+  const [inlineEdit,      setInlineEdit]      = useState(null);
 
   const stageRef       = useRef(null);
   const transformerRef = useRef(null);
   const layerRef       = useRef(null);
+  // Clipboard for copy/paste
+  const clipboardRef   = useRef([]);
 
   // ── Space-key pan override ────────────────────────────────────────────────
   useEffect(() => {
@@ -86,7 +82,88 @@ export default function Canvas() {
     };
   }, []);
 
-  // Stage is draggable in cursor mode or while Space is held
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      // Ignore when typing in a text input
+      if (e.target.closest('input, textarea')) return;
+
+      const selected = [...selectedIds];
+
+      // Delete / Backspace → delete selected
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
+        e.preventDefault();
+        batchDelete(selected);
+        deselectAll();
+        return;
+      }
+
+      // Escape → deselect all
+      if (e.key === 'Escape') {
+        deselectAll();
+        setInlineEdit(null);
+        return;
+      }
+
+      // Ctrl/Cmd + A → select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        selectAll(objects.map((o) => o.id));
+        return;
+      }
+
+      // Ctrl/Cmd + C → copy
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selected.length > 0) {
+        clipboardRef.current = objects.filter((o) => selected.includes(o.id));
+        return;
+      }
+
+      // Ctrl/Cmd + V → paste with +20px offset
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
+        e.preventDefault();
+        const items = clipboardRef.current.map(({ type, x, y, ...rest }) => ({
+          type, x: x + 20, y: y + 20, ...rest,
+        }));
+        const newIds = batchCreate(items);
+        selectAll(newIds);
+        // Update clipboard so repeated paste keeps offsetting
+        clipboardRef.current = clipboardRef.current.map((o) => ({
+          ...o, x: o.x + 20, y: o.y + 20,
+        }));
+        return;
+      }
+
+      // Ctrl/Cmd + D → duplicate (same as copy+paste)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selected.length > 0) {
+        e.preventDefault();
+        const items = objects
+          .filter((o) => selected.includes(o.id))
+          .map(({ type, x, y, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
+        const newIds = batchCreate(items);
+        selectAll(newIds);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedIds, objects, batchDelete, batchCreate, deselectAll, selectAll]);
+
+  // ── Transformer: attach to all selected nodes ─────────────────────────────
+  useEffect(() => {
+    if (!transformerRef.current || !layerRef.current) return;
+
+    if (selectedIds.size > 0) {
+      const nodes = [...selectedIds]
+        .map((id) => layerRef.current.findOne(`#note-${id}`))
+        .filter(Boolean);
+      transformerRef.current.nodes(nodes);
+    } else {
+      transformerRef.current.nodes([]);
+    }
+    transformerRef.current.getLayer()?.batchDraw();
+  }, [selectedIds]);
+
   const isDraggable = activeTool === 'cursor' || spaceHeld;
 
   // ── Zoom ─────────────────────────────────────────────────────────────────
@@ -146,51 +223,38 @@ export default function Canvas() {
   };
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const handleSelect = (id) => {
-    setSelectedId(id);
+  const handleSelect = useCallback((id, e) => {
+    if (e?.evt?.shiftKey) {
+      toggleSelect(id);
+    } else {
+      select(id);
+    }
     updateObject(id, { zIndex: Date.now() });
-  };
+  }, [select, toggleSelect, updateObject]);
 
   const handleDeselectClick = (e) => {
     if (e.target === e.target.getStage()) {
-      setSelectedId(null);
-      commitInlineEdit();
+      deselectAll();
+      if (inlineEdit) setInlineEdit(null);
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = useCallback((id) => {
     deleteObject(id);
-    if (selectedId === id) setSelectedId(null);
-  };
-
-  // ── Transform ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (selectedId && transformerRef.current && layerRef.current) {
-      const node = layerRef.current.findOne(`#note-${selectedId}`);
-      if (node) {
-        transformerRef.current.nodes([node]);
-        transformerRef.current.getLayer().batchDraw();
-      }
-    } else if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-      transformerRef.current.getLayer().batchDraw();
-    }
-  }, [selectedId]);
+    deselectAll();
+  }, [deleteObject, deselectAll]);
 
   // ── Inline editing ────────────────────────────────────────────────────────
   const handleStartInlineEdit = useCallback((data) => {
     const stage     = stageRef.current;
     const container = stage.container().getBoundingClientRect();
     const scale     = stage.scaleX();
-    const sx        = stage.x();
-    const sy        = stage.y();
-
     setInlineEdit({
       id:       data.id,
       content:  data.content ?? '',
       color:    data.color,
-      x:        container.left + sx + data.x * scale,
-      y:        container.top  + sy + data.y * scale,
+      x:        container.left + stage.x() + data.x * scale,
+      y:        container.top  + stage.y() + data.y * scale,
       w:        data.width  * scale,
       h:        data.height * scale,
       scale,
@@ -198,29 +262,19 @@ export default function Canvas() {
     });
   }, []);
 
-  const commitInlineEdit = useCallback(() => {
-    setInlineEdit(null);
-  }, []);
-
   const handleInlineEditBlur = (e) => {
-    const content = e.target.value;
     if (inlineEdit) {
-      updateObject(inlineEdit.id, { content });
+      updateObject(inlineEdit.id, { content: e.target.value });
       setInlineEdit(null);
     }
   };
 
   const handleInlineEditKeyDown = (e) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' || (e.key === 'Enter' && e.ctrlKey)) {
       updateObject(inlineEdit.id, { content: e.target.value });
       setInlineEdit(null);
     }
-    // Allow normal Enter; Ctrl+Enter closes
-    if (e.key === 'Enter' && e.ctrlKey) {
-      updateObject(inlineEdit.id, { content: e.target.value });
-      setInlineEdit(null);
-    }
-    e.stopPropagation(); // prevent Space/Delete shortcuts firing
+    e.stopPropagation();
   };
 
   // ── Color picker ──────────────────────────────────────────────────────────
@@ -240,6 +294,7 @@ export default function Canvas() {
   const handleClearAll = () => {
     if (window.confirm('Delete all objects? This cannot be undone.')) {
       deleteAllObjects();
+      deselectAll();
     }
   };
 
@@ -266,7 +321,7 @@ export default function Canvas() {
         <Layer ref={layerRef}>
           <ObjectRenderer
             objects={objects}
-            selectedId={selectedId}
+            selectedIds={selectedIds}
             inlineEditId={inlineEdit?.id ?? null}
             onSelect={handleSelect}
             onUpdate={updateObject}
@@ -334,6 +389,17 @@ export default function Canvas() {
         usersOnline={presence.length + 1}
         loading={loading}
       />
+
+      {/* Selection count badge */}
+      {selectedIds.size > 1 && (
+        <div style={{
+          position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)',
+          background: '#4ECDC4', color: 'white', padding: '4px 12px',
+          borderRadius: 20, fontSize: 13, fontWeight: 600, zIndex: 1000,
+        }}>
+          {selectedIds.size} objects selected
+        </div>
+      )}
 
       {objects.length > 0 && (
         <button

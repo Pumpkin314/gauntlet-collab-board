@@ -57,7 +57,7 @@ export interface ShapeProps {
   id: string;           // Konva node id (e.g. "note-<objectId>")
   data: BoardObject;
   isSelected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, e?: unknown) => void;
   onUpdate: (id: string, updates: Partial<BoardObject>) => void;
   onDelete: (id: string) => void;
   onShowColorPicker: (id: string, pos: { x: number; y: number }) => void;

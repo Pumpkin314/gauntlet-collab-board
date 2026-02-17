@@ -1,31 +1,31 @@
 /**
  * ObjectRenderer
  *
- * Maps the `objects` array from BoardContext to the correct shape component
- * via the shape registry. Replaces the manual .filter(type === 'sticky') chains
- * in Canvas.jsx and makes adding new shape types zero-config here.
+ * Maps the `objects` array to shape components via the shape registry.
+ * Passes selectedIds (Set) so each shape knows if it's selected.
+ * onSelect now receives (id, nativeEvent) so Canvas can detect shift+click.
  */
 
-import type { BoardObject, ShapeProps } from '../../types/board';
+import type { BoardObject } from '../../types/board';
 import { getShapeEntry } from '../../utils/shapeRegistry';
 
 interface ObjectRendererProps {
   objects: BoardObject[];
-  selectedId: string | null;
+  selectedIds: Set<string>;
   inlineEditId: string | null;
-  onSelect: ShapeProps['onSelect'];
-  onUpdate: ShapeProps['onUpdate'];
-  onDelete: ShapeProps['onDelete'];
-  onShowColorPicker: ShapeProps['onShowColorPicker'];
-  onTransformStart?: ShapeProps['onTransformStart'];
-  onTransformEnd?: ShapeProps['onTransformEnd'];
+  onSelect: (id: string, e?: any) => void;
+  onUpdate: (id: string, updates: Partial<BoardObject>) => void;
+  onDelete: (id: string) => void;
+  onShowColorPicker: (id: string, pos: { x: number; y: number }) => void;
+  onTransformStart?: () => void;
+  onTransformEnd?: () => void;
   onDimsChanged: () => void;
   onStartEdit: (data: BoardObject) => void;
 }
 
 export default function ObjectRenderer({
   objects,
-  selectedId,
+  selectedIds,
   inlineEditId,
   onSelect,
   onUpdate,
@@ -44,10 +44,10 @@ export default function ObjectRenderer({
 
         const { component: ShapeComponent } = entry;
 
-        const sharedProps: ShapeProps = {
+        const sharedProps = {
           id:               `note-${obj.id}`,
           data:             obj,
-          isSelected:       selectedId === obj.id,
+          isSelected:       selectedIds.has(obj.id),
           onSelect,
           onUpdate,
           onDelete,
@@ -57,7 +57,6 @@ export default function ObjectRenderer({
           onDimsChanged,
         };
 
-        // Shape-specific extra props
         const extraProps: Record<string, unknown> = {};
         if (obj.type === 'sticky' || obj.type === 'text') {
           extraProps.onStartEdit     = onStartEdit;

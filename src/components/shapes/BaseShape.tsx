@@ -101,8 +101,8 @@ export default function BaseShape({
       rotation={data.rotation ?? 0}
       draggable
       onDragEnd={handleDragEnd}
-      onClick={() => onSelect(data.id)}
-      onTap={() => onSelect(data.id)}
+      onClick={(e: any) => onSelect(data.id, e)}
+      onTap={(e: any) => onSelect(data.id, e)}
       onDblClick={onDblClick}
       onTransformStart={onTransformStart}
       onTransformEnd={handleTransformEnd}
