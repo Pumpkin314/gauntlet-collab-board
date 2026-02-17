@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Stage, Layer, Rect, Text, Group, Circle, Transformer } from 'react-konva';
 import { useBoard } from '../contexts/BoardContext';
 import Cursor from './Cursor';
@@ -15,10 +15,31 @@ function StickyNote({
   onUpdate,
   onStartEdit,
   onShowColorPicker,
-  onDelete
+  onDelete,
+  onTransformStart,
+  onTransformEnd,
+  onDimsChanged,
 }) {
   const groupRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
+
+  // Local dimensions so resize is instant — no async React/Firestore round-trip
+  const [localWidth, setLocalWidth] = useState(data.width);
+  const [localHeight, setLocalHeight] = useState(data.height);
+
+  // Sync local dims when data changes from other users (not from our own resize)
+  useEffect(() => {
+    setLocalWidth(data.width);
+    setLocalHeight(data.height);
+  }, [data.width, data.height]);
+
+  // After React commits new localWidth/localHeight to Konva nodes, tell the
+  // transformer to recalculate its bounding box
+  useEffect(() => {
+    if (isSelected && onDimsChanged) {
+      onDimsChanged();
+    }
+  }, [localWidth, localHeight]);
 
   // Handle drag end - update position in Firestore
   const handleDragEnd = (e) => {
@@ -39,23 +60,43 @@ function StickyNote({
     onStartEdit(data);
   };
 
+  // Handle transform start
+  const handleTransformStart = () => {
+    if (onTransformStart) {
+      onTransformStart();
+    }
+  };
+
   // Handle transform end - update size/rotation in Firestore
   const handleTransformEnd = () => {
     const node = groupRef.current;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
 
-    // Reset scale and apply to width/height
+    const newWidth = Math.max(100, localWidth * scaleX);
+    const newHeight = Math.max(80, localHeight * scaleY);
+
+    // Reset scale
     node.scaleX(1);
     node.scaleY(1);
 
+    // Update local state immediately — React renders correct dims in this same cycle,
+    // so the transformer sees the right bounding box with no flash
+    setLocalWidth(newWidth);
+    setLocalHeight(newHeight);
+
+    // Persist to Firestore
     onUpdate(data.id, {
       x: node.x(),
       y: node.y(),
-      width: Math.max(100, data.width * scaleX), // Min width 100
-      height: Math.max(80, data.height * scaleY), // Min height 80
+      width: newWidth,
+      height: newHeight,
       rotation: node.rotation(),
     });
+
+    if (onTransformEnd) {
+      onTransformEnd();
+    }
   };
 
   return (
@@ -71,14 +112,15 @@ function StickyNote({
       onClick={handleClick}
       onTap={handleClick}
       onDblClick={handleDblClick}
+      onTransformStart={handleTransformStart}
       onTransformEnd={handleTransformEnd}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Main sticky note rectangle */}
       <Rect
-        width={data.width}
-        height={data.height}
+        width={localWidth}
+        height={localHeight}
         fill={data.color}
         stroke={isSelected ? "#4ECDC4" : "#333"}
         strokeWidth={isSelected ? 3 : 2}
@@ -92,8 +134,8 @@ function StickyNote({
       <Text
         x={10}
         y={10}
-        width={data.width - 20}
-        height={data.height - 20}
+        width={localWidth - 20}
+        height={localHeight - 20}
         text={data.content}
         fontSize={16}
         fill="#333"
@@ -106,7 +148,7 @@ function StickyNote({
       {isHovered && (
         <>
           <Group
-            x={data.width - 25}
+            x={localWidth - 25}
             y={5}
             onClick={(e) => {
               e.cancelBubble = true;
@@ -135,7 +177,7 @@ function StickyNote({
 
           {/* Color picker button */}
           <Group
-            x={data.width - 50}
+            x={localWidth - 50}
             y={5}
             onClick={(e) => {
               e.cancelBubble = true;
@@ -187,6 +229,7 @@ export default function Canvas() {
   const stageRef = useRef(null);
   const transformerRef = useRef(null);
   const layerRef = useRef(null);
+  const isTransformingRef = useRef(false);
 
   // Handle mouse wheel zoom
   const handleWheel = (e) => {
@@ -245,7 +288,7 @@ export default function Canvas() {
   };
 
   // Handle mouse move to update cursor position
-  const handleMouseMove = (e) => {
+  const handleMouseMove = (_e) => {
     const stage = stageRef.current;
     const pointerPosition = stage.getPointerPosition();
 
@@ -337,6 +380,16 @@ export default function Canvas() {
     }
   };
 
+  // Handle transform start - set flag to prevent transformer updates
+  const handleTransformStart = () => {
+    isTransformingRef.current = true;
+  };
+
+  // Handle transform end - clear flag to allow transformer updates
+  const handleTransformEnd = () => {
+    isTransformingRef.current = false;
+  };
+
   // Attach transformer to selected object
   useEffect(() => {
     if (selectedId && transformerRef.current && layerRef.current) {
@@ -350,26 +403,6 @@ export default function Canvas() {
       transformerRef.current.getLayer().batchDraw();
     }
   }, [selectedId]);
-
-  // Force transformer to update when selected object's dimensions change
-  // Debounced to prevent flash during optimistic updates
-  useEffect(() => {
-    if (selectedId && transformerRef.current) {
-      // Skip immediate update if we have pending updates
-      if (pendingUpdates[selectedId]) {
-        return;
-      }
-
-      // Debounce to prevent flash
-      const timeout = setTimeout(() => {
-        if (transformerRef.current) {
-          transformerRef.current.forceUpdate();
-        }
-      }, 50); // Small delay to let optimistic updates settle
-
-      return () => clearTimeout(timeout);
-    }
-  }, [objects, selectedId, pendingUpdates]);
 
   // Filter sticky notes from objects and merge pending updates
   const stickyNotes = objects
@@ -422,6 +455,13 @@ export default function Canvas() {
               onStartEdit={handleStartEdit}
               onShowColorPicker={handleShowColorPicker}
               onDelete={handleDelete}
+              onTransformStart={handleTransformStart}
+              onTransformEnd={handleTransformEnd}
+              onDimsChanged={() => {
+                if (transformerRef.current) {
+                  transformerRef.current.forceUpdate();
+                }
+              }}
             />
           ))}
           {/* Transformer for resize/rotate */}
