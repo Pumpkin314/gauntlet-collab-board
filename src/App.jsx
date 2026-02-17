@@ -3,12 +3,15 @@ import Canvas from './components/Canvas';
 import TestSync from './components/TestSync';
 import Login from './components/Login';
 import { useAuth } from './contexts/AuthContext';
+import { useBoard } from './contexts/BoardContext';
 import './App.css';
 
 function App() {
   const { currentUser, logout } = useAuth();
+  const { presence } = useBoard();
   const [view, setView] = useState('canvas'); // 'canvas' or 'test-sync'
   const [imageError, setImageError] = useState(false);
+  const [showPresence, setShowPresence] = useState(false);
 
   // Show login screen if not authenticated
   if (!currentUser) {
@@ -55,26 +58,85 @@ function App() {
         </div>
 
         {/* User profile */}
-        <div className="user-profile">
-          {currentUser.photoURL && !imageError ? (
-            <img
-              src={currentUser.photoURL}
-              alt={currentUser.displayName}
-              className="user-avatar"
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <div
-              className="user-avatar-fallback"
-              style={{ background: getColorFromName(currentUser.displayName || 'User') }}
+        <div className="user-profile-section">
+          <div className="user-profile">
+            {currentUser.photoURL && !imageError ? (
+              <img
+                src={currentUser.photoURL}
+                alt={currentUser.displayName}
+                className="user-avatar"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div
+                className="user-avatar-fallback"
+                style={{ background: getColorFromName(currentUser.displayName || 'User') }}
+              >
+                {getInitials(currentUser.displayName || 'User')}
+              </div>
+            )}
+            <span className="user-name">{currentUser.displayName}</span>
+            <button
+              onClick={() => setShowPresence(!showPresence)}
+              className="presence-toggle-btn"
+              title="Active users"
             >
-              {getInitials(currentUser.displayName || 'User')}
+              👥 {presence.length + 1}
+            </button>
+            <button onClick={logout} className="logout-btn">
+              Sign Out
+            </button>
+          </div>
+
+          {/* Presence list */}
+          {showPresence && (
+            <div className="presence-list">
+              <div className="presence-header">Active Users</div>
+
+              {/* Current user */}
+              <div className="presence-item current-user">
+                {currentUser.photoURL && !imageError ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={currentUser.displayName}
+                    className="presence-avatar"
+                  />
+                ) : (
+                  <div
+                    className="presence-avatar-fallback"
+                    style={{ background: getColorFromName(currentUser.displayName || 'User') }}
+                  >
+                    {getInitials(currentUser.displayName || 'User')}
+                  </div>
+                )}
+                <span className="presence-name">{currentUser.displayName} (you)</span>
+              </div>
+
+              {/* Other users */}
+              {presence.map((user) => (
+                <div key={user.id} className="presence-item">
+                  <div
+                    className="presence-avatar-fallback"
+                    style={{ background: user.userColor }}
+                  >
+                    {getInitials(user.userName)}
+                  </div>
+                  <span className="presence-name">{user.userName}</span>
+                  <div
+                    className="presence-color-indicator"
+                    style={{ background: user.userColor }}
+                    title="Cursor color"
+                  />
+                </div>
+              ))}
+
+              {presence.length === 0 && (
+                <div className="presence-empty">
+                  No other users online
+                </div>
+              )}
             </div>
           )}
-          <span className="user-name">{currentUser.displayName}</span>
-          <button onClick={logout} className="logout-btn">
-            Sign Out
-          </button>
         </div>
       </div>
 

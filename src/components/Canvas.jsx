@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Stage, Layer, Rect, Text, Group } from 'react-konva';
 import { useBoard } from '../contexts/BoardContext';
+import Cursor from './Cursor';
 
 /**
  * StickyNote Component
@@ -41,7 +42,7 @@ function StickyNote({ data }) {
  * Double-click to create sticky notes that sync via Firestore
  */
 export default function Canvas() {
-  const { objects, createStickyNote, loading } = useBoard();
+  const { objects, presence, createStickyNote, updateCursorPosition, loading } = useBoard();
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
   const stageRef = useRef(null);
@@ -99,6 +100,20 @@ export default function Canvas() {
     }
   };
 
+  // Handle mouse move to update cursor position
+  const handleMouseMove = (e) => {
+    const stage = stageRef.current;
+    const pointerPosition = stage.getPointerPosition();
+
+    if (pointerPosition) {
+      // Convert screen coordinates to canvas coordinates
+      const x = (pointerPosition.x - stagePos.x) / stageScale;
+      const y = (pointerPosition.y - stagePos.y) / stageScale;
+
+      updateCursorPosition(x, y);
+    }
+  };
+
   // Filter sticky notes from objects
   const stickyNotes = objects.filter(obj => obj.type === 'sticky');
 
@@ -112,15 +127,23 @@ export default function Canvas() {
         onWheel={handleWheel}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
+        onMouseMove={handleMouseMove}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
         scaleY={stageScale}
       >
+        {/* Content Layer: Sticky notes and shapes */}
         <Layer>
-          {/* Render all sticky notes from Firestore */}
           {stickyNotes.map((note) => (
             <StickyNote key={note.id} data={note} />
+          ))}
+        </Layer>
+
+        {/* UI Layer: Cursors (not affected by pan/zoom) */}
+        <Layer listening={false}>
+          {presence.map((user) => (
+            <Cursor key={user.id} data={user} />
           ))}
         </Layer>
       </Stage>
@@ -140,6 +163,7 @@ export default function Canvas() {
         <div>Zoom: {(stageScale * 100).toFixed(0)}%</div>
         <div>Pan: ({Math.round(stagePos.x)}, {Math.round(stagePos.y)})</div>
         <div>Sticky Notes: {stickyNotes.length}</div>
+        <div style={{ color: '#4ECDC4' }}>Users Online: {presence.length + 1}</div>
         <div style={{ marginTop: 8, opacity: 0.7 }}>
           • Drag to pan<br/>
           • Scroll to zoom<br/>

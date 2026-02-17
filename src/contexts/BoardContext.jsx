@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   collection,
   onSnapshot,
@@ -8,10 +8,38 @@ import {
   doc,
   serverTimestamp,
   query,
-  orderBy
+  orderBy,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
+
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Generate consistent color from user ID
+function getUserColor(userId) {
+  const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
+    '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
+    '#F8B195', '#C06C84', '#6C5B7B', '#355C7D'
+  ];
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
 
 const BoardContext = createContext();
 
@@ -29,7 +57,9 @@ export function BoardProvider({ children }) {
   const boardId = 'default-board';
 
   const [objects, setObjects] = useState([]);
+  const [presence, setPresence] = useState([]);
   const [loading, setLoading] = useState(true);
+  const presenceRef = useRef(null);
 
   // Listen to objects in real-time
   useEffect(() => {
@@ -56,6 +86,71 @@ export function BoardProvider({ children }) {
 
     return () => unsubscribe();
   }, [currentUser, boardId]);
+
+  // Set up presence and listen to other users' presence
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Create presence document for current user
+    presenceRef.current = doc(db, `boards/${boardId}/presence`, currentUser.uid);
+
+    const userColor = getUserColor(currentUser.uid);
+
+    // Set initial presence
+    setDoc(presenceRef.current, {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || 'Anonymous',
+      userColor,
+      cursorX: 0,
+      cursorY: 0,
+      lastActive: serverTimestamp(),
+    }).catch(err => console.error('Error setting presence:', err));
+
+    // Listen to all presence documents
+    const presenceCollection = collection(db, `boards/${boardId}/presence`);
+    const unsubscribe = onSnapshot(
+      presenceCollection,
+      (snapshot) => {
+        const allPresence = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        // Filter out current user's presence (don't show our own cursor)
+        const otherUsers = allPresence.filter(p => p.userId !== currentUser.uid);
+        setPresence(otherUsers);
+      },
+      (error) => {
+        console.error('Error fetching presence:', error);
+      }
+    );
+
+    // Cleanup: Delete presence when component unmounts
+    return () => {
+      unsubscribe();
+      if (presenceRef.current) {
+        deleteDoc(presenceRef.current).catch(err =>
+          console.error('Error deleting presence:', err)
+        );
+      }
+    };
+  }, [currentUser, boardId]);
+
+  // Debounced cursor position update (100ms)
+  const updateCursorPositionDebounced = useRef(
+    debounce((x, y) => {
+      if (presenceRef.current) {
+        updateDoc(presenceRef.current, {
+          cursorX: x,
+          cursorY: y,
+          lastActive: serverTimestamp(),
+        }).catch(err => console.error('Error updating cursor:', err));
+      }
+    }, 100)
+  ).current;
+
+  const updateCursorPosition = (x, y) => {
+    updateCursorPositionDebounced(x, y);
+  };
 
   // Create a new sticky note
   const createStickyNote = async (x, y) => {
@@ -111,10 +206,12 @@ export function BoardProvider({ children }) {
   const value = {
     boardId,
     objects,
+    presence,
     loading,
     createStickyNote,
     updateObject,
     deleteObject,
+    updateCursorPosition,
   };
 
   return (
