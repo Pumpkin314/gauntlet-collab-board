@@ -340,7 +340,7 @@ function ShapeRect({
  * Double-click to create sticky notes that sync via Firestore
  */
 export default function Canvas() {
-  const { objects, presence, createStickyNote, createShape, updateObject, deleteObject, deleteAllObjects, updateCursorPosition, loading } = useBoard();
+  const { objects, presence, createObject, updateObject, deleteObject, deleteAllObjects, updateCursorPosition, loading } = useBoard();
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
   const [activeTool, setActiveTool] = useState('sticky'); // 'sticky' | 'rect'
@@ -348,7 +348,6 @@ export default function Canvas() {
   const [editingNote, setEditingNote] = useState(null);
   const [colorPickerNote, setColorPickerNote] = useState(null);
   const [colorPickerPos, setColorPickerPos] = useState({ x: 0, y: 0 });
-  const [pendingUpdates, setPendingUpdates] = useState({});
   const stageRef = useRef(null);
   const transformerRef = useRef(null);
   const layerRef = useRef(null);
@@ -406,11 +405,7 @@ export default function Canvas() {
       const x = (pointerPosition.x - stagePos.x) / stageScale;
       const y = (pointerPosition.y - stagePos.y) / stageScale;
 
-      if (activeTool === 'rect') {
-        createShape(x, y);
-      } else {
-        createStickyNote(x, y);
-      }
+      createObject(activeTool, x, y);
     }
   };
 
@@ -428,28 +423,9 @@ export default function Canvas() {
     }
   };
 
-  // Handle sticky note update with optimistic updates
+  // Handle object update — Yjs updates are synchronous in-memory, no optimistic layer needed
   const handleNoteUpdate = (noteId, updates) => {
-    // Optimistic update: apply changes immediately to local state
-    setPendingUpdates(prev => ({
-      ...prev,
-      [noteId]: {
-        ...prev[noteId],
-        ...updates
-      }
-    }));
-
-    // Update Firestore in background
     updateObject(noteId, updates);
-
-    // Clear pending updates after a delay (Firestore should have updated by then)
-    setTimeout(() => {
-      setPendingUpdates(prev => {
-        const next = { ...prev };
-        delete next[noteId];
-        return next;
-      });
-    }, 500);
   };
 
   // Handle start editing
@@ -531,10 +507,9 @@ export default function Canvas() {
     }
   }, [selectedId]);
 
-  // Filter objects by type, merging pending updates
-  const withPending = (obj) => ({ ...obj, ...(pendingUpdates[obj.id] || {}) });
-  const stickyNotes = objects.filter(obj => obj.type === 'sticky').map(withPending);
-  const rectShapes = objects.filter(obj => obj.type === 'rect').map(withPending);
+  // Filter objects by type (Yjs updates are instant, no pending merge needed)
+  const stickyNotes = objects.filter(obj => obj.type === 'sticky');
+  const rectShapes = objects.filter(obj => obj.type === 'rect');
   const allObjects = [...stickyNotes, ...rectShapes];
 
   // Predefined color palette

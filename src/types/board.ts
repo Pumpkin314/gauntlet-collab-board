@@ -45,8 +45,9 @@ export interface BoardObject {
 
 export interface PresenceUser {
   id: string;
-  name: string;
-  color: string;
+  userId: string;
+  userName: string;
+  userColor: string;
   cursorX: number;
   cursorY: number;
 }
