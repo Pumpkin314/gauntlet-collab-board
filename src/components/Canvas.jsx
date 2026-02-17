@@ -3,6 +3,10 @@ import { Stage, Layer, Transformer } from 'react-konva';
 import { useBoard } from '../contexts/BoardContext';
 import Cursor from './Cursor';
 import ObjectRenderer from './Canvas/ObjectRenderer';
+import Toolbar from './Canvas/Toolbar';
+import EditModal from './Canvas/EditModal';
+import ColorPicker from './Canvas/ColorPicker';
+import InfoOverlay from './Canvas/InfoOverlay';
 import { registerShape } from '../utils/shapeRegistry';
 import StickyNote from './shapes/StickyNote';
 import RectShape from './shapes/RectShape';
@@ -40,7 +44,7 @@ export default function Canvas() {
 
   const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
   const [stageScale,      setStageScale]      = useState(1);
-  const [activeTool,      setActiveTool]      = useState('sticky'); // 'sticky' | 'rect'
+  const [activeTool,      setActiveTool]      = useState('sticky');
   const [selectedId,      setSelectedId]      = useState(null);
   const [editingNote,     setEditingNote]     = useState(null);
   const [colorPickerNote, setColorPickerNote] = useState(null);
@@ -182,13 +186,6 @@ export default function Canvas() {
     }
   }, [selectedId]);
 
-  // ── Misc ────────────────────────────────────────────────────────────────────
-
-  const colorPalette = [
-    '#FFE66D', '#FF6B6B', '#4ECDC4', '#95E1D3',
-    '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA',
-  ];
-
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -242,52 +239,15 @@ export default function Canvas() {
         </Layer>
       </Stage>
 
-      {/* Toolbar */}
-      <div style={{
-        position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', gap: 8, background: 'white', padding: '8px 12px',
-        borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 1000,
-      }}>
-        {[
-          { tool: 'sticky', label: '📝', title: 'Sticky Note' },
-          { tool: 'rect',   label: '⬜', title: 'Rectangle' },
-        ].map(({ tool, label, title }) => (
-          <button
-            key={tool}
-            title={`${title} (double-click canvas to place)`}
-            onClick={() => setActiveTool(tool)}
-            style={{
-              width: 40, height: 40,
-              border:       activeTool === tool ? '2px solid #4ECDC4' : '2px solid #ddd',
-              background:   activeTool === tool ? '#f0fffe' : 'white',
-              borderRadius: 8, cursor: 'pointer', fontSize: 18,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
 
-      {/* Info overlay */}
-      <div style={{
-        position: 'absolute', bottom: 20, left: 20,
-        background: 'rgba(0,0,0,0.7)', color: 'white',
-        padding: '10px 15px', borderRadius: 8, fontSize: 12, fontFamily: 'monospace',
-      }}>
-        <div>Zoom: {(stageScale * 100).toFixed(0)}%</div>
-        <div>Pan: ({Math.round(stagePos.x)}, {Math.round(stagePos.y)})</div>
-        <div>Objects: {objects.length}</div>
-        <div style={{ color: '#4ECDC4' }}>Users Online: {presence.length + 1}</div>
-        <div style={{ marginTop: 8, opacity: 0.7, fontSize: 11 }}>
-          • Drag canvas to pan<br />
-          • Scroll to zoom<br />
-          • Double-click to create<br />
-          • Click shape to select
-        </div>
-        {loading && <div style={{ marginTop: 8, color: '#4ECDC4' }}>Syncing…</div>}
-      </div>
+      <InfoOverlay
+        stageScale={stageScale}
+        stagePos={stagePos}
+        objectCount={objects.length}
+        usersOnline={presence.length + 1}
+        loading={loading}
+      />
 
       {/* Clear All */}
       {objects.length > 0 && (
@@ -305,97 +265,18 @@ export default function Canvas() {
         </button>
       )}
 
-      {/* Text Editing Modal */}
-      {editingNote && (
-        <div
-          style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.5)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', zIndex: 2000,
-          }}
-          onClick={() => setEditingNote(null)}
-        >
-          <div
-            style={{
-              background: 'white', borderRadius: 12, padding: 20,
-              width: '90%', maxWidth: 400, boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: '0 0 15px 0', fontSize: 18 }}>Edit Sticky Note</h3>
-            <textarea
-              autoFocus
-              defaultValue={editingNote.content}
-              style={{
-                width: '100%', height: 150, padding: 12, fontSize: 16,
-                border: '2px solid #ddd', borderRadius: 8, resize: 'none',
-                fontFamily: 'inherit',
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.ctrlKey) handleSaveEdit(e.target.value);
-                if (e.key === 'Escape')             setEditingNote(null);
-              }}
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 15, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setEditingNote(null)}
-                style={{
-                  padding: '8px 16px', border: '2px solid #ddd', background: 'white',
-                  borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={(e) => {
-                  const textarea = e.target.parentElement.previousSibling;
-                  handleSaveEdit(textarea.value);
-                }}
-                style={{
-                  padding: '8px 16px', border: '2px solid #4ECDC4', background: '#4ECDC4',
-                  color: 'white', borderRadius: 8, cursor: 'pointer',
-                  fontSize: 14, fontWeight: 600,
-                }}
-              >
-                Save (Ctrl+Enter)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EditModal
+        note={editingNote}
+        onSave={handleSaveEdit}
+        onClose={() => setEditingNote(null)}
+      />
 
-      {/* Color Picker */}
-      {colorPickerNote && (
-        <>
-          <div
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1999 }}
-            onClick={() => setColorPickerNote(null)}
-          />
-          <div
-            style={{
-              position: 'absolute', left: colorPickerPos.x, top: colorPickerPos.y,
-              background: 'white', borderRadius: 12, padding: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.2)', zIndex: 2000,
-              display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8,
-            }}
-          >
-            {colorPalette.map((color) => (
-              <button
-                key={color}
-                onClick={() => handleColorChange(color)}
-                style={{
-                  width: 40, height: 40, background: color,
-                  border: '2px solid #ddd', borderRadius: 8, cursor: 'pointer',
-                  transition: 'transform 0.2s ease',
-                }}
-                onMouseEnter={(e) => (e.target.style.transform = 'scale(1.1)')}
-                onMouseLeave={(e) => (e.target.style.transform = 'scale(1)')}
-                title={color}
-              />
-            ))}
-          </div>
-        </>
-      )}
+      <ColorPicker
+        noteId={colorPickerNote}
+        position={colorPickerPos}
+        onColorChange={handleColorChange}
+        onClose={() => setColorPickerNote(null)}
+      />
     </div>
   );
 }
