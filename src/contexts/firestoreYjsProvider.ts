@@ -1,21 +1,16 @@
 /**
- * FirestoreYjsProvider
+ * FirestorePersistenceProvider
  *
- * Custom Yjs provider using Firestore as a persistence backend.
- * Yjs (in-memory CRDT) is the source of truth. Firestore stores
- * a single compacted snapshot — no unbounded incremental-update accumulation.
+ * Persistence-only Yjs provider using Firestore as a durable backup.
+ * Real-time P2P sync is handled by y-webrtc; this provider persists
+ * a compacted snapshot at a relaxed cadence (~2s debounce).
  *
  * Firestore structure (one doc per board):
  *   boards/{boardId}/ydoc/state
- *     state:     string   (base64-encoded full Y.Doc state)
+ *     state:     string   (base64-encoded Y.Doc state)
  *     updatedAt: number
  *
- * Real-time flow:
- *   Local mutation → Y.Doc (CRDT merge) → debounced setDoc snapshot
- *   Remote change  → onSnapshot fires → Y.applyUpdate (CRDT merge) → React re-render
- *
- * CRDT safety: Y.applyUpdate is idempotent and commutative, so simultaneous
- * writes from multiple clients converge correctly even with last-write-wins Firestore.
+ * Always writes full state (single-doc architecture requires complete snapshots).
  */
 
 import * as Y from 'yjs';
@@ -47,7 +42,9 @@ function base64ToUint8(base64: string): Uint8Array {
 
 // ── provider ───────────────────────────────────────────────────────────────
 
-export class FirestoreYjsProvider {
+export { FirestorePersistenceProvider as FirestoreYjsProvider };
+
+export class FirestorePersistenceProvider {
   private ydoc: Y.Doc;
   private boardId: string;
   private unsubscribe: (() => void) | null = null;
@@ -99,7 +96,7 @@ export class FirestoreYjsProvider {
     this.persistTimeout = setTimeout(() => {
       this.persistTimeout = null;
       void this.persist();
-    }, 300);
+    }, 500);
   }
 
   private async persist(): Promise<void> {
@@ -111,7 +108,7 @@ export class FirestoreYjsProvider {
         updatedAt: Date.now(),
       });
     } catch (error) {
-      console.error('[FirestoreYjsProvider] persist error:', error);
+      console.error('[FirestorePersistenceProvider] persist error:', error);
     }
   }
 
