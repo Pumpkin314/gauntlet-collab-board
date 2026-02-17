@@ -13,8 +13,10 @@ export default function Login() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError('Failed to sign in with Google. Please try again.');
       console.error('Sign in error:', err);
+      const code = err?.code ?? 'unknown';
+      const message = err?.message ?? String(err);
+      setError(`[${code}] ${message}`);
     } finally {
       setLoading(false);
     }
