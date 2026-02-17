@@ -214,13 +214,136 @@ function StickyNote({
 }
 
 /**
+ * ShapeRect Component
+ * A plain resizable/draggable rectangle with hover menu
+ */
+function ShapeRect({
+  id,
+  data,
+  isSelected,
+  onSelect,
+  onUpdate,
+  onShowColorPicker,
+  onDelete,
+  onTransformStart,
+  onTransformEnd,
+  onDimsChanged,
+}) {
+  const groupRef = useRef(null);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const [localWidth, setLocalWidth] = useState(data.width);
+  const [localHeight, setLocalHeight] = useState(data.height);
+
+  useEffect(() => {
+    setLocalWidth(data.width);
+    setLocalHeight(data.height);
+  }, [data.width, data.height]);
+
+  useEffect(() => {
+    if (isSelected && onDimsChanged) {
+      onDimsChanged();
+    }
+  }, [localWidth, localHeight]);
+
+  const handleDragEnd = (e) => {
+    const node = e.target;
+    onUpdate(data.id, { x: node.x(), y: node.y() });
+  };
+
+  const handleTransformEnd = () => {
+    const node = groupRef.current;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    const newWidth = Math.max(40, localWidth * scaleX);
+    const newHeight = Math.max(40, localHeight * scaleY);
+    node.scaleX(1);
+    node.scaleY(1);
+    setLocalWidth(newWidth);
+    setLocalHeight(newHeight);
+    onUpdate(data.id, {
+      x: node.x(),
+      y: node.y(),
+      width: newWidth,
+      height: newHeight,
+      rotation: node.rotation(),
+    });
+    if (onTransformEnd) onTransformEnd();
+  };
+
+  return (
+    <Group
+      id={id}
+      name="object"
+      ref={groupRef}
+      x={data.x}
+      y={data.y}
+      rotation={data.rotation || 0}
+      draggable
+      onDragEnd={handleDragEnd}
+      onClick={() => onSelect(data.id)}
+      onTap={() => onSelect(data.id)}
+      onTransformStart={onTransformStart}
+      onTransformEnd={handleTransformEnd}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Rect
+        width={localWidth}
+        height={localHeight}
+        fill={data.color}
+        stroke={isSelected ? '#4ECDC4' : '#333'}
+        strokeWidth={isSelected ? 3 : 2}
+        cornerRadius={4}
+        shadowBlur={8}
+        shadowColor="rgba(0,0,0,0.2)"
+        shadowOffset={{ x: 2, y: 2 }}
+      />
+
+      {/* Hover menu */}
+      {isHovered && (
+        <>
+          <Group
+            x={localWidth - 25}
+            y={5}
+            onClick={(e) => { e.cancelBubble = true; onDelete(data.id); }}
+            onTap={(e) => { e.cancelBubble = true; onDelete(data.id); }}
+          >
+            <Circle radius={10} fill="#ff6b6b" shadowBlur={4} shadowColor="rgba(0,0,0,0.3)" />
+            <Text x={-5} y={-6} text="✕" fontSize={12} fill="white" fontStyle="bold" />
+          </Group>
+          <Group
+            x={localWidth - 50}
+            y={5}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              const pos = e.target.getStage().getPointerPosition();
+              onShowColorPicker(data.id, pos);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              const pos = e.target.getStage().getPointerPosition();
+              onShowColorPicker(data.id, pos);
+            }}
+          >
+            <Circle radius={10} fill="#4ECDC4" shadowBlur={4} shadowColor="rgba(0,0,0,0.3)" />
+            <Text x={-3} y={-6} text="⋮" fontSize={12} fill="white" fontStyle="bold" />
+          </Group>
+        </>
+      )}
+    </Group>
+  );
+}
+
+/**
  * Canvas Component with Sticky Notes
  * Double-click to create sticky notes that sync via Firestore
  */
 export default function Canvas() {
-  const { objects, presence, createStickyNote, updateObject, deleteObject, deleteAllObjects, updateCursorPosition, loading } = useBoard();
+  const { objects, presence, createStickyNote, createShape, updateObject, deleteObject, deleteAllObjects, updateCursorPosition, loading } = useBoard();
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
+  const [activeTool, setActiveTool] = useState('sticky'); // 'sticky' | 'rect'
   const [selectedId, setSelectedId] = useState(null);
   const [editingNote, setEditingNote] = useState(null);
   const [colorPickerNote, setColorPickerNote] = useState(null);
@@ -272,7 +395,7 @@ export default function Canvas() {
     }
   };
 
-  // Handle double-click to create sticky note
+  // Handle double-click to create object based on active tool
   const handleDblClick = (e) => {
     // Only create on background double-click (not on existing objects)
     if (e.target === e.target.getStage()) {
@@ -283,7 +406,11 @@ export default function Canvas() {
       const x = (pointerPosition.x - stagePos.x) / stageScale;
       const y = (pointerPosition.y - stagePos.y) / stageScale;
 
-      createStickyNote(x, y);
+      if (activeTool === 'rect') {
+        createShape(x, y);
+      } else {
+        createStickyNote(x, y);
+      }
     }
   };
 
@@ -404,13 +531,11 @@ export default function Canvas() {
     }
   }, [selectedId]);
 
-  // Filter sticky notes from objects and merge pending updates
-  const stickyNotes = objects
-    .filter(obj => obj.type === 'sticky')
-    .map(obj => ({
-      ...obj,
-      ...(pendingUpdates[obj.id] || {}) // Apply pending updates if any
-    }));
+  // Filter objects by type, merging pending updates
+  const withPending = (obj) => ({ ...obj, ...(pendingUpdates[obj.id] || {}) });
+  const stickyNotes = objects.filter(obj => obj.type === 'sticky').map(withPending);
+  const rectShapes = objects.filter(obj => obj.type === 'rect').map(withPending);
+  const allObjects = [...stickyNotes, ...rectShapes];
 
   // Predefined color palette
   const colorPalette = [
@@ -444,6 +569,23 @@ export default function Canvas() {
       >
         {/* Content Layer: Sticky notes and shapes */}
         <Layer ref={layerRef}>
+          {rectShapes.map((shape) => (
+            <ShapeRect
+              key={shape.id}
+              id={`note-${shape.id}`}
+              data={shape}
+              isSelected={selectedId === shape.id}
+              onSelect={handleSelect}
+              onUpdate={handleNoteUpdate}
+              onShowColorPicker={handleShowColorPicker}
+              onDelete={handleDelete}
+              onTransformStart={handleTransformStart}
+              onTransformEnd={handleTransformEnd}
+              onDimsChanged={() => {
+                if (transformerRef.current) transformerRef.current.forceUpdate();
+              }}
+            />
+          ))}
           {stickyNotes.map((note) => (
             <StickyNote
               key={note.id}
@@ -485,6 +627,47 @@ export default function Canvas() {
         </Layer>
       </Stage>
 
+      {/* Toolbar */}
+      <div style={{
+        position: 'absolute',
+        top: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        gap: 8,
+        background: 'white',
+        padding: '8px 12px',
+        borderRadius: 12,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+        zIndex: 1000,
+      }}>
+        {[
+          { tool: 'sticky', label: '📝', title: 'Sticky Note' },
+          { tool: 'rect',   label: '⬜', title: 'Rectangle' },
+        ].map(({ tool, label, title }) => (
+          <button
+            key={tool}
+            title={`${title} (double-click canvas to place)`}
+            onClick={() => setActiveTool(tool)}
+            style={{
+              width: 40,
+              height: 40,
+              border: activeTool === tool ? '2px solid #4ECDC4' : '2px solid #ddd',
+              background: activeTool === tool ? '#f0fffe' : 'white',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 18,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Canvas info overlay */}
       <div style={{
         position: 'absolute',
@@ -499,12 +682,12 @@ export default function Canvas() {
       }}>
         <div>Zoom: {(stageScale * 100).toFixed(0)}%</div>
         <div>Pan: ({Math.round(stagePos.x)}, {Math.round(stagePos.y)})</div>
-        <div>Sticky Notes: {stickyNotes.length}</div>
+        <div>Objects: {allObjects.length}</div>
         <div style={{ color: '#4ECDC4' }}>Users Online: {presence.length + 1}</div>
         <div style={{ marginTop: 8, opacity: 0.7, fontSize: 11 }}>
           • Drag canvas to pan<br/>
           • Scroll to zoom<br/>
-          • Double-click to create sticky<br/>
+          • Double-click to create object<br/>
           • Drag sticky to move<br/>
           • Double-click sticky to edit<br/>
           • Right-click sticky for colors
@@ -513,7 +696,7 @@ export default function Canvas() {
       </div>
 
       {/* Clear All Button */}
-      {stickyNotes.length > 0 && (
+      {allObjects.length > 0 && (
         <button
           onClick={handleClearAll}
           style={{

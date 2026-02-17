@@ -176,6 +176,29 @@ export function BoardProvider({ children }) {
     }
   };
 
+  // Create a new rectangle shape
+  const createShape = async (x, y) => {
+    if (!currentUser) return;
+
+    try {
+      const objectsRef = collection(db, `boards/${boardId}/objects`);
+      await addDoc(objectsRef, {
+        type: 'rect',
+        x,
+        y,
+        width: 160,
+        height: 100,
+        color: '#85C1E2',
+        createdBy: currentUser.uid,
+        createdByName: currentUser.displayName,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error creating shape:', error);
+    }
+  };
+
   // Update an object
   const updateObject = async (objectId, updates) => {
     if (!currentUser) return;
@@ -224,6 +247,7 @@ export function BoardProvider({ children }) {
     presence,
     loading,
     createStickyNote,
+    createShape,
     updateObject,
     deleteObject,
     deleteAllObjects,
