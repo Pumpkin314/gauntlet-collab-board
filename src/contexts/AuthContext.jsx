@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   signInWithPopup,
   signOut,
@@ -54,6 +54,30 @@ export function AuthProvider({ children }) {
 
     return unsubscribe;
   }, []);
+
+  // Auto sign-out after 30 minutes of inactivity
+  const idleTimerRef = useRef(null);
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const IDLE_MS = 30 * 60 * 1000; // 30 minutes
+
+    const resetTimer = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        logout();
+      }, IDLE_MS);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel'];
+    events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    resetTimer(); // start immediately on login
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, resetTimer));
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [currentUser]);
 
   const value = {
     currentUser,

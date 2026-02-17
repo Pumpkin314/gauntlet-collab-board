@@ -6,13 +6,13 @@
  * in Canvas.jsx and makes adding new shape types zero-config here.
  */
 
-import type { BoardObject } from '../../types/board';
-import type { ShapeProps } from '../../types/board';
+import type { BoardObject, ShapeProps } from '../../types/board';
 import { getShapeEntry } from '../../utils/shapeRegistry';
 
 interface ObjectRendererProps {
   objects: BoardObject[];
   selectedId: string | null;
+  inlineEditId: string | null;
   onSelect: ShapeProps['onSelect'];
   onUpdate: ShapeProps['onUpdate'];
   onDelete: ShapeProps['onDelete'];
@@ -20,13 +20,13 @@ interface ObjectRendererProps {
   onTransformStart?: ShapeProps['onTransformStart'];
   onTransformEnd?: ShapeProps['onTransformEnd'];
   onDimsChanged: () => void;
-  // Sticky-note specific
   onStartEdit: (data: BoardObject) => void;
 }
 
 export default function ObjectRenderer({
   objects,
   selectedId,
+  inlineEditId,
   onSelect,
   onUpdate,
   onDelete,
@@ -57,8 +57,12 @@ export default function ObjectRenderer({
           onDimsChanged,
         };
 
-        // Pass sticky-specific prop only when relevant
-        const extraProps = obj.type === 'sticky' ? { onStartEdit } : {};
+        // Shape-specific extra props
+        const extraProps: Record<string, unknown> = {};
+        if (obj.type === 'sticky' || obj.type === 'text') {
+          extraProps.onStartEdit     = onStartEdit;
+          extraProps.isInlineEditing = inlineEditId === obj.id;
+        }
 
         return <ShapeComponent key={obj.id} {...sharedProps} {...extraProps} />;
       })}

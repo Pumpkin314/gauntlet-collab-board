@@ -8,9 +8,11 @@ import type { ShapeProps, BoardObject } from '../../types/board';
 
 interface StickyNoteProps extends ShapeProps {
   onStartEdit: (data: BoardObject) => void;
+  /** Set true while the inline textarea overlay is active — hides the Konva Text */
+  isInlineEditing?: boolean;
 }
 
-export default function StickyNote({ onStartEdit, ...props }: StickyNoteProps) {
+export default function StickyNote({ onStartEdit, isInlineEditing, ...props }: StickyNoteProps) {
   const { data, isSelected } = props;
 
   return (
@@ -33,18 +35,21 @@ export default function StickyNote({ onStartEdit, ...props }: StickyNoteProps) {
             shadowColor="rgba(0,0,0,0.2)"
             shadowOffset={{ x: 2, y: 2 }}
           />
-          <Text
-            x={10}
-            y={10}
-            width={w - 20}
-            height={h - 20}
-            text={data.content ?? ''}
-            fontSize={data.fontSize ?? 16}
-            fill="#333"
-            align="left"
-            verticalAlign="top"
-            wrap="word"
-          />
+          {/* Hidden while the HTML textarea overlay is active */}
+          {!isInlineEditing && (
+            <Text
+              x={10}
+              y={10}
+              width={w - 20}
+              height={h - 20}
+              text={data.content ?? ''}
+              fontSize={data.fontSize ?? 16}
+              fill="#333"
+              align="left"
+              verticalAlign="top"
+              wrap="word"
+            />
+          )}
         </>
       )}
     </BaseShape>
