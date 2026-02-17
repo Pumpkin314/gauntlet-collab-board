@@ -7,6 +7,7 @@ import ObjectRenderer from './Canvas/ObjectRenderer';
 import Toolbar from './Canvas/Toolbar';
 import ColorPicker from './Canvas/ColorPicker';
 import InfoOverlay from './Canvas/InfoOverlay';
+import DebugOverlay from './Canvas/DebugOverlay';
 import { registerShape } from '../utils/shapeRegistry';
 import StickyNote from './shapes/StickyNote';
 import RectShape from './shapes/RectShape';
@@ -414,6 +415,8 @@ export default function Canvas() {
           🗑️ Clear All
         </button>
       )}
+
+      <DebugOverlay stageScale={stageScale} stagePos={stagePos} />
 
       <ColorPicker
         noteId={colorPickerNote}
