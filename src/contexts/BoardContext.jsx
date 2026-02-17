@@ -203,6 +203,21 @@ export function BoardProvider({ children }) {
     }
   };
 
+  // Delete all objects
+  const deleteAllObjects = async () => {
+    if (!currentUser) return;
+
+    try {
+      // Delete all objects in the collection
+      const promises = objects.map(obj =>
+        deleteDoc(doc(db, `boards/${boardId}/objects`, obj.id))
+      );
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Error deleting all objects:', error);
+    }
+  };
+
   const value = {
     boardId,
     objects,
@@ -211,6 +226,7 @@ export function BoardProvider({ children }) {
     createStickyNote,
     updateObject,
     deleteObject,
+    deleteAllObjects,
     updateCursorPosition,
   };
 

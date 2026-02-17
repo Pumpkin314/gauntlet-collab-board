@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import Canvas from './components/Canvas';
-import TestSync from './components/TestSync';
 import Login from './components/Login';
 import { useAuth } from './contexts/AuthContext';
 import { useBoard } from './contexts/BoardContext';
@@ -9,7 +8,6 @@ import './App.css';
 function App() {
   const { currentUser, logout } = useAuth();
   const { presence } = useBoard();
-  const [view, setView] = useState('canvas'); // 'canvas' or 'test-sync'
   const [imageError, setImageError] = useState(false);
   const [showPresence, setShowPresence] = useState(false);
 
@@ -40,23 +38,8 @@ function App() {
 
   return (
     <div className="app">
-      {/* User profile and view toggle */}
+      {/* Top bar with user profile */}
       <div className="top-bar">
-        <div className="view-toggle">
-          <button
-            className={view === 'canvas' ? 'active' : ''}
-            onClick={() => setView('canvas')}
-          >
-            Canvas (Konva)
-          </button>
-          <button
-            className={view === 'test-sync' ? 'active' : ''}
-            onClick={() => setView('test-sync')}
-          >
-            Test Firestore Sync
-          </button>
-        </div>
-
         {/* User profile */}
         <div className="user-profile-section">
           <div className="user-profile">
@@ -140,8 +123,8 @@ function App() {
         </div>
       </div>
 
-      {/* Render selected view */}
-      {view === 'canvas' ? <Canvas /> : <TestSync />}
+      {/* Render canvas */}
+      <Canvas />
     </div>
   );
 }
