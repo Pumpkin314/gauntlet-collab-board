@@ -148,7 +148,11 @@ export default function Canvas() {
 
   // ── Selection ───────────────────────────────────────────────────────────────
 
-  const handleSelect = (id) => setSelectedId(id);
+  const handleSelect = (id) => {
+    setSelectedId(id);
+    // Bring clicked object to front by bumping its zIndex
+    updateObject(id, { zIndex: Date.now() });
+  };
 
   const handleDeselectClick = (e) => {
     if (e.target === e.target.getStage()) setSelectedId(null);
