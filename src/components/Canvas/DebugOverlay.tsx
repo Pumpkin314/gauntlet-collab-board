@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBoard } from '../../contexts/BoardContext';
 import type { DebugInfo } from '../../contexts/BoardContext';
+import { cursorDeltas } from '../Cursor';
 
 interface DebugOverlayProps {
   stageScale: number;
@@ -134,9 +135,24 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
       {/* Cursors */}
       <Section title="Cursors">
         <Row label="Local" value={`(${Math.round(d.localCursor.x)}, ${Math.round(d.localCursor.y)})`} />
-        {d.remoteCursors.map((c) => (
-          <Row key={c.userId} label={c.userName} value={`(${Math.round(c.x)}, ${Math.round(c.y)})`} />
-        ))}
+        {d.remoteCursors.map((c) => {
+          const delta = cursorDeltas.get(c.userId) ?? 0;
+          const deltaColor = delta < 1 ? '#4f4' : delta < 10 ? '#fa0' : '#f44';
+          return (
+            <Row
+              key={c.userId}
+              label={c.userName}
+              value={
+                <>
+                  {`(${Math.round(c.x)}, ${Math.round(c.y)})`}
+                  <span style={{ marginLeft: 8, color: deltaColor }}>
+                    {`Δ ${Math.round(delta)}px`}
+                  </span>
+                </>
+              }
+            />
+          );
+        })}
         {d.remoteCursors.length === 0 && (
           <div style={{ color: '#666', fontStyle: 'italic' }}>no remote cursors</div>
         )}
