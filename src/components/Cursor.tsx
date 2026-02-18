@@ -1,13 +1,16 @@
 import { Group, Rect, Text, Path } from 'react-konva';
 
-/**
- * Cursor Component
- * Renders another user's cursor with their name label
- */
-export default function Cursor({ data }) {
+interface PresenceUser {
+  id: string;
+  cursorX: number;
+  cursorY: number;
+  userName: string;
+  userColor: string;
+}
+
+export default function Cursor({ data }: { data: PresenceUser }) {
   const { cursorX, cursorY, userName, userColor } = data;
 
-  // Calculate label dimensions
   const labelPadding = 6;
   const fontSize = 12;
   const labelWidth = userName.length * (fontSize * 0.6) + labelPadding * 2;
@@ -15,7 +18,6 @@ export default function Cursor({ data }) {
 
   return (
     <Group x={cursorX} y={cursorY}>
-      {/* Cursor pointer (SVG-like path) */}
       <Path
         data="M 0 0 L 0 20 L 5 15 L 9 24 L 12 22 L 8 13 L 15 13 Z"
         fill={userColor}
@@ -26,9 +28,7 @@ export default function Cursor({ data }) {
         shadowOffset={{ x: 1, y: 1 }}
       />
 
-      {/* Name label */}
       <Group x={18} y={8}>
-        {/* Background rectangle */}
         <Rect
           width={labelWidth}
           height={labelHeight}
@@ -38,7 +38,6 @@ export default function Cursor({ data }) {
           shadowColor="rgba(0,0,0,0.2)"
           shadowOffset={{ x: 1, y: 1 }}
         />
-        {/* Text */}
         <Text
           x={labelPadding}
           y={labelPadding}
