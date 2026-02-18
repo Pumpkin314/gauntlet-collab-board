@@ -2,7 +2,7 @@
  * BaseShape
  *
  * Shared foundation for all board shapes (sticky, rect, circle, text, …).
- * Handles: drag, transform (resize/rotate), hover menu (delete + color picker),
+ * Handles: drag, transform (resize/rotate), selection action menu (delete + color picker),
  * and the localWidth/localHeight pattern that prevents the transformer flash.
  *
  * Usage:
@@ -11,7 +11,7 @@
  *   </BaseShape>
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Group, Circle, Text } from 'react-konva';
 import type { ShapeProps } from '../../types/board';
@@ -41,7 +41,6 @@ export default function BaseShape({
   children,
 }: BaseShapeProps) {
   const groupRef = useRef<any>(null);
-  const [isHovered, setIsHovered] = useState(false);
 
   // Local dimensions — updated immediately on resize so the transformer
   // never sees a stale bounding box (no Yjs round-trip needed).
@@ -106,19 +105,17 @@ export default function BaseShape({
       onDblClick={onDblClick}
       onTransformStart={onTransformStart}
       onTransformEnd={handleTransformEnd}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Shape visual — provided by the concrete shape component */}
       {children(localWidth, localHeight)}
 
-      {/* Hover menu */}
-      {isHovered && (
+      {/* Selection action menu — shown above the top-center resize handle */}
+      {isSelected && (
         <>
           {/* Delete button */}
           <Group
-            x={localWidth - 25}
-            y={5}
+            x={localWidth / 2 + 18}
+            y={-28}
             onClick={(e: any) => { e.cancelBubble = true; onDelete(data.id); }}
             onTap={(e: any)   => { e.cancelBubble = true; onDelete(data.id); }}
           >
@@ -128,8 +125,8 @@ export default function BaseShape({
 
           {/* Color picker button */}
           <Group
-            x={localWidth - 50}
-            y={5}
+            x={localWidth / 2 - 18}
+            y={-28}
             onClick={(e: any) => {
               e.cancelBubble = true;
               const pos = e.target.getStage().getPointerPosition();
