@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   signInWithPopup,
   signOut,
@@ -55,27 +55,48 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // Auto sign-out after 30 minutes of inactivity
-  const idleTimerRef = useRef(null);
+  // Dual-timer inactivity system: warn at 4 min, sign out at 5 min
+  const WARN_MS  = 4 * 60 * 1000;  // show warning popup
+  const IDLE_MS  = 5 * 60 * 1000;  // sign out (1 min after warning)
+
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false);
+  const warnTimerRef   = useRef(null);
+  const logoutTimerRef = useRef(null);
+
+  // Stable ref so the event listener doesn't capture a stale closure.
+  const resetTimerRef = useRef(null);
+
+  const stayLoggedIn = useCallback(() => {
+    if (resetTimerRef.current) resetTimerRef.current();
+  }, []);
+
   useEffect(() => {
     if (!currentUser) return;
 
-    const IDLE_MS = 30 * 60 * 1000; // 30 minutes
-
     const resetTimer = () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = setTimeout(() => {
-        logout();
-      }, IDLE_MS);
+      clearTimeout(warnTimerRef.current);
+      clearTimeout(logoutTimerRef.current);
+      setShowInactivityWarning(false);
+
+      warnTimerRef.current = setTimeout(() => {
+        setShowInactivityWarning(true);
+        // Fire sign-out 1 minute after the warning appears
+        logoutTimerRef.current = setTimeout(() => {
+          logout();
+        }, IDLE_MS - WARN_MS);
+      }, WARN_MS);
     };
+
+    resetTimerRef.current = resetTimer;
 
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel'];
     events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
-    resetTimer(); // start immediately on login
+    resetTimer(); // arm timers immediately on login
 
     return () => {
       events.forEach((ev) => window.removeEventListener(ev, resetTimer));
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      clearTimeout(warnTimerRef.current);
+      clearTimeout(logoutTimerRef.current);
     };
   }, [currentUser]);
 
@@ -84,6 +105,8 @@ export function AuthProvider({ children }) {
     signInWithGoogle,
     logout,
     loading,
+    showInactivityWarning,
+    stayLoggedIn,
   };
 
   return (

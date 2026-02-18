@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import Canvas from './components/Canvas';
 import Login from './components/Login';
+import InactivityWarningModal from './components/InactivityWarningModal';
 import { useAuth } from './contexts/AuthContext';
 import { useBoard } from './contexts/BoardContext';
 import './App.css';
 
 function App() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, showInactivityWarning, stayLoggedIn } = useAuth();
   const { presence } = useBoard();
   const [imageError, setImageError] = useState(false);
   const [showPresence, setShowPresence] = useState(false);
@@ -125,6 +126,13 @@ function App() {
 
       {/* Render canvas */}
       <Canvas />
+
+      {showInactivityWarning && (
+        <InactivityWarningModal
+          onStayLoggedIn={stayLoggedIn}
+          onSignOut={logout}
+        />
+      )}
     </div>
   );
 }

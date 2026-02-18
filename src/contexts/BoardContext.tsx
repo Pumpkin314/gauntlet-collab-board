@@ -289,19 +289,38 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       lastActive: serverTimestamp(),
     }).catch((e) => console.error('presence set error:', e));
 
+    // Heartbeat: keep lastActive fresh so other clients can detect our presence.
+    // Without this, a force-closed tab leaves a stale doc forever.
+    const heartbeat = setInterval(() => {
+      if (presenceRef.current) {
+        setDoc(presenceRef.current, { lastActive: serverTimestamp() }, { merge: true });
+      }
+    }, 60_000);
+
+    const STALE_MS = 10 * 60 * 1000;
+
     const presenceCol = collection(db, `boards/${boardId}/presence`);
     const unsub = onSnapshot(presenceCol, (snap) => {
       // Only use Firestore presence when we have no WebRTC peers
       if (hasWebrtcPeersRef.current) return;
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PresenceUser[];
-      const filtered = all.filter((p) => p.userId !== currentUser.uid);
-      setPresence(filtered);
-      if (filtered.length > 0) {
+      const all = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((p) => {
+          // Drop entries with no heartbeat or whose heartbeat is older than STALE_MS.
+          // This evicts tabs that closed without a graceful deleteDoc.
+          const ts = (p as any).lastActive as { toDate: () => Date } | null | undefined;
+          if (!ts) return false;
+          return Date.now() - ts.toDate().getTime() < STALE_MS;
+        })
+        .filter((p) => p.userId !== currentUser.uid) as PresenceUser[];
+      setPresence(all);
+      if (all.length > 0) {
         updateDebug({ presenceSource: 'firestore' });
       }
     });
 
     return () => {
+      clearInterval(heartbeat);
       unsub();
       if (presenceRef.current) {
         deleteDoc(presenceRef.current).catch(() => {});
