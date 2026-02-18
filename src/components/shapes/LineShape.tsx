@@ -4,13 +4,10 @@
  * Points stored as absolute canvas coords: [x1, y1, x2, y2].
  */
 
-import { useState } from 'react';
 import { Group, Line, Circle, Text } from 'react-konva';
 import type { ShapeProps } from '../../types/board';
 
 export default function LineShape({ id, data, isSelected, onSelect, onUpdate, onDelete }: ShapeProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
   const pts = data.points ?? [data.x, data.y, data.x + 200, data.y];
   const [x1, y1, x2, y2] = pts;
 
@@ -31,8 +28,6 @@ export default function LineShape({ id, data, isSelected, onSelect, onUpdate, on
       name="object"
       onClick={() => onSelect(data.id)}
       onTap={() => onSelect(data.id)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* The line itself */}
       <Line
@@ -58,8 +53,8 @@ export default function LineShape({ id, data, isSelected, onSelect, onUpdate, on
         />
       ))}
 
-      {/* Delete button at midpoint (on hover) */}
-      {isHovered && (
+      {/* Delete button at midpoint (on selection) */}
+      {isSelected && (
         <Group
           x={mx}
           y={my - 20}
