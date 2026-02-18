@@ -556,19 +556,19 @@ export default function Canvas() {
           const mx = (pts[0] + pts[2]) / 2;
           const my = (pts[1] + pts[3]) / 2;
           btnScreenX = stagePos.x + mx * stageScale;
-          btnScreenY = stagePos.y + my * stageScale - 44;
+          btnScreenY = stagePos.y + my * stageScale - 28;
         } else {
           // Compute rotated top-center in canvas space, then 44px "above" in screen space
           const r = (selObj.rotation ?? 0) * Math.PI / 180;
           const canvasTCX = selObj.x + (selObj.width / 2) * Math.cos(r);
           const canvasTCY = selObj.y + (selObj.width / 2) * Math.sin(r);
-          btnScreenX = stagePos.x + canvasTCX * stageScale + Math.sin(r) * 44;
-          btnScreenY = stagePos.y + canvasTCY * stageScale - Math.cos(r) * 44;
+          btnScreenX = stagePos.x + canvasTCX * stageScale + Math.sin(r) * 28;
+          btnScreenY = stagePos.y + canvasTCY * stageScale - Math.cos(r) * 28;
         }
 
         const btnStyle = {
-          width: 28, height: 28, border: 'none', borderRadius: '50%',
-          cursor: 'pointer', fontSize: 14, fontWeight: 'bold', color: 'white',
+          width: 24, height: 24, border: 'none', borderRadius: '50%',
+          cursor: 'pointer', fontSize: 12, fontWeight: 'bold', color: 'white',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         };
