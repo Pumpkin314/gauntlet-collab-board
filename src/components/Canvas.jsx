@@ -53,6 +53,7 @@ export default function Canvas() {
   const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
   const [stageScale,      setStageScale]      = useState(1);
   const [activeTool,      setActiveTool]      = useState('cursor');
+  const [toolMode,        setToolMode]        = useState('infinite'); // 'infinite' | 'single'
   const [colorPickerNote, setColorPickerNote] = useState(null);
   const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
   const [spaceHeld,       setSpaceHeld]       = useState(false);
@@ -165,7 +166,20 @@ export default function Canvas() {
     transformerRef.current.getLayer()?.batchDraw();
   }, [selectedIds]);
 
-  const isDraggable = activeTool === 'cursor' || spaceHeld;
+  // ── Tool change handlers ─────────────────────────────────────────────────
+  // Switching to a different tool always resets mode to infinite.
+  const handleToolChange = (tool) => {
+    setActiveTool(tool);
+    setToolMode('infinite');
+  };
+
+  // Clicking the already-active tool button flips the mode.
+  const handleModeToggle = () => {
+    setToolMode((prev) => (prev === 'infinite' ? 'single' : 'infinite'));
+  };
+
+  // box-select drag draws a selection rect instead of panning; all other tools pan.
+  const isDraggable = activeTool !== 'box-select' || spaceHeld;
 
   // ── Zoom ─────────────────────────────────────────────────────────────────
   const handleWheel = (e) => {
@@ -196,7 +210,7 @@ export default function Canvas() {
 
   // ── Object creation ───────────────────────────────────────────────────────
   const handleDblClick = (e) => {
-    if (activeTool === 'cursor') return;
+    if (activeTool === 'cursor' || activeTool === 'box-select') return;
     if (e.target !== e.target.getStage()) return;
 
     const stage   = stageRef.current;
@@ -205,9 +219,14 @@ export default function Canvas() {
     const y = (pointer.y - stagePos.y) / stageScale;
 
     if (activeTool === 'line') {
+      // Two-step line creation handled in commit 2.6; for now fall through
       createObject('line', x, y, { points: [x, y, x + 200, y] });
     } else {
       createObject(activeTool, x, y);
+      if (toolMode === 'single') {
+        setActiveTool('cursor');
+        setToolMode('infinite');
+      }
     }
   };
 
@@ -381,7 +400,12 @@ export default function Canvas() {
         />
       )}
 
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
+      <Toolbar
+        activeTool={activeTool}
+        toolMode={toolMode}
+        onToolChange={handleToolChange}
+        onModeToggle={handleModeToggle}
+      />
 
       <InfoOverlay
         stageScale={stageScale}
