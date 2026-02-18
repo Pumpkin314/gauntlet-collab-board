@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:signal": "node node_modules/y-webrtc/bin/server.js",
+    "dev:all": "npm run dev:signal & npm run dev",
     "build": "vite build",
     "preview": "vite preview"
   },

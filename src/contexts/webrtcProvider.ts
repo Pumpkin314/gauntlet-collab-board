@@ -9,7 +9,7 @@
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 
-const DEFAULT_SIGNALING = ['wss://signaling.yjs.dev'];
+const DEFAULT_SIGNALING = ['ws://localhost:4444'];
 
 export function createWebrtcProvider(ydoc: Y.Doc, boardId: string): WebrtcProvider {
   const signalingEnv = import.meta.env.VITE_SIGNALING_SERVERS as string | undefined;
