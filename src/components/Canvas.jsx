@@ -184,10 +184,11 @@ export default function Canvas() {
   }, [selectedIds, objects]);
 
   // ── Tool change handlers ─────────────────────────────────────────────────
-  // Switching to a different tool always resets mode to infinite.
+  // box-select defaults to single-shot so it returns to cursor after one use.
+  // All other tools default to infinite.
   const handleToolChange = (tool) => {
     setActiveTool(tool);
-    setToolMode('infinite');
+    setToolMode(tool === 'box-select' ? 'single' : 'infinite');
     setPendingLineStart(null);
   };
 
