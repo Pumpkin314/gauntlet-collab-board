@@ -154,20 +154,26 @@ export default function Canvas() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedIds, objects, batchDelete, batchCreate, deselectAll, selectAll]);
 
-  // ── Transformer: attach to all selected nodes ─────────────────────────────
+  // ── Transformer: attach to selected non-line nodes ───────────────────────
+  // Lines self-manage their handles (endpoint circles) so they must be
+  // excluded; otherwise the Transformer shows redundant handles over them.
   useEffect(() => {
     if (!transformerRef.current || !layerRef.current) return;
 
     if (selectedIds.size > 0) {
       const nodes = [...selectedIds]
-        .map((id) => layerRef.current.findOne(`#note-${id}`))
+        .map((id) => {
+          const obj = objects.find((o) => o.id === id);
+          if (obj?.type === 'line') return null;
+          return layerRef.current.findOne(`#note-${id}`);
+        })
         .filter(Boolean);
       transformerRef.current.nodes(nodes);
     } else {
       transformerRef.current.nodes([]);
     }
     transformerRef.current.getLayer()?.batchDraw();
-  }, [selectedIds]);
+  }, [selectedIds, objects]);
 
   // ── Tool change handlers ─────────────────────────────────────────────────
   // Switching to a different tool always resets mode to infinite.
