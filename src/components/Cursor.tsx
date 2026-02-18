@@ -13,6 +13,9 @@ interface PresenceUser {
 const SMOOTHING = 0.3;
 const SNAP_THRESHOLD = 0.5;
 
+/** Module-level map: userId → current lerp distance (px) to target. Read by DebugOverlay. */
+export const cursorDeltas = new Map<string, number>();
+
 export default function Cursor({ data }: { data: PresenceUser }) {
   const { cursorX, cursorY, userName, userColor } = data;
 
@@ -24,9 +27,6 @@ export default function Cursor({ data }: { data: PresenceUser }) {
     const node = groupRef.current;
     if (!node) return;
 
-    const dx = displayPos.current.x - node.x();
-    const dy = displayPos.current.y - node.y();
-
     // Lerp toward target
     displayPos.current.x += (cursorX - displayPos.current.x) * SMOOTHING;
     displayPos.current.y += (cursorY - displayPos.current.y) * SMOOTHING;
@@ -37,7 +37,10 @@ export default function Cursor({ data }: { data: PresenceUser }) {
 
     const remainX = cursorX - displayPos.current.x;
     const remainY = cursorY - displayPos.current.y;
-    if (Math.abs(remainX) > SNAP_THRESHOLD || Math.abs(remainY) > SNAP_THRESHOLD) {
+    const delta = Math.hypot(remainX, remainY);
+    cursorDeltas.set(data.id, delta);
+
+    if (delta > SNAP_THRESHOLD) {
       rafId.current = requestAnimationFrame(animate);
     } else {
       // Snap to exact target
@@ -46,9 +49,10 @@ export default function Cursor({ data }: { data: PresenceUser }) {
       node.x(cursorX);
       node.y(cursorY);
       node.getLayer()?.batchDraw();
+      cursorDeltas.set(data.id, 0);
       rafId.current = 0;
     }
-  }, [cursorX, cursorY]);
+  }, [cursorX, cursorY, data.id]);
 
   useEffect(() => {
     if (!rafId.current) {
@@ -59,8 +63,9 @@ export default function Cursor({ data }: { data: PresenceUser }) {
         cancelAnimationFrame(rafId.current);
         rafId.current = 0;
       }
+      cursorDeltas.delete(data.id);
     };
-  }, [animate]);
+  }, [animate, data.id]);
 
   const labelPadding = 6;
   const fontSize = 12;
