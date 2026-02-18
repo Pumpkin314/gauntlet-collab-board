@@ -60,6 +60,9 @@ export default function Canvas() {
   const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
   const [spaceHeld,       setSpaceHeld]       = useState(false);
   const [inlineEdit,      setInlineEdit]      = useState(null);
+  // True while any shape (not the stage background) is being dragged — hides the
+  // action button overlay which would otherwise lag behind due to stale React state.
+  const [isDraggingShape, setIsDraggingShape] = useState(false);
 
   const stageRef       = useRef(null);
   const transformerRef = useRef(null);
@@ -255,10 +258,13 @@ export default function Canvas() {
     });
   };
 
-  // ── Pan ───────────────────────────────────────────────────────────────────
+  // ── Pan + drag tracking ───────────────────────────────────────────────────
   const handleDragEnd = (e) => {
     if (e.target === e.target.getStage()) {
       setStagePos({ x: e.target.x(), y: e.target.y() });
+    } else {
+      // Shape drag ended — re-show action buttons
+      setIsDraggingShape(false);
     }
   };
 
@@ -406,6 +412,7 @@ export default function Canvas() {
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onContextMenu={handleContextMenu}
+        onDragStart={(e) => { if (e.target !== e.target.getStage()) setIsDraggingShape(true); }}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
         onClick={handleDeselectClick}
@@ -441,6 +448,8 @@ export default function Canvas() {
           )}
           <Transformer
             ref={transformerRef}
+            onTransformStart={() => setIsDraggingShape(true)}
+            onTransformEnd={() => setIsDraggingShape(false)}
             boundBoxFunc={(oldBox, newBox) => {
               if (newBox.width < 40 || newBox.height < 40) return oldBox;
               return newBox;
@@ -535,8 +544,8 @@ export default function Canvas() {
       />
 
       {/* Selection action menu — HTML overlay so it never affects Transformer bbox.
-          Shown above the selected shape's top-center (or line midpoint). */}
-      {selectedIds.size === 1 && (() => {
+          Hidden while a shape drag is in progress (stale state would lag behind). */}
+      {!isDraggingShape && selectedIds.size === 1 && (() => {
         const selId = [...selectedIds][0];
         const selObj = objects.find((o) => o.id === selId);
         if (!selObj) return null;
