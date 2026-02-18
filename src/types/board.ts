@@ -4,7 +4,7 @@
 
 export type ShapeType = 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector';
 
-export type ActiveTool = 'cursor' | 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector';
+export type ActiveTool = 'cursor' | 'box-select' | 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector';
 
 export interface BoardObject {
   id: string;
