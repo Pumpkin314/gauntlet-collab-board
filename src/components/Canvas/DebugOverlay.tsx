@@ -34,17 +34,6 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
   const [fps, setFps] = useState(0);
   const frameTimesRef = useRef<number[]>([]);
 
-  // Toggle with backtick key
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === '`' && !e.target || !(e.target as HTMLElement).closest?.('input, textarea')) {
-        setVisible((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
   // FPS counter
   useEffect(() => {
     let rafId: number;
@@ -164,9 +153,6 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
         <Row label="Pan" value={`(${Math.round(stagePos.x)}, ${Math.round(stagePos.y)})`} />
       </Section>
 
-      <div style={{ marginTop: 8, color: '#555', fontSize: 10, textAlign: 'center' }}>
-        Press ` to toggle
-      </div>
     </div>
   );
 }
