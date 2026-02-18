@@ -573,11 +573,12 @@ export default function Canvas() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         };
 
+        const rotateDeg = selObj.type === 'line' ? 0 : (selObj.rotation ?? 0);
         return (
           <div style={{
             position: 'absolute',
             left: btnScreenX, top: btnScreenY,
-            transform: 'translate(-50%, -50%)',
+            transform: `translate(-50%, -50%) rotate(${rotateDeg}deg)`,
             display: 'flex', gap: 8, zIndex: 1200,
           }}>
             {selObj.type !== 'line' && (
