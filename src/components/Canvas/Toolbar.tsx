@@ -11,6 +11,7 @@
  *   inactive          → grey border
  */
 
+import { useState } from 'react';
 import type { ActiveTool } from '../../types/board';
 
 interface ToolDef {
@@ -38,6 +39,8 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ activeTool, toolMode, onToolChange, onModeToggle }: ToolbarProps) {
+  const [hoveredTool, setHoveredTool] = useState<ActiveTool | null>(null);
+
   return (
     <div style={{
       position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
@@ -52,42 +55,57 @@ export default function Toolbar({ activeTool, toolMode, onToolChange, onModeTogg
         if (tool === 'cursor') {
           hint = 'Select & pan (hold Space to pan in any mode)';
         } else if (tool === 'box-select') {
-          if (!isActive)      hint = 'Drag to select multiple objects';
+          if (!isActive)       hint = 'Drag to select multiple objects';
           else if (isInfinite) hint = '∞ Drag to select — stays active. Click to switch to single-shot';
           else                 hint = 'Single-shot — returns to cursor after selecting. Click again for ∞';
         } else {
-          if (!isActive)      hint = `${title} — double-click to place`;
+          if (!isActive)       hint = `${title} — double-click to place`;
           else if (isInfinite) hint = `∞ ${title} — keeps placing after each double-click. Click to switch to single-shot`;
           else                 hint = `Single-shot — returns to cursor after placing. Click again for ∞`;
         }
 
         let border: string;
-        if (!isActive)                    border = '2px solid #ddd';
-        else if (isInfinite)              border = '2px solid #4ECDC4';
-        else                              border = '2px dashed #4ECDC4';
+        if (!isActive)       border = '2px solid #ddd';
+        else if (isInfinite) border = '2px solid #4ECDC4';
+        else                 border = '2px dashed #4ECDC4';
 
         return (
-          <button
-            key={tool}
-            title={hint}
-            onClick={() => {
-              if (tool === activeTool && tool !== 'cursor') {
-                onModeToggle();
-              } else {
-                onToolChange(tool);
-              }
-            }}
-            style={{
-              width: 40, height: 40,
-              border,
-              background:   isActive ? '#f0fffe' : 'white',
-              borderRadius: 8, cursor: 'pointer', fontSize: 18,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {label}
-          </button>
+          <div key={tool} style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                if (tool === activeTool && tool !== 'cursor') {
+                  onModeToggle();
+                } else {
+                  onToolChange(tool);
+                }
+              }}
+              onMouseEnter={() => setHoveredTool(tool)}
+              onMouseLeave={() => setHoveredTool(null)}
+              style={{
+                width: 40, height: 40,
+                border,
+                background:   isActive ? '#f0fffe' : 'white',
+                borderRadius: 8, cursor: 'pointer', fontSize: 18,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {label}
+            </button>
+            {hoveredTool === tool && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 10px)', left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#333', color: 'white',
+                padding: '5px 9px', borderRadius: 6,
+                fontSize: 12, lineHeight: 1.4,
+                whiteSpace: 'nowrap', maxWidth: 260, pointerEvents: 'none',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)', zIndex: 1001,
+              }}>
+                {hint}
+              </div>
+            )}
+          </div>
         );
       })}
     </div>
