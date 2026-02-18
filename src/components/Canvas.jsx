@@ -1,477 +1,289 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Stage, Layer, Rect, Text, Group, Circle, Transformer } from 'react-konva';
+import { Stage, Layer, Transformer } from 'react-konva';
 import { useBoard } from '../contexts/BoardContext';
+import { useSelection } from '../contexts/SelectionContext';
 import Cursor from './Cursor';
+import ObjectRenderer from './Canvas/ObjectRenderer';
+import Toolbar from './Canvas/Toolbar';
+import ColorPicker from './Canvas/ColorPicker';
+import InfoOverlay from './Canvas/InfoOverlay';
+import DebugOverlay from './Canvas/DebugOverlay';
+import { registerShape } from '../utils/shapeRegistry';
+import StickyNote from './shapes/StickyNote';
+import RectShape from './shapes/RectShape';
+import CircleShape from './shapes/CircleShape';
+import TextShape from './shapes/TextShape';
+import LineShape from './shapes/LineShape';
 
-/**
- * StickyNote Component
- * Interactive sticky note with drag, edit, selection, and hover menu
- */
-function StickyNote({
-  id,
-  data,
-  isSelected,
-  onSelect,
-  onUpdate,
-  onStartEdit,
-  onShowColorPicker,
-  onDelete,
-  onTransformStart,
-  onTransformEnd,
-  onDimsChanged,
-}) {
-  const groupRef = useRef(null);
-  const [isHovered, setIsHovered] = useState(false);
+// ── Register all shape types ───────────────────────────────────────────────────
+registerShape('sticky', {
+  component: StickyNote,
+  defaults:  { width: 200, height: 200, color: '#FFE66D', content: 'Double-click to edit' },
+  minWidth: 100, minHeight: 80,
+});
+registerShape('rect', {
+  component: RectShape,
+  defaults:  { width: 160, height: 100, color: '#85C1E2' },
+  minWidth: 40, minHeight: 40,
+});
+registerShape('circle', {
+  component: CircleShape,
+  defaults:  { width: 120, height: 120, color: '#AA96DA' },
+  minWidth: 40, minHeight: 40,
+});
+registerShape('text', {
+  component: TextShape,
+  defaults:  { width: 200, height: 60, color: '#333333', content: 'Text' },
+  minWidth: 60, minHeight: 24,
+});
+registerShape('line', {
+  component: LineShape,
+  defaults:  { width: 200, height: 0, color: '#333333', strokeWidth: 2 },
+  minWidth: 0, minHeight: 0,
+});
 
-  // Local dimensions so resize is instant — no async React/Firestore round-trip
-  const [localWidth, setLocalWidth] = useState(data.width);
-  const [localHeight, setLocalHeight] = useState(data.height);
-
-  // Sync local dims when data changes from other users (not from our own resize)
-  useEffect(() => {
-    setLocalWidth(data.width);
-    setLocalHeight(data.height);
-  }, [data.width, data.height]);
-
-  // After React commits new localWidth/localHeight to Konva nodes, tell the
-  // transformer to recalculate its bounding box
-  useEffect(() => {
-    if (isSelected && onDimsChanged) {
-      onDimsChanged();
-    }
-  }, [localWidth, localHeight]);
-
-  // Handle drag end - update position in Firestore
-  const handleDragEnd = (e) => {
-    const node = e.target;
-    onUpdate(data.id, {
-      x: node.x(),
-      y: node.y(),
-    });
-  };
-
-  // Handle click - select this object
-  const handleClick = () => {
-    onSelect(data.id);
-  };
-
-  // Handle double-click - enter edit mode
-  const handleDblClick = () => {
-    onStartEdit(data);
-  };
-
-  // Handle transform start
-  const handleTransformStart = () => {
-    if (onTransformStart) {
-      onTransformStart();
-    }
-  };
-
-  // Handle transform end - update size/rotation in Firestore
-  const handleTransformEnd = () => {
-    const node = groupRef.current;
-    const scaleX = node.scaleX();
-    const scaleY = node.scaleY();
-
-    const newWidth = Math.max(100, localWidth * scaleX);
-    const newHeight = Math.max(80, localHeight * scaleY);
-
-    // Reset scale
-    node.scaleX(1);
-    node.scaleY(1);
-
-    // Update local state immediately — React renders correct dims in this same cycle,
-    // so the transformer sees the right bounding box with no flash
-    setLocalWidth(newWidth);
-    setLocalHeight(newHeight);
-
-    // Persist to Firestore
-    onUpdate(data.id, {
-      x: node.x(),
-      y: node.y(),
-      width: newWidth,
-      height: newHeight,
-      rotation: node.rotation(),
-    });
-
-    if (onTransformEnd) {
-      onTransformEnd();
-    }
-  };
-
-  return (
-    <Group
-      id={id}
-      name="object"
-      ref={groupRef}
-      x={data.x}
-      y={data.y}
-      rotation={data.rotation || 0}
-      draggable
-      onDragEnd={handleDragEnd}
-      onClick={handleClick}
-      onTap={handleClick}
-      onDblClick={handleDblClick}
-      onTransformStart={handleTransformStart}
-      onTransformEnd={handleTransformEnd}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Main sticky note rectangle */}
-      <Rect
-        width={localWidth}
-        height={localHeight}
-        fill={data.color}
-        stroke={isSelected ? "#4ECDC4" : "#333"}
-        strokeWidth={isSelected ? 3 : 2}
-        cornerRadius={8}
-        shadowBlur={10}
-        shadowColor="rgba(0,0,0,0.2)"
-        shadowOffset={{ x: 2, y: 2 }}
-      />
-
-      {/* Text content */}
-      <Text
-        x={10}
-        y={10}
-        width={localWidth - 20}
-        height={localHeight - 20}
-        text={data.content}
-        fontSize={16}
-        fill="#333"
-        align="left"
-        verticalAlign="top"
-        wrap="word"
-      />
-
-      {/* Hover menu - Delete button */}
-      {isHovered && (
-        <>
-          <Group
-            x={localWidth - 25}
-            y={5}
-            onClick={(e) => {
-              e.cancelBubble = true;
-              onDelete(data.id);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              onDelete(data.id);
-            }}
-          >
-            <Circle
-              radius={10}
-              fill="#ff6b6b"
-              shadowBlur={4}
-              shadowColor="rgba(0,0,0,0.3)"
-            />
-            <Text
-              x={-5}
-              y={-6}
-              text="✕"
-              fontSize={12}
-              fill="white"
-              fontStyle="bold"
-            />
-          </Group>
-
-          {/* Color picker button */}
-          <Group
-            x={localWidth - 50}
-            y={5}
-            onClick={(e) => {
-              e.cancelBubble = true;
-              const stage = e.target.getStage();
-              const pos = stage.getPointerPosition();
-              onShowColorPicker(data.id, pos);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              const stage = e.target.getStage();
-              const pos = stage.getPointerPosition();
-              onShowColorPicker(data.id, pos);
-            }}
-          >
-            <Circle
-              radius={10}
-              fill="#4ECDC4"
-              shadowBlur={4}
-              shadowColor="rgba(0,0,0,0.3)"
-            />
-            <Text
-              x={-3}
-              y={-6}
-              text="⋮"
-              fontSize={12}
-              fill="white"
-              fontStyle="bold"
-            />
-          </Group>
-        </>
-      )}
-    </Group>
-  );
-}
-
-/**
- * ShapeRect Component
- * A plain resizable/draggable rectangle with hover menu
- */
-function ShapeRect({
-  id,
-  data,
-  isSelected,
-  onSelect,
-  onUpdate,
-  onShowColorPicker,
-  onDelete,
-  onTransformStart,
-  onTransformEnd,
-  onDimsChanged,
-}) {
-  const groupRef = useRef(null);
-  const [isHovered, setIsHovered] = useState(false);
-
-  const [localWidth, setLocalWidth] = useState(data.width);
-  const [localHeight, setLocalHeight] = useState(data.height);
-
-  useEffect(() => {
-    setLocalWidth(data.width);
-    setLocalHeight(data.height);
-  }, [data.width, data.height]);
-
-  useEffect(() => {
-    if (isSelected && onDimsChanged) {
-      onDimsChanged();
-    }
-  }, [localWidth, localHeight]);
-
-  const handleDragEnd = (e) => {
-    const node = e.target;
-    onUpdate(data.id, { x: node.x(), y: node.y() });
-  };
-
-  const handleTransformEnd = () => {
-    const node = groupRef.current;
-    const scaleX = node.scaleX();
-    const scaleY = node.scaleY();
-    const newWidth = Math.max(40, localWidth * scaleX);
-    const newHeight = Math.max(40, localHeight * scaleY);
-    node.scaleX(1);
-    node.scaleY(1);
-    setLocalWidth(newWidth);
-    setLocalHeight(newHeight);
-    onUpdate(data.id, {
-      x: node.x(),
-      y: node.y(),
-      width: newWidth,
-      height: newHeight,
-      rotation: node.rotation(),
-    });
-    if (onTransformEnd) onTransformEnd();
-  };
-
-  return (
-    <Group
-      id={id}
-      name="object"
-      ref={groupRef}
-      x={data.x}
-      y={data.y}
-      rotation={data.rotation || 0}
-      draggable
-      onDragEnd={handleDragEnd}
-      onClick={() => onSelect(data.id)}
-      onTap={() => onSelect(data.id)}
-      onTransformStart={onTransformStart}
-      onTransformEnd={handleTransformEnd}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <Rect
-        width={localWidth}
-        height={localHeight}
-        fill={data.color}
-        stroke={isSelected ? '#4ECDC4' : '#333'}
-        strokeWidth={isSelected ? 3 : 2}
-        cornerRadius={4}
-        shadowBlur={8}
-        shadowColor="rgba(0,0,0,0.2)"
-        shadowOffset={{ x: 2, y: 2 }}
-      />
-
-      {/* Hover menu */}
-      {isHovered && (
-        <>
-          <Group
-            x={localWidth - 25}
-            y={5}
-            onClick={(e) => { e.cancelBubble = true; onDelete(data.id); }}
-            onTap={(e) => { e.cancelBubble = true; onDelete(data.id); }}
-          >
-            <Circle radius={10} fill="#ff6b6b" shadowBlur={4} shadowColor="rgba(0,0,0,0.3)" />
-            <Text x={-5} y={-6} text="✕" fontSize={12} fill="white" fontStyle="bold" />
-          </Group>
-          <Group
-            x={localWidth - 50}
-            y={5}
-            onClick={(e) => {
-              e.cancelBubble = true;
-              const pos = e.target.getStage().getPointerPosition();
-              onShowColorPicker(data.id, pos);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              const pos = e.target.getStage().getPointerPosition();
-              onShowColorPicker(data.id, pos);
-            }}
-          >
-            <Circle radius={10} fill="#4ECDC4" shadowBlur={4} shadowColor="rgba(0,0,0,0.3)" />
-            <Text x={-3} y={-6} text="⋮" fontSize={12} fill="white" fontStyle="bold" />
-          </Group>
-        </>
-      )}
-    </Group>
-  );
-}
-
-/**
- * Canvas Component with Sticky Notes
- * Double-click to create sticky notes that sync via Firestore
- */
 export default function Canvas() {
-  const { objects, presence, createStickyNote, createShape, updateObject, deleteObject, deleteAllObjects, updateCursorPosition, loading } = useBoard();
-  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-  const [stageScale, setStageScale] = useState(1);
-  const [activeTool, setActiveTool] = useState('sticky'); // 'sticky' | 'rect'
-  const [selectedId, setSelectedId] = useState(null);
-  const [editingNote, setEditingNote] = useState(null);
-  const [colorPickerNote, setColorPickerNote] = useState(null);
-  const [colorPickerPos, setColorPickerPos] = useState({ x: 0, y: 0 });
-  const [pendingUpdates, setPendingUpdates] = useState({});
-  const stageRef = useRef(null);
-  const transformerRef = useRef(null);
-  const layerRef = useRef(null);
-  const isTransformingRef = useRef(false);
+  const {
+    objects, presence, createObject, updateObject,
+    deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchDelete, loading,
+  } = useBoard();
 
-  // Handle mouse wheel zoom
+  const { selectedIds, select, toggleSelect, deselectAll, selectAll, isSelected } = useSelection();
+
+  const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
+  const [stageScale,      setStageScale]      = useState(1);
+  const [activeTool,      setActiveTool]      = useState('cursor');
+  const [colorPickerNote, setColorPickerNote] = useState(null);
+  const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
+  const [spaceHeld,       setSpaceHeld]       = useState(false);
+  const [inlineEdit,      setInlineEdit]      = useState(null);
+
+  const stageRef       = useRef(null);
+  const transformerRef = useRef(null);
+  const layerRef       = useRef(null);
+  // Clipboard for copy/paste
+  const clipboardRef   = useRef([]);
+
+  // ── Space-key pan override ────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.code === 'Space' && !e.target.closest('input, textarea')) {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const onKeyUp = (e) => {
+      if (e.code === 'Space') setSpaceHeld(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup',   onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup',   onKeyUp);
+    };
+  }, []);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      // Ignore when typing in a text input
+      if (e.target.closest('input, textarea')) return;
+
+      const selected = [...selectedIds];
+
+      // Delete / Backspace → delete selected
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
+        e.preventDefault();
+        batchDelete(selected);
+        deselectAll();
+        return;
+      }
+
+      // Escape → deselect all
+      if (e.key === 'Escape') {
+        deselectAll();
+        setInlineEdit(null);
+        return;
+      }
+
+      // Ctrl/Cmd + A → select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        selectAll(objects.map((o) => o.id));
+        return;
+      }
+
+      // Ctrl/Cmd + C → copy
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selected.length > 0) {
+        clipboardRef.current = objects.filter((o) => selected.includes(o.id));
+        return;
+      }
+
+      // Ctrl/Cmd + V → paste with +20px offset
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
+        e.preventDefault();
+        const items = clipboardRef.current.map(({ type, x, y, ...rest }) => ({
+          type, x: x + 20, y: y + 20, ...rest,
+        }));
+        const newIds = batchCreate(items);
+        selectAll(newIds);
+        // Update clipboard so repeated paste keeps offsetting
+        clipboardRef.current = clipboardRef.current.map((o) => ({
+          ...o, x: o.x + 20, y: o.y + 20,
+        }));
+        return;
+      }
+
+      // Ctrl/Cmd + D → duplicate (same as copy+paste)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selected.length > 0) {
+        e.preventDefault();
+        const items = objects
+          .filter((o) => selected.includes(o.id))
+          .map(({ type, x, y, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
+        const newIds = batchCreate(items);
+        selectAll(newIds);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedIds, objects, batchDelete, batchCreate, deselectAll, selectAll]);
+
+  // ── Transformer: attach to all selected nodes ─────────────────────────────
+  useEffect(() => {
+    if (!transformerRef.current || !layerRef.current) return;
+
+    if (selectedIds.size > 0) {
+      const nodes = [...selectedIds]
+        .map((id) => layerRef.current.findOne(`#note-${id}`))
+        .filter(Boolean);
+      transformerRef.current.nodes(nodes);
+    } else {
+      transformerRef.current.nodes([]);
+    }
+    transformerRef.current.getLayer()?.batchDraw();
+  }, [selectedIds]);
+
+  const isDraggable = activeTool === 'cursor' || spaceHeld;
+
+  // ── Zoom ─────────────────────────────────────────────────────────────────
   const handleWheel = (e) => {
     e.evt.preventDefault();
-
-    const stage = stageRef.current;
+    const stage    = stageRef.current;
     const oldScale = stage.scaleX();
-    const pointer = stage.getPointerPosition();
-
-    // Calculate new scale
-    const scaleBy = 1.05;
-    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-
-    // Limit zoom range
-    const clampedScale = Math.max(0.1, Math.min(5, newScale));
-
-    // Calculate new position to zoom toward mouse
+    const pointer  = stage.getPointerPosition();
+    const scaleBy  = 1.05;
+    const clamped  = Math.max(0.1, Math.min(5,
+      e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy));
     const mousePointTo = {
       x: (pointer.x - stage.x()) / oldScale,
       y: (pointer.y - stage.y()) / oldScale,
     };
-
-    const newPos = {
-      x: pointer.x - mousePointTo.x * clampedScale,
-      y: pointer.y - mousePointTo.y * clampedScale,
-    };
-
-    setStageScale(clampedScale);
-    setStagePos(newPos);
+    setStageScale(clamped);
+    setStagePos({
+      x: pointer.x - mousePointTo.x * clamped,
+      y: pointer.y - mousePointTo.y * clamped,
+    });
   };
 
-  // Handle stage drag (pan)
+  // ── Pan ───────────────────────────────────────────────────────────────────
   const handleDragEnd = (e) => {
-    // Only update stage position if dragging the stage itself, not child elements
     if (e.target === e.target.getStage()) {
-      setStagePos({
-        x: e.target.x(),
-        y: e.target.y(),
-      });
+      setStagePos({ x: e.target.x(), y: e.target.y() });
     }
   };
 
-  // Handle double-click to create object based on active tool
+  // ── Object creation ───────────────────────────────────────────────────────
   const handleDblClick = (e) => {
-    // Only create on background double-click (not on existing objects)
+    if (activeTool === 'cursor') return;
+    if (e.target !== e.target.getStage()) return;
+
+    const stage   = stageRef.current;
+    const pointer = stage.getPointerPosition();
+    const x = (pointer.x - stagePos.x) / stageScale;
+    const y = (pointer.y - stagePos.y) / stageScale;
+
+    if (activeTool === 'line') {
+      createObject('line', x, y, { points: [x, y, x + 200, y] });
+    } else {
+      createObject(activeTool, x, y);
+    }
+  };
+
+  // ── Cursor position ───────────────────────────────────────────────────────
+  const handleMouseMove = () => {
+    const stage   = stageRef.current;
+    const pointer = stage.getPointerPosition();
+    if (pointer) {
+      updateCursorPosition(
+        (pointer.x - stagePos.x) / stageScale,
+        (pointer.y - stagePos.y) / stageScale,
+      );
+    }
+  };
+
+  // ── Selection ─────────────────────────────────────────────────────────────
+  const handleSelect = useCallback((id, e) => {
+    if (e?.evt?.shiftKey) {
+      toggleSelect(id);
+    } else {
+      select(id);
+    }
+    updateObject(id, { zIndex: Date.now() });
+  }, [select, toggleSelect, updateObject]);
+
+  const handleDeselectClick = (e) => {
     if (e.target === e.target.getStage()) {
-      const stage = stageRef.current;
-      const pointerPosition = stage.getPointerPosition();
-
-      // Convert screen coordinates to canvas coordinates (accounting for pan/zoom)
-      const x = (pointerPosition.x - stagePos.x) / stageScale;
-      const y = (pointerPosition.y - stagePos.y) / stageScale;
-
-      if (activeTool === 'rect') {
-        createShape(x, y);
-      } else {
-        createStickyNote(x, y);
-      }
+      deselectAll();
+      if (inlineEdit) setInlineEdit(null);
     }
   };
 
-  // Handle mouse move to update cursor position
-  const handleMouseMove = (_e) => {
-    const stage = stageRef.current;
-    const pointerPosition = stage.getPointerPosition();
+  const handleDelete = useCallback((id) => {
+    deleteObject(id);
+    deselectAll();
+  }, [deleteObject, deselectAll]);
 
-    if (pointerPosition) {
-      // Convert screen coordinates to canvas coordinates
-      const x = (pointerPosition.x - stagePos.x) / stageScale;
-      const y = (pointerPosition.y - stagePos.y) / stageScale;
+  // ── Inline editing ────────────────────────────────────────────────────────
+  const handleStartInlineEdit = useCallback((data) => {
+    const stage     = stageRef.current;
+    const container = stage.container().getBoundingClientRect();
+    const scale     = stage.scaleX();
+    setInlineEdit({
+      id:       data.id,
+      content:  data.content ?? '',
+      color:    data.color,
+      x:        container.left + stage.x() + data.x * scale,
+      y:        container.top  + stage.y() + data.y * scale,
+      w:        data.width  * scale,
+      h:        data.height * scale,
+      scale,
+      rotation: data.rotation ?? 0,
+    });
+  }, []);
 
-      updateCursorPosition(x, y);
+  const handleInlineEditBlur = (e) => {
+    if (inlineEdit) {
+      updateObject(inlineEdit.id, { content: e.target.value });
+      setInlineEdit(null);
     }
   };
 
-  // Handle sticky note update with optimistic updates
-  const handleNoteUpdate = (noteId, updates) => {
-    // Optimistic update: apply changes immediately to local state
-    setPendingUpdates(prev => ({
-      ...prev,
-      [noteId]: {
-        ...prev[noteId],
-        ...updates
-      }
-    }));
-
-    // Update Firestore in background
-    updateObject(noteId, updates);
-
-    // Clear pending updates after a delay (Firestore should have updated by then)
-    setTimeout(() => {
-      setPendingUpdates(prev => {
-        const next = { ...prev };
-        delete next[noteId];
-        return next;
-      });
-    }, 500);
-  };
-
-  // Handle start editing
-  const handleStartEdit = (note) => {
-    setEditingNote(note);
-  };
-
-  // Handle save edit
-  const handleSaveEdit = (content) => {
-    if (editingNote) {
-      updateObject(editingNote.id, { content });
-      setEditingNote(null);
+  const handleInlineEditKeyDown = (e) => {
+    if (e.key === 'Escape' || (e.key === 'Enter' && e.ctrlKey)) {
+      updateObject(inlineEdit.id, { content: e.target.value });
+      setInlineEdit(null);
     }
+    e.stopPropagation();
   };
 
-  // Handle show color picker
+  // ── Color picker ──────────────────────────────────────────────────────────
   const handleShowColorPicker = (noteId, position) => {
     setColorPickerNote(noteId);
     setColorPickerPos(position);
   };
 
-  // Handle color change
   const handleColorChange = (color) => {
     if (colorPickerNote) {
       updateObject(colorPickerNote, { color });
@@ -479,83 +291,23 @@ export default function Canvas() {
     }
   };
 
-  // Handle clear all
+  // ── Clear all ─────────────────────────────────────────────────────────────
   const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to delete all sticky notes? This cannot be undone.')) {
+    if (window.confirm('Delete all objects? This cannot be undone.')) {
       deleteAllObjects();
+      deselectAll();
     }
   };
 
-  // Handle object selection
-  const handleSelect = (id) => {
-    setSelectedId(id);
-  };
-
-  // Handle deselection (click on background)
-  const handleDeselectClick = (e) => {
-    // Deselect when clicking on stage background
-    if (e.target === e.target.getStage()) {
-      setSelectedId(null);
-    }
-  };
-
-  // Handle delete object
-  const handleDelete = (id) => {
-    deleteObject(id);
-    if (selectedId === id) {
-      setSelectedId(null);
-    }
-  };
-
-  // Handle transform start - set flag to prevent transformer updates
-  const handleTransformStart = () => {
-    isTransformingRef.current = true;
-  };
-
-  // Handle transform end - clear flag to allow transformer updates
-  const handleTransformEnd = () => {
-    isTransformingRef.current = false;
-  };
-
-  // Attach transformer to selected object
-  useEffect(() => {
-    if (selectedId && transformerRef.current && layerRef.current) {
-      const selectedNode = layerRef.current.findOne(`#note-${selectedId}`);
-      if (selectedNode) {
-        transformerRef.current.nodes([selectedNode]);
-        transformerRef.current.getLayer().batchDraw();
-      }
-    } else if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-      transformerRef.current.getLayer().batchDraw();
-    }
-  }, [selectedId]);
-
-  // Filter objects by type, merging pending updates
-  const withPending = (obj) => ({ ...obj, ...(pendingUpdates[obj.id] || {}) });
-  const stickyNotes = objects.filter(obj => obj.type === 'sticky').map(withPending);
-  const rectShapes = objects.filter(obj => obj.type === 'rect').map(withPending);
-  const allObjects = [...stickyNotes, ...rectShapes];
-
-  // Predefined color palette
-  const colorPalette = [
-    '#FFE66D', // Yellow
-    '#FF6B6B', // Red
-    '#4ECDC4', // Teal
-    '#95E1D3', // Mint
-    '#F38181', // Pink
-    '#AA96DA', // Purple
-    '#FCBAD3', // Light Pink
-    '#A8D8EA', // Light Blue
-  ];
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
       <Stage
         ref={stageRef}
         width={window.innerWidth}
         height={window.innerHeight}
-        draggable
+        draggable={isDraggable}
+        style={{ cursor: isDraggable ? 'grab' : 'crosshair' }}
         onWheel={handleWheel}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
@@ -567,59 +319,31 @@ export default function Canvas() {
         scaleX={stageScale}
         scaleY={stageScale}
       >
-        {/* Content Layer: Sticky notes and shapes */}
         <Layer ref={layerRef}>
-          {rectShapes.map((shape) => (
-            <ShapeRect
-              key={shape.id}
-              id={`note-${shape.id}`}
-              data={shape}
-              isSelected={selectedId === shape.id}
-              onSelect={handleSelect}
-              onUpdate={handleNoteUpdate}
-              onShowColorPicker={handleShowColorPicker}
-              onDelete={handleDelete}
-              onTransformStart={handleTransformStart}
-              onTransformEnd={handleTransformEnd}
-              onDimsChanged={() => {
-                if (transformerRef.current) transformerRef.current.forceUpdate();
-              }}
-            />
-          ))}
-          {stickyNotes.map((note) => (
-            <StickyNote
-              key={note.id}
-              id={`note-${note.id}`}
-              data={note}
-              isSelected={selectedId === note.id}
-              onSelect={handleSelect}
-              onUpdate={handleNoteUpdate}
-              onStartEdit={handleStartEdit}
-              onShowColorPicker={handleShowColorPicker}
-              onDelete={handleDelete}
-              onTransformStart={handleTransformStart}
-              onTransformEnd={handleTransformEnd}
-              onDimsChanged={() => {
-                if (transformerRef.current) {
-                  transformerRef.current.forceUpdate();
-                }
-              }}
-            />
-          ))}
-          {/* Transformer for resize/rotate */}
+          <ObjectRenderer
+            objects={objects}
+            selectedIds={selectedIds}
+            inlineEditId={inlineEdit?.id ?? null}
+            onSelect={handleSelect}
+            onUpdate={updateObject}
+            onDelete={handleDelete}
+            onShowColorPicker={handleShowColorPicker}
+            onTransformStart={() => {}}
+            onTransformEnd={() => {}}
+            onDimsChanged={() => {
+              if (transformerRef.current) transformerRef.current.forceUpdate();
+            }}
+            onStartEdit={handleStartInlineEdit}
+          />
           <Transformer
             ref={transformerRef}
             boundBoxFunc={(oldBox, newBox) => {
-              // Limit resize to minimum size
-              if (newBox.width < 100 || newBox.height < 80) {
-                return oldBox;
-              }
+              if (newBox.width < 40 || newBox.height < 40) return oldBox;
               return newBox;
             }}
           />
         </Layer>
 
-        {/* UI Layer: Cursors (not affected by pan/zoom) */}
         <Layer listening={false}>
           {presence.map((user) => (
             <Cursor key={user.id} data={user} />
@@ -627,237 +351,79 @@ export default function Canvas() {
         </Layer>
       </Stage>
 
-      {/* Toolbar */}
-      <div style={{
-        position: 'absolute',
-        top: 20,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        display: 'flex',
-        gap: 8,
-        background: 'white',
-        padding: '8px 12px',
-        borderRadius: 12,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-        zIndex: 1000,
-      }}>
-        {[
-          { tool: 'sticky', label: '📝', title: 'Sticky Note' },
-          { tool: 'rect',   label: '⬜', title: 'Rectangle' },
-        ].map(({ tool, label, title }) => (
-          <button
-            key={tool}
-            title={`${title} (double-click canvas to place)`}
-            onClick={() => setActiveTool(tool)}
-            style={{
-              width: 40,
-              height: 40,
-              border: activeTool === tool ? '2px solid #4ECDC4' : '2px solid #ddd',
-              background: activeTool === tool ? '#f0fffe' : 'white',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: 18,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Inline edit textarea overlay */}
+      {inlineEdit && (
+        <textarea
+          autoFocus
+          defaultValue={inlineEdit.content}
+          onBlur={handleInlineEditBlur}
+          onKeyDown={handleInlineEditKeyDown}
+          style={{
+            position:   'fixed',
+            left:       inlineEdit.x + 10 * inlineEdit.scale,
+            top:        inlineEdit.y + 10 * inlineEdit.scale,
+            width:      inlineEdit.w - 20 * inlineEdit.scale,
+            height:     inlineEdit.h - 20 * inlineEdit.scale,
+            fontSize:   16 * inlineEdit.scale,
+            transform:  inlineEdit.rotation ? `rotate(${inlineEdit.rotation}deg)` : undefined,
+            transformOrigin: 'top left',
+            background: 'transparent',
+            border:     'none',
+            outline:    '2px solid #4ECDC4',
+            borderRadius: 4,
+            resize:     'none',
+            padding:    0,
+            fontFamily: 'inherit',
+            color:      '#333',
+            zIndex:     1500,
+            lineHeight: 1.4,
+          }}
+        />
+      )}
 
-      {/* Canvas info overlay */}
-      <div style={{
-        position: 'absolute',
-        bottom: 20,
-        left: 20,
-        background: 'rgba(0,0,0,0.7)',
-        color: 'white',
-        padding: '10px 15px',
-        borderRadius: 8,
-        fontSize: 12,
-        fontFamily: 'monospace'
-      }}>
-        <div>Zoom: {(stageScale * 100).toFixed(0)}%</div>
-        <div>Pan: ({Math.round(stagePos.x)}, {Math.round(stagePos.y)})</div>
-        <div>Objects: {allObjects.length}</div>
-        <div style={{ color: '#4ECDC4' }}>Users Online: {presence.length + 1}</div>
-        <div style={{ marginTop: 8, opacity: 0.7, fontSize: 11 }}>
-          • Drag canvas to pan<br/>
-          • Scroll to zoom<br/>
-          • Double-click to create object<br/>
-          • Drag sticky to move<br/>
-          • Double-click sticky to edit<br/>
-          • Right-click sticky for colors
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
+
+      <InfoOverlay
+        stageScale={stageScale}
+        stagePos={stagePos}
+        objectCount={objects.length}
+        usersOnline={presence.length + 1}
+        loading={loading}
+      />
+
+      {/* Selection count badge */}
+      {selectedIds.size > 1 && (
+        <div style={{
+          position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)',
+          background: '#4ECDC4', color: 'white', padding: '4px 12px',
+          borderRadius: 20, fontSize: 13, fontWeight: 600, zIndex: 1000,
+        }}>
+          {selectedIds.size} objects selected
         </div>
-        {loading && <div style={{ marginTop: 8, color: '#4ECDC4' }}>Loading...</div>}
-      </div>
+      )}
 
-      {/* Clear All Button */}
-      {allObjects.length > 0 && (
+      {objects.length > 0 && (
         <button
           onClick={handleClearAll}
           style={{
-            position: 'absolute',
-            bottom: 20,
-            right: 20,
-            background: '#ff6b6b',
-            color: 'white',
-            border: 'none',
-            padding: '8px 12px',
-            borderRadius: 8,
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(255, 107, 107, 0.3)',
+            position: 'absolute', bottom: 20, right: 20,
+            background: '#ff6b6b', color: 'white', border: 'none',
+            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.3)',
           }}
-          title="Delete all sticky notes"
         >
           🗑️ Clear All
         </button>
       )}
 
-      {/* Text Editing Modal */}
-      {editingNote && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000,
-          }}
-          onClick={() => setEditingNote(null)}
-        >
-          <div
-            style={{
-              background: 'white',
-              borderRadius: 12,
-              padding: 20,
-              width: '90%',
-              maxWidth: 400,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: '0 0 15px 0', fontSize: 18 }}>Edit Sticky Note</h3>
-            <textarea
-              autoFocus
-              defaultValue={editingNote.content}
-              style={{
-                width: '100%',
-                height: 150,
-                padding: 12,
-                fontSize: 16,
-                border: '2px solid #ddd',
-                borderRadius: 8,
-                resize: 'none',
-                fontFamily: 'inherit',
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.ctrlKey) {
-                  handleSaveEdit(e.target.value);
-                }
-                if (e.key === 'Escape') {
-                  setEditingNote(null);
-                }
-              }}
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 15, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setEditingNote(null)}
-                style={{
-                  padding: '8px 16px',
-                  border: '2px solid #ddd',
-                  background: 'white',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={(e) => {
-                  const textarea = e.target.parentElement.previousSibling;
-                  handleSaveEdit(textarea.value);
-                }}
-                style={{
-                  padding: '8px 16px',
-                  border: '2px solid #4ECDC4',
-                  background: '#4ECDC4',
-                  color: 'white',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Save (Ctrl+Enter)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DebugOverlay stageScale={stageScale} stagePos={stagePos} />
 
-      {/* Color Picker */}
-      {colorPickerNote && (
-        <>
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 1999,
-            }}
-            onClick={() => setColorPickerNote(null)}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: colorPickerPos.x,
-              top: colorPickerPos.y,
-              background: 'white',
-              borderRadius: 12,
-              padding: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-              zIndex: 2000,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 8,
-            }}
-          >
-            {colorPalette.map((color) => (
-              <button
-                key={color}
-                onClick={() => handleColorChange(color)}
-                style={{
-                  width: 40,
-                  height: 40,
-                  background: color,
-                  border: '2px solid #ddd',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s ease',
-                }}
-                onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
-                onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                title={color}
-              />
-            ))}
-          </div>
-        </>
-      )}
+      <ColorPicker
+        noteId={colorPickerNote}
+        position={colorPickerPos}
+        onColorChange={handleColorChange}
+        onClose={() => setColorPickerNote(null)}
+      />
     </div>
   );
 }
