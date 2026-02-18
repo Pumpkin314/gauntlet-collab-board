@@ -7,6 +7,7 @@ import ObjectRenderer from './Canvas/ObjectRenderer';
 import Toolbar from './Canvas/Toolbar';
 import ColorPicker from './Canvas/ColorPicker';
 import SelectionRect from './Canvas/SelectionRect';
+import LinePreview from './Canvas/LinePreview';
 import InfoOverlay from './Canvas/InfoOverlay';
 import DebugOverlay from './Canvas/DebugOverlay';
 import { registerShape } from '../utils/shapeRegistry';
@@ -67,6 +68,9 @@ export default function Canvas() {
   // Box-select: rect state + ref to avoid stale closures in mousemove
   const [boxSelectRect,   setBoxSelectRect]   = useState(null); // {startX,startY,x,y,width,height}
   const isBoxDraggingRef = useRef(false);
+  // Two-step line creation: first double-click anchors the start vertex
+  const [pendingLineStart, setPendingLineStart] = useState(null); // {x,y} | null
+  const [cursorPos,         setCursorPos]        = useState({ x: 0, y: 0 });
 
   // ── Space-key pan override ────────────────────────────────────────────────
   useEffect(() => {
@@ -103,8 +107,9 @@ export default function Canvas() {
         return;
       }
 
-      // Escape → deselect all
+      // Escape → cancel pending line step 1, then deselect all
       if (e.key === 'Escape') {
+        if (pendingLineStart) { setPendingLineStart(null); return; }
         deselectAll();
         setInlineEdit(null);
         return;
@@ -152,7 +157,7 @@ export default function Canvas() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedIds, objects, batchDelete, batchCreate, deselectAll, selectAll]);
+  }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, deselectAll, selectAll]);
 
   // ── Transformer: attach to selected non-line nodes ───────────────────────
   // Lines self-manage their handles (endpoint circles) so they must be
@@ -180,6 +185,7 @@ export default function Canvas() {
   const handleToolChange = (tool) => {
     setActiveTool(tool);
     setToolMode('infinite');
+    setPendingLineStart(null);
   };
 
   // Clicking the already-active tool button flips the mode.
@@ -189,6 +195,12 @@ export default function Canvas() {
 
   // box-select drag draws a selection rect instead of panning; all other tools pan.
   const isDraggable = activeTool !== 'box-select' || spaceHeld;
+
+  // ── Right-click: cancel pending line step 1 ──────────────────────────────
+  const handleContextMenu = (e) => {
+    e.evt.preventDefault();
+    if (pendingLineStart) setPendingLineStart(null);
+  };
 
   // ── Box-select drag ───────────────────────────────────────────────────────
   const handleMouseDown = (e) => {
@@ -261,14 +273,27 @@ export default function Canvas() {
     const y = (pointer.y - stagePos.y) / stageScale;
 
     if (activeTool === 'line') {
-      // Two-step line creation handled in commit 2.6; for now fall through
-      createObject('line', x, y, { points: [x, y, x + 200, y] });
-    } else {
-      createObject(activeTool, x, y);
-      if (toolMode === 'single') {
-        setActiveTool('cursor');
-        setToolMode('infinite');
+      if (!pendingLineStart) {
+        // Step 1: anchor the first vertex; preview follows cursor until second click
+        setPendingLineStart({ x, y });
+      } else {
+        // Step 2: commit the line with exact endpoints
+        createObject('line', pendingLineStart.x, pendingLineStart.y, {
+          points: [pendingLineStart.x, pendingLineStart.y, x, y],
+        });
+        setPendingLineStart(null);
+        if (toolMode === 'single') {
+          setActiveTool('cursor');
+          setToolMode('infinite');
+        }
       }
+      return;
+    }
+
+    createObject(activeTool, x, y);
+    if (toolMode === 'single') {
+      setActiveTool('cursor');
+      setToolMode('infinite');
     }
   };
 
@@ -280,6 +305,7 @@ export default function Canvas() {
     const cx = (pointer.x - stagePos.x) / stageScale;
     const cy = (pointer.y - stagePos.y) / stageScale;
     updateCursorPosition(cx, cy);
+    setCursorPos({ x: cx, y: cy });
     if (isBoxDraggingRef.current && boxSelectRect) {
       setBoxSelectRect((prev) => ({
         ...prev,
@@ -379,6 +405,7 @@ export default function Canvas() {
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onContextMenu={handleContextMenu}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
         onClick={handleDeselectClick}
@@ -406,6 +433,12 @@ export default function Canvas() {
             onStartEdit={handleStartInlineEdit}
           />
           {boxSelectRect && <SelectionRect {...boxSelectRect} />}
+          {pendingLineStart && (
+            <LinePreview
+              x1={pendingLineStart.x} y1={pendingLineStart.y}
+              x2={cursorPos.x}        y2={cursorPos.y}
+            />
+          )}
           <Transformer
             ref={transformerRef}
             boundBoxFunc={(oldBox, newBox) => {
