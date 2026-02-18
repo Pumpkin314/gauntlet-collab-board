@@ -533,6 +533,62 @@ export default function Canvas() {
         onColorChange={handleColorChange}
         onClose={() => setColorPickerNote(null)}
       />
+
+      {/* Selection action menu — HTML overlay so it never affects Transformer bbox.
+          Shown above the selected shape's top-center (or line midpoint). */}
+      {selectedIds.size === 1 && (() => {
+        const selId = [...selectedIds][0];
+        const selObj = objects.find((o) => o.id === selId);
+        if (!selObj) return null;
+
+        let btnScreenX, btnScreenY;
+        if (selObj.type === 'line') {
+          const pts = selObj.points ?? [selObj.x, selObj.y, selObj.x + 200, selObj.y];
+          const mx = (pts[0] + pts[2]) / 2;
+          const my = (pts[1] + pts[3]) / 2;
+          btnScreenX = stagePos.x + mx * stageScale;
+          btnScreenY = stagePos.y + my * stageScale - 44;
+        } else {
+          // Compute rotated top-center in canvas space, then 44px "above" in screen space
+          const r = (selObj.rotation ?? 0) * Math.PI / 180;
+          const canvasTCX = selObj.x + (selObj.width / 2) * Math.cos(r);
+          const canvasTCY = selObj.y + (selObj.width / 2) * Math.sin(r);
+          btnScreenX = stagePos.x + canvasTCX * stageScale + Math.sin(r) * 44;
+          btnScreenY = stagePos.y + canvasTCY * stageScale - Math.cos(r) * 44;
+        }
+
+        const btnStyle = {
+          width: 28, height: 28, border: 'none', borderRadius: '50%',
+          cursor: 'pointer', fontSize: 14, fontWeight: 'bold', color: 'white',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        };
+
+        return (
+          <div style={{
+            position: 'absolute',
+            left: btnScreenX, top: btnScreenY,
+            transform: 'translate(-50%, -50%)',
+            display: 'flex', gap: 8, zIndex: 1200,
+          }}>
+            {selObj.type !== 'line' && (
+              <button
+                title="Change color"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  handleShowColorPicker(selObj.id, { x: rect.right + 8, y: rect.top });
+                }}
+                style={{ ...btnStyle, background: '#4ECDC4' }}
+              >⋮</button>
+            )}
+            <button
+              title="Delete"
+              onClick={() => handleDelete(selObj.id)}
+              style={{ ...btnStyle, background: '#ff6b6b' }}
+            >✕</button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
