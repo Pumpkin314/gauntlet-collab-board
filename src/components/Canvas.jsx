@@ -6,6 +6,7 @@ import Cursor from './Cursor';
 import ObjectRenderer from './Canvas/ObjectRenderer';
 import Toolbar from './Canvas/Toolbar';
 import ColorPicker from './Canvas/ColorPicker';
+import SelectionRect from './Canvas/SelectionRect';
 import InfoOverlay from './Canvas/InfoOverlay';
 import DebugOverlay from './Canvas/DebugOverlay';
 import { registerShape } from '../utils/shapeRegistry';
@@ -48,7 +49,7 @@ export default function Canvas() {
     deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchDelete, loading,
   } = useBoard();
 
-  const { selectedIds, select, toggleSelect, deselectAll, selectAll, isSelected } = useSelection();
+  const { selectedIds, select, toggleSelect, setSelection, deselectAll, selectAll, isSelected } = useSelection();
 
   const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
   const [stageScale,      setStageScale]      = useState(1);
@@ -62,8 +63,10 @@ export default function Canvas() {
   const stageRef       = useRef(null);
   const transformerRef = useRef(null);
   const layerRef       = useRef(null);
-  // Clipboard for copy/paste
   const clipboardRef   = useRef([]);
+  // Box-select: rect state + ref to avoid stale closures in mousemove
+  const [boxSelectRect,   setBoxSelectRect]   = useState(null); // {startX,startY,x,y,width,height}
+  const isBoxDraggingRef = useRef(false);
 
   // ── Space-key pan override ────────────────────────────────────────────────
   useEffect(() => {
@@ -181,6 +184,39 @@ export default function Canvas() {
   // box-select drag draws a selection rect instead of panning; all other tools pan.
   const isDraggable = activeTool !== 'box-select' || spaceHeld;
 
+  // ── Box-select drag ───────────────────────────────────────────────────────
+  const handleMouseDown = (e) => {
+    if (activeTool !== 'box-select') return;
+    if (e.target !== e.target.getStage()) return;
+    const pointer = stageRef.current.getPointerPosition();
+    const cx = (pointer.x - stagePos.x) / stageScale;
+    const cy = (pointer.y - stagePos.y) / stageScale;
+    isBoxDraggingRef.current = true;
+    setBoxSelectRect({ startX: cx, startY: cy, x: cx, y: cy, width: 0, height: 0 });
+  };
+
+  const handleMouseUp = () => {
+    if (!isBoxDraggingRef.current || !boxSelectRect) return;
+    isBoxDraggingRef.current = false;
+    const { x, y, width, height } = boxSelectRect;
+    if (width > 4 || height > 4) {
+      const hit = objects.filter((obj) => {
+        const ox = obj.points ? Math.min(obj.points[0], obj.points[2]) : obj.x;
+        const oy = obj.points ? Math.min(obj.points[1], obj.points[3]) : obj.y;
+        const ow = obj.points ? Math.abs(obj.points[2] - obj.points[0]) : obj.width;
+        const oh = obj.points ? Math.abs(obj.points[3] - obj.points[1]) : obj.height;
+        // AABB intersection (more forgiving than strict containment)
+        return ox < x + width && ox + ow > x && oy < y + height && oy + oh > y;
+      });
+      setSelection(new Set(hit.map((o) => o.id)));
+    }
+    setBoxSelectRect(null);
+    if (toolMode === 'single') {
+      setActiveTool('cursor');
+      setToolMode('infinite');
+    }
+  };
+
   // ── Zoom ─────────────────────────────────────────────────────────────────
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -230,15 +266,22 @@ export default function Canvas() {
     }
   };
 
-  // ── Cursor position ───────────────────────────────────────────────────────
+  // ── Cursor position + box-select rect update ─────────────────────────────
   const handleMouseMove = () => {
     const stage   = stageRef.current;
     const pointer = stage.getPointerPosition();
-    if (pointer) {
-      updateCursorPosition(
-        (pointer.x - stagePos.x) / stageScale,
-        (pointer.y - stagePos.y) / stageScale,
-      );
+    if (!pointer) return;
+    const cx = (pointer.x - stagePos.x) / stageScale;
+    const cy = (pointer.y - stagePos.y) / stageScale;
+    updateCursorPosition(cx, cy);
+    if (isBoxDraggingRef.current && boxSelectRect) {
+      setBoxSelectRect((prev) => ({
+        ...prev,
+        x:      Math.min(cx, prev.startX),
+        y:      Math.min(cy, prev.startY),
+        width:  Math.abs(cx - prev.startX),
+        height: Math.abs(cy - prev.startY),
+      }));
     }
   };
 
@@ -328,6 +371,8 @@ export default function Canvas() {
         draggable={isDraggable}
         style={{ cursor: isDraggable ? 'grab' : 'crosshair' }}
         onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
         onClick={handleDeselectClick}
@@ -354,6 +399,7 @@ export default function Canvas() {
             }}
             onStartEdit={handleStartInlineEdit}
           />
+          {boxSelectRect && <SelectionRect {...boxSelectRect} />}
           <Transformer
             ref={transformerRef}
             boundBoxFunc={(oldBox, newBox) => {
