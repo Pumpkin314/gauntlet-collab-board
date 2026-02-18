@@ -2,8 +2,9 @@
  * BaseShape
  *
  * Shared foundation for all board shapes (sticky, rect, circle, text, …).
- * Handles: drag, transform (resize/rotate), hover menu (delete + color picker),
- * and the localWidth/localHeight pattern that prevents the transformer flash.
+ * Handles: drag, transform (resize/rotate), and the localWidth/localHeight pattern
+ * that prevents the transformer flash. The selection action menu (delete/color) is
+ * rendered as an HTML overlay in Canvas.jsx so it never affects the Transformer bbox.
  *
  * Usage:
  *   <BaseShape {...shapeProps} minWidth={100} minHeight={80} onDblClick={...}>
@@ -11,9 +12,9 @@
  *   </BaseShape>
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Group, Circle, Text } from 'react-konva';
+import { Group } from 'react-konva';
 import type { ShapeProps } from '../../types/board';
 
 interface BaseShapeProps extends ShapeProps {
@@ -41,7 +42,6 @@ export default function BaseShape({
   children,
 }: BaseShapeProps) {
   const groupRef = useRef<any>(null);
-  const [isHovered, setIsHovered] = useState(false);
 
   // Local dimensions — updated immediately on resize so the transformer
   // never sees a stale bounding box (no Yjs round-trip needed).
@@ -106,46 +106,9 @@ export default function BaseShape({
       onDblClick={onDblClick}
       onTransformStart={onTransformStart}
       onTransformEnd={handleTransformEnd}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Shape visual — provided by the concrete shape component */}
       {children(localWidth, localHeight)}
-
-      {/* Hover menu */}
-      {isHovered && (
-        <>
-          {/* Delete button */}
-          <Group
-            x={localWidth - 25}
-            y={5}
-            onClick={(e: any) => { e.cancelBubble = true; onDelete(data.id); }}
-            onTap={(e: any)   => { e.cancelBubble = true; onDelete(data.id); }}
-          >
-            <Circle radius={10} fill="#ff6b6b" shadowBlur={4} shadowColor="rgba(0,0,0,0.3)" />
-            <Text x={-5} y={-6} text="✕" fontSize={12} fill="white" fontStyle="bold" />
-          </Group>
-
-          {/* Color picker button */}
-          <Group
-            x={localWidth - 50}
-            y={5}
-            onClick={(e: any) => {
-              e.cancelBubble = true;
-              const pos = e.target.getStage().getPointerPosition();
-              onShowColorPicker(data.id, pos);
-            }}
-            onTap={(e: any) => {
-              e.cancelBubble = true;
-              const pos = e.target.getStage().getPointerPosition();
-              onShowColorPicker(data.id, pos);
-            }}
-          >
-            <Circle radius={10} fill="#4ECDC4" shadowBlur={4} shadowColor="rgba(0,0,0,0.3)" />
-            <Text x={-3} y={-6} text="⋮" fontSize={12} fill="white" fontStyle="bold" />
-          </Group>
-        </>
-      )}
     </Group>
   );
 }

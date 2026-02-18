@@ -60,6 +60,9 @@ export default function Canvas() {
   const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
   const [spaceHeld,       setSpaceHeld]       = useState(false);
   const [inlineEdit,      setInlineEdit]      = useState(null);
+  // True while any shape (not the stage background) is being dragged — hides the
+  // action button overlay which would otherwise lag behind due to stale React state.
+  const [isDraggingShape, setIsDraggingShape] = useState(false);
 
   const stageRef       = useRef(null);
   const transformerRef = useRef(null);
@@ -255,10 +258,13 @@ export default function Canvas() {
     });
   };
 
-  // ── Pan ───────────────────────────────────────────────────────────────────
+  // ── Pan + drag tracking ───────────────────────────────────────────────────
   const handleDragEnd = (e) => {
     if (e.target === e.target.getStage()) {
       setStagePos({ x: e.target.x(), y: e.target.y() });
+    } else {
+      // Shape drag ended — re-show action buttons
+      setIsDraggingShape(false);
     }
   };
 
@@ -406,6 +412,7 @@ export default function Canvas() {
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onContextMenu={handleContextMenu}
+        onDragStart={(e) => { if (e.target !== e.target.getStage()) setIsDraggingShape(true); }}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
         onClick={handleDeselectClick}
@@ -441,6 +448,8 @@ export default function Canvas() {
           )}
           <Transformer
             ref={transformerRef}
+            onTransformStart={() => setIsDraggingShape(true)}
+            onTransformEnd={() => setIsDraggingShape(false)}
             boundBoxFunc={(oldBox, newBox) => {
               if (newBox.width < 40 || newBox.height < 40) return oldBox;
               return newBox;
@@ -533,6 +542,63 @@ export default function Canvas() {
         onColorChange={handleColorChange}
         onClose={() => setColorPickerNote(null)}
       />
+
+      {/* Selection action menu — HTML overlay so it never affects Transformer bbox.
+          Hidden while a shape drag is in progress (stale state would lag behind). */}
+      {!isDraggingShape && selectedIds.size === 1 && (() => {
+        const selId = [...selectedIds][0];
+        const selObj = objects.find((o) => o.id === selId);
+        if (!selObj) return null;
+
+        let btnScreenX, btnScreenY;
+        if (selObj.type === 'line') {
+          const pts = selObj.points ?? [selObj.x, selObj.y, selObj.x + 200, selObj.y];
+          const mx = (pts[0] + pts[2]) / 2;
+          const my = (pts[1] + pts[3]) / 2;
+          btnScreenX = stagePos.x + mx * stageScale;
+          btnScreenY = stagePos.y + my * stageScale - 28;
+        } else {
+          // Compute rotated top-center in canvas space, then 44px "above" in screen space
+          const r = (selObj.rotation ?? 0) * Math.PI / 180;
+          const canvasTCX = selObj.x + (selObj.width / 2) * Math.cos(r);
+          const canvasTCY = selObj.y + (selObj.width / 2) * Math.sin(r);
+          btnScreenX = stagePos.x + canvasTCX * stageScale + Math.sin(r) * 28;
+          btnScreenY = stagePos.y + canvasTCY * stageScale - Math.cos(r) * 28;
+        }
+
+        const btnStyle = {
+          width: 24, height: 24, border: 'none', borderRadius: '50%',
+          cursor: 'pointer', fontSize: 12, fontWeight: 'bold', color: 'white',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        };
+
+        const rotateDeg = selObj.type === 'line' ? 0 : (selObj.rotation ?? 0);
+        return (
+          <div style={{
+            position: 'absolute',
+            left: btnScreenX, top: btnScreenY,
+            transform: `translate(-50%, -50%) rotate(${rotateDeg}deg)`,
+            display: 'flex', gap: 8, zIndex: 1200,
+          }}>
+            {selObj.type !== 'line' && (
+              <button
+                title="Change color"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  handleShowColorPicker(selObj.id, { x: rect.right + 8, y: rect.top });
+                }}
+                style={{ ...btnStyle, background: '#4ECDC4' }}
+              >⋮</button>
+            )}
+            <button
+              title="Delete"
+              onClick={() => handleDelete(selObj.id)}
+              style={{ ...btnStyle, background: '#ff6b6b' }}
+            >✕</button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
