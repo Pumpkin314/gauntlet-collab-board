@@ -99,7 +99,7 @@ export default function Toolbar({ activeTool, toolMode, onToolChange, onModeTogg
                 background: '#333', color: 'white',
                 padding: '5px 9px', borderRadius: 6,
                 fontSize: 12, lineHeight: 1.4,
-                whiteSpace: 'nowrap', maxWidth: 260, pointerEvents: 'none',
+                whiteSpace: 'nowrap', pointerEvents: 'none',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.25)', zIndex: 1001,
               }}>
                 {hint}
