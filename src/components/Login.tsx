@@ -23,7 +23,7 @@ export default function Login() {
   };
 
   return (
-    <div style={styles.container}>
+    <div data-testid="login-page" style={styles.container}>
       <div style={styles.card}>
         <div style={styles.header}>
           <div style={styles.logo}>CB</div>
@@ -34,6 +34,7 @@ export default function Login() {
         {error && <div style={styles.error}>{error}</div>}
 
         <button
+          data-testid="google-signin-btn"
           onClick={() => void handleGoogleSignIn()}
           disabled={loading}
           style={{ ...styles.button, ...(loading ? styles.buttonDisabled : {}) }}
