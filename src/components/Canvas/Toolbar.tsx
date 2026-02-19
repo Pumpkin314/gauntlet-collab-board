@@ -42,7 +42,7 @@ export default function Toolbar({ activeTool, toolMode, onToolChange, onModeTogg
   const [hoveredTool, setHoveredTool] = useState<ActiveTool | null>(null);
 
   return (
-    <div style={{
+    <div data-testid="toolbar" style={{
       position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
       display: 'flex', gap: 8, background: 'white', padding: '8px 12px',
       borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 1000,
@@ -72,6 +72,7 @@ export default function Toolbar({ activeTool, toolMode, onToolChange, onModeTogg
         return (
           <div key={tool} style={{ position: 'relative' }}>
             <button
+              data-testid={`tool-${tool}`}
               onClick={() => {
                 if (tool === activeTool && tool !== 'cursor') {
                   onModeToggle();
