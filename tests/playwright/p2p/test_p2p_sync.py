@@ -19,7 +19,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from helpers import navigate_and_wait, get_shape_count, canvas_center
+from helpers import navigate_and_wait_p2p, get_shape_count, canvas_center
 
 # How long to wait for WebRTC peers to connect before the write.
 # y-webrtc negotiates via signaling + ICE; on localhost this typically
@@ -58,8 +58,8 @@ def test_p2p_latency():
         page_b = browser_b.new_page()
 
         try:
-            navigate_and_wait(page_a)
-            navigate_and_wait(page_b)
+            navigate_and_wait_p2p(page_a)
+            navigate_and_wait_p2p(page_b)
 
             # Give WebRTC time to complete signaling + ICE negotiation.
             print(f"  Waiting {WEBRTC_SETTLE_S}s for WebRTC peers to connect...")

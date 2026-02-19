@@ -3,8 +3,15 @@ Shared helpers for the CollabBoard Playwright test suite.
 
 All helpers assume:
   - The dev server is running at http://localhost:3000
-  - VITE_TEST_MODE=true (auth bypass + in-memory Yjs, no Firebase/WebRTC)
   - data-testid attributes from feature/test-selectors are present
+
+Two navigation helpers are provided:
+  navigate_and_wait()     — hermetic tests (SKIP_SYNC): uses networkidle,
+                            safe because no persistent WebSocket is open.
+  navigate_and_wait_p2p() — P2P tests (real WebRTC): waits for the canvas
+                            stage to be visible instead of networkidle, because
+                            the WebRTC signaling WebSocket keeps the connection
+                            open indefinitely and networkidle never fires.
 """
 
 import time
@@ -16,11 +23,33 @@ BASE_URL = "http://localhost:3000"
 # Konva node types that are framework internals, not board objects.
 _INTERNAL_NODE_TYPES = {"Transformer", "TransformerAnchor"}
 
+# How long to wait for the canvas to appear in P2P mode (Firestore error +
+# WebRTC handshake can add a few seconds before the board is rendered).
+_P2P_CANVAS_TIMEOUT_MS = 20_000
+
 
 def navigate_and_wait(page: Page) -> None:
-    """Navigate to the app root and wait for network activity to settle."""
+    """Navigate to the app root and wait for network activity to settle.
+
+    Suitable for hermetic tests where VITE_TEST_SKIP_SYNC=true suppresses
+    WebSockets, so networkidle resolves quickly.
+    """
     page.goto(BASE_URL)
     page.wait_for_load_state("networkidle")
+
+
+def navigate_and_wait_p2p(page: Page) -> None:
+    """Navigate to the app root and wait until the canvas stage is visible.
+
+    Used for P2P tests where WebRTC keeps a persistent WebSocket to the
+    signaling server open — networkidle never fires in that environment.
+    Waits for [data-testid="canvas-stage"] as the readiness signal instead.
+    """
+    page.goto(BASE_URL)
+    page.wait_for_load_state("domcontentloaded")
+    page.locator('[data-testid="canvas-stage"]').wait_for(
+        state="visible", timeout=_P2P_CANVAS_TIMEOUT_MS
+    )
 
 
 def get_shape_count(page: Page) -> int:
