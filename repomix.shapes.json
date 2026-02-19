@@ -1,0 +1,12 @@
+{
+  "output": { "filePath": "repomix-shapes.xml" },
+  "include": [
+    "CODEBASE-MAP.md",
+    "CLAUDE.md",
+    "src/types/board.ts",
+    "src/firebase.ts",
+    "src/utils/shapeRegistry.ts",
+    "src/components/shapes/**",
+    "src/components/Canvas/ObjectRenderer.tsx"
+  ]
+}
