@@ -190,6 +190,28 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
     updateDebug({ ydocClientId: ydoc.clientID });
 
+    // In test mode skip WebRTC and Firestore entirely — use a plain in-memory
+    // Yjs doc. All CRUD methods still work identically against the Yjs map,
+    // so tests exercise the same code paths with zero external dependencies.
+    if (import.meta.env.VITE_TEST_MODE === 'true') {
+      const syncToReact = () => {
+        const arr: BoardObject[] = [];
+        yObjects.forEach((yObj) => {
+          arr.push(Object.fromEntries(yObj.entries()) as unknown as BoardObject);
+        });
+        arr.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+        setObjects(arr);
+      };
+      yObjects.observeDeep(syncToReact);
+      setLoading(false);
+      updateDebug({ firestoreSynced: true, presenceSource: 'none' });
+      return () => {
+        ydoc.destroy();
+        ydocRef.current     = null;
+        yObjectsRef.current = null;
+      };
+    }
+
     // P2P real-time sync via WebRTC
     const webrtcProvider = createWebrtcProvider(ydoc, boardId);
     webrtcRef.current = webrtcProvider;
@@ -307,6 +329,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!currentUser) return;
+    // Presence writes are skipped in test mode — no Firestore connection exists.
+    if (import.meta.env.VITE_TEST_MODE === 'true') return;
 
     presenceRef.current = doc(db, `boards/${boardId}/presence`, currentUser.uid);
     const userColor = getUserColor(currentUser.uid);
