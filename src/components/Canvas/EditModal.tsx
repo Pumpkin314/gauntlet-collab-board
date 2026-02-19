@@ -3,6 +3,7 @@
  * Phase 4 will replace this with inline canvas editing (textarea overlay).
  */
 
+import { useRef } from 'react';
 import type { BoardObject } from '../../types/board';
 
 interface EditModalProps {
@@ -12,6 +13,7 @@ interface EditModalProps {
 }
 
 export default function EditModal({ note, onSave, onClose }: EditModalProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   if (!note) return null;
 
   return (
@@ -32,6 +34,7 @@ export default function EditModal({ note, onSave, onClose }: EditModalProps) {
       >
         <h3 style={{ margin: '0 0 15px 0', fontSize: 18 }}>Edit Sticky Note</h3>
         <textarea
+          ref={textareaRef}
           autoFocus
           defaultValue={note.content ?? ''}
           style={{
@@ -55,9 +58,8 @@ export default function EditModal({ note, onSave, onClose }: EditModalProps) {
             Cancel
           </button>
           <button
-            onClick={(e) => {
-              const textarea = (e.target as HTMLElement).parentElement!.previousSibling as HTMLTextAreaElement;
-              onSave(textarea.value);
+            onClick={() => {
+              if (textareaRef.current) onSave(textareaRef.current.value);
             }}
             style={{
               padding: '8px 16px', border: '2px solid #4ECDC4', background: '#4ECDC4',
