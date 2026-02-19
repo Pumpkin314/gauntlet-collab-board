@@ -50,10 +50,11 @@ function computeGridStyle(
     // empty radial-gradient that still costs compositor memory.
     if (Math.round(opacity * 100) === 0) continue;
 
-    // Align the CSS tile origin to the canvas-space origin so the grid
-    // pans correctly as stagePos changes.
-    const offX = ((pos.x % screenSpacing) + screenSpacing) % screenSpacing;
-    const offY = ((pos.y % screenSpacing) + screenSpacing) % screenSpacing;
+    // radial-gradient places dots at the tile center (50% 50%), so we shift
+    // the tile origin by -screenSpacing/2 to land dots at canvas-space multiples
+    // of canvasSpacing. This guarantees coarse dots coincide with fine/micro dots.
+    const offX = ((pos.x - screenSpacing / 2) % screenSpacing + screenSpacing) % screenSpacing;
+    const offY = ((pos.y - screenSpacing / 2) % screenSpacing + screenSpacing) % screenSpacing;
 
     images.push(
       `radial-gradient(circle, rgba(150,150,150,${opacity.toFixed(3)}) ${tier.radius}px, transparent ${tier.radius}px)`,
