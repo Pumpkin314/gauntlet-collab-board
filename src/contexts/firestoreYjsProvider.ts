@@ -54,6 +54,8 @@ export class FirestorePersistenceProvider {
 
   /** Fired once after the initial Firestore snapshot is applied. */
   onSynced?: () => void;
+  /** Fired after each successful persist to Firestore. */
+  onPersisted?: () => void;
 
   constructor(ydoc: Y.Doc, boardId: string) {
     this.ydoc = ydoc;
@@ -74,9 +76,13 @@ export class FirestorePersistenceProvider {
       snapshotRef,
       (snap) => {
         if (snap.exists()) {
-          const { state } = snap.data() as { state: string };
-          // Y.applyUpdate merges the remote snapshot into local state (CRDT-safe)
-          Y.applyUpdate(this.ydoc, base64ToUint8(state), 'firestore');
+          const data = snap.data();
+          if (typeof data['state'] !== 'string') {
+            console.error('[FirestoreYjsProvider] unexpected snapshot format:', data);
+          } else {
+            // Y.applyUpdate merges the remote snapshot into local state (CRDT-safe)
+            Y.applyUpdate(this.ydoc, base64ToUint8(data['state']), 'firestore');
+          }
         }
 
         // Signal ready after the first snapshot (may be empty for new boards)
@@ -107,6 +113,7 @@ export class FirestorePersistenceProvider {
         state: uint8ToBase64(state),
         updatedAt: Date.now(),
       });
+      this.onPersisted?.();
     } catch (error) {
       console.error('[FirestorePersistenceProvider] persist error:', error);
     }

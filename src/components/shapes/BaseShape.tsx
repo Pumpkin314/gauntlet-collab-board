@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Group } from 'react-konva';
+import Konva from 'konva';
 import type { ShapeProps } from '../../types/board';
 
 interface BaseShapeProps extends ShapeProps {
@@ -41,7 +42,7 @@ export default function BaseShape({
   minHeight = 40,
   children,
 }: BaseShapeProps) {
-  const groupRef = useRef<any>(null);
+  const groupRef = useRef<Konva.Group>(null);
 
   // Local dimensions — updated immediately on resize so the transformer
   // never sees a stale bounding box (no Yjs round-trip needed).
@@ -61,13 +62,14 @@ export default function BaseShape({
     }
   }, [localWidth, localHeight]);
 
-  const handleDragEnd = (e: any) => {
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
     onUpdate(data.id, { x: node.x(), y: node.y() });
   };
 
   const handleTransformEnd = () => {
     const node = groupRef.current;
+    if (!node) return;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
 
@@ -101,8 +103,8 @@ export default function BaseShape({
       rotation={data.rotation ?? 0}
       draggable
       onDragEnd={handleDragEnd}
-      onClick={(e: any) => onSelect(data.id, e)}
-      onTap={(e: any) => onSelect(data.id, e)}
+      onClick={(e: Konva.KonvaEventObject<MouseEvent>) => onSelect(data.id, e)}
+      onTap={(e: Konva.KonvaEventObject<Event>) => onSelect(data.id, e)}
       onDblClick={onDblClick}
       onTransformStart={onTransformStart}
       onTransformEnd={handleTransformEnd}

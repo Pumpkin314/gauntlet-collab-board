@@ -21,6 +21,7 @@ import {
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { FirestoreYjsProvider } from './firestoreYjsProvider';
@@ -40,6 +41,37 @@ function getUserColor(userId: string): string {
     hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
+}
+
+/** Shape of a validated Yjs awareness entry. */
+interface AwarenessState {
+  userId: string;
+  userName: string;
+  userColor: string;
+  cursorX: number;
+  cursorY: number;
+}
+
+function isAwarenessState(s: unknown): s is AwarenessState {
+  if (!s || typeof s !== 'object') return false;
+  const o = s as Record<string, unknown>;
+  return (
+    typeof o['userId']    === 'string' &&
+    typeof o['userName']  === 'string' &&
+    typeof o['userColor'] === 'string' &&
+    typeof o['cursorX']   === 'number' &&
+    typeof o['cursorY']   === 'number'
+  );
+}
+
+/** Shape of a Firestore presence document. */
+interface PresenceDoc {
+  userId:     string;
+  userName:   string;
+  userColor:  string;
+  cursorX:    number;
+  cursorY:    number;
+  lastActive: Timestamp | null;
 }
 
 const SHAPE_DEFAULTS: Record<ShapeType, Partial<BoardObject>> = {
@@ -196,20 +228,20 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const remoteCursors: DebugInfo['remoteCursors'] = [];
       states.forEach((state, clientId) => {
         if (clientId === ydoc.clientID) return;
-        if (!state || !state.userId) return;
+        if (!isAwarenessState(state)) return;
         remotePeers.push({
-          id:        state.userId as string,
-          userId:    state.userId as string,
-          userName:  state.userName as string,
-          userColor: state.userColor as string,
-          cursorX:   (state.cursorX as number) ?? 0,
-          cursorY:   (state.cursorY as number) ?? 0,
+          id:        state.userId,
+          userId:    state.userId,
+          userName:  state.userName,
+          userColor: state.userColor,
+          cursorX:   state.cursorX,
+          cursorY:   state.cursorY,
         });
         remoteCursors.push({
-          userId:   state.userId as string,
-          userName: state.userName as string,
-          x:        (state.cursorX as number) ?? 0,
-          y:        (state.cursorY as number) ?? 0,
+          userId:   state.userId,
+          userName: state.userName,
+          x:        state.cursorX,
+          y:        state.cursorY,
         });
       });
       hasWebrtcPeersRef.current = remotePeers.length > 0;
@@ -227,10 +259,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // Firestore persistence (durable backup)
     const firestoreProvider = new FirestoreYjsProvider(ydoc, boardId);
 
-    // Track Firestore writes via the provider's persist events
-    const origPersist = (firestoreProvider as any).persist.bind(firestoreProvider);
-    (firestoreProvider as any).persist = async function () {
-      await origPersist();
+    // Track Firestore writes via the provider's onPersisted callback
+    firestoreProvider.onPersisted = () => {
       firestoreWriteCountRef.current++;
       updateDebug({
         firestoreWriteCount: firestoreWriteCountRef.current,
@@ -293,7 +323,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // Without this, a force-closed tab leaves a stale doc forever.
     const heartbeat = setInterval(() => {
       if (presenceRef.current) {
-        setDoc(presenceRef.current, { lastActive: serverTimestamp() }, { merge: true });
+        setDoc(presenceRef.current, { lastActive: serverTimestamp() }, { merge: true })
+          .catch((e) => console.warn('[BoardContext] heartbeat update failed:', e));
       }
     }, 60_000);
 
@@ -303,16 +334,15 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     const unsub = onSnapshot(presenceCol, (snap) => {
       // Only use Firestore presence when we have no WebRTC peers
       if (hasWebrtcPeersRef.current) return;
-      const all = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
+      const all: PresenceUser[] = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as PresenceDoc) }))
         .filter((p) => {
           // Drop entries with no heartbeat or whose heartbeat is older than STALE_MS.
           // This evicts tabs that closed without a graceful deleteDoc.
-          const ts = (p as any).lastActive as { toDate: () => Date } | null | undefined;
-          if (!ts) return false;
-          return Date.now() - ts.toDate().getTime() < STALE_MS;
+          if (!p.lastActive) return false;
+          return Date.now() - p.lastActive.toDate().getTime() < STALE_MS;
         })
-        .filter((p) => p.userId !== currentUser.uid) as PresenceUser[];
+        .filter((p) => p.userId !== currentUser.uid);
       setPresence(all);
       if (all.length > 0) {
         updateDebug({ presenceSource: 'firestore' });
@@ -323,7 +353,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       clearInterval(heartbeat);
       unsub();
       if (presenceRef.current) {
-        deleteDoc(presenceRef.current).catch(() => {});
+        deleteDoc(presenceRef.current).catch((e) => console.warn('[BoardContext] presence cleanup failed:', e));
       }
     };
   }, [currentUser, boardId, updateDebug]);
