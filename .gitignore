@@ -27,3 +27,7 @@ dist-ssr
 .env
 .env.local
 .env.production
+
+# Test artifacts
+tests/screenshots/*.png
+tests/playwright/__pycache__/
