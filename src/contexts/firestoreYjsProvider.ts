@@ -93,6 +93,13 @@ export class FirestorePersistenceProvider {
       },
       (error) => {
         console.error('[FirestoreYjsProvider] snapshot error:', error);
+        // Still mark the board as ready so callers don't hang indefinitely.
+        // This lets P2P test sessions start with stub Firestore credentials —
+        // WebRTC handles real-time sync; Firestore persistence is simply absent.
+        if (!this.synced) {
+          this.synced = true;
+          this.onSynced?.();
+        }
       }
     );
   }
