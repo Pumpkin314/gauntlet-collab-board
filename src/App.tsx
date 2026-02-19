@@ -36,7 +36,7 @@ function App() {
   return (
     <div className="app">
       {/* Top bar with user profile */}
-      <div className="top-bar">
+      <div data-testid="top-bar" className="top-bar">
         <div className="user-profile-section">
           <div className="user-profile">
             {currentUser.photoURL && !imageError ? (
@@ -54,21 +54,22 @@ function App() {
                 {getInitials(currentUser.displayName ?? 'User')}
               </div>
             )}
-            <span className="user-name">{currentUser.displayName}</span>
+            <span data-testid="user-name" className="user-name">{currentUser.displayName}</span>
             <button
+              data-testid="presence-toggle-btn"
               onClick={() => setShowPresence(!showPresence)}
               className="presence-toggle-btn"
               title="Active users"
             >
               👥 {presence.length + 1}
             </button>
-            <button onClick={() => void logout()} className="logout-btn">
+            <button data-testid="logout-btn" onClick={() => void logout()} className="logout-btn">
               Sign Out
             </button>
           </div>
 
           {showPresence && (
-            <div className="presence-list">
+            <div data-testid="presence-list" className="presence-list">
               <div className="presence-header">Active Users</div>
 
               {/* Current user */}
