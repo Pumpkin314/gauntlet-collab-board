@@ -13,7 +13,7 @@ interface ObjectRendererProps {
   objects: BoardObject[];
   selectedIds: Set<string>;
   inlineEditId: string | null;
-  onSelect: (id: string, e?: any) => void;
+  onSelect: (id: string, e?: unknown) => void;
   onUpdate: (id: string, updates: Partial<BoardObject>) => void;
   onDelete: (id: string) => void;
   onShowColorPicker: (id: string, pos: { x: number; y: number }) => void;
