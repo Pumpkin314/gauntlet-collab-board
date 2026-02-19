@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Stage, Layer, Transformer } from 'react-konva';
+import Konva from 'konva';
 import { useBoard } from '../contexts/BoardContext';
 import { useSelection } from '../contexts/SelectionContext';
 import Cursor from './Cursor';
@@ -16,6 +17,7 @@ import RectShape from './shapes/RectShape';
 import CircleShape from './shapes/CircleShape';
 import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
+import type { ActiveTool, BoardObject } from '../types/board';
 
 // ── Register all shape types ───────────────────────────────────────────────────
 registerShape('sticky', {
@@ -44,46 +46,72 @@ registerShape('line', {
   minWidth: 0, minHeight: 0,
 });
 
+// ── local types ────────────────────────────────────────────────────────────────
+
+interface InlineEdit {
+  id:       string;
+  content:  string;
+  color:    string;
+  x:        number;
+  y:        number;
+  w:        number;
+  h:        number;
+  scale:    number;
+  rotation: number;
+}
+
+interface BoxSelectRect {
+  startX: number;
+  startY: number;
+  x:      number;
+  y:      number;
+  width:  number;
+  height: number;
+}
+
+/** Transformer boundBoxFunc — pure, no closures, safe to hoist. */
+const boundBoxFunc = (
+  oldBox: { x: number; y: number; width: number; height: number; rotation: number },
+  newBox: { x: number; y: number; width: number; height: number; rotation: number },
+) => (newBox.width < 40 || newBox.height < 40 ? oldBox : newBox);
+
 export default function Canvas() {
   const {
     objects, presence, createObject, updateObject,
     deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchDelete, loading,
   } = useBoard();
 
-  const { selectedIds, select, toggleSelect, setSelection, deselectAll, selectAll, isSelected } = useSelection();
+  const { selectedIds, select, toggleSelect, setSelection, deselectAll, selectAll } = useSelection();
 
   const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
   const [stageScale,      setStageScale]      = useState(1);
-  const [activeTool,      setActiveTool]      = useState('cursor');
-  const [toolMode,        setToolMode]        = useState('infinite'); // 'infinite' | 'single'
-  const [colorPickerNote, setColorPickerNote] = useState(null);
+  const [activeTool,      setActiveTool]      = useState<ActiveTool>('cursor');
+  const [toolMode,        setToolMode]        = useState<'infinite' | 'single'>('infinite');
+  const [colorPickerNote, setColorPickerNote] = useState<string | null>(null);
   const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
   const [spaceHeld,       setSpaceHeld]       = useState(false);
-  const [inlineEdit,      setInlineEdit]      = useState(null);
-  // True while any shape (not the stage background) is being dragged — hides the
-  // action button overlay which would otherwise lag behind due to stale React state.
+  const [inlineEdit,      setInlineEdit]      = useState<InlineEdit | null>(null);
   const [isDraggingShape, setIsDraggingShape] = useState(false);
 
-  const stageRef       = useRef(null);
-  const transformerRef = useRef(null);
-  const layerRef       = useRef(null);
-  const clipboardRef   = useRef([]);
-  // Box-select: rect state + ref to avoid stale closures in mousemove
-  const [boxSelectRect,   setBoxSelectRect]   = useState(null); // {startX,startY,x,y,width,height}
-  const isBoxDraggingRef = useRef(false);
-  // Two-step line creation: first double-click anchors the start vertex
-  const [pendingLineStart, setPendingLineStart] = useState(null); // {x,y} | null
-  const [cursorPos,         setCursorPos]        = useState({ x: 0, y: 0 });
+  const stageRef       = useRef<Konva.Stage | null>(null);
+  const transformerRef = useRef<Konva.Transformer | null>(null);
+  const layerRef       = useRef<Konva.Layer | null>(null);
+  const clipboardRef   = useRef<BoardObject[]>([]);
+
+  const [boxSelectRect,   setBoxSelectRect]   = useState<BoxSelectRect | null>(null);
+  const isBoxDraggingRef  = useRef(false);
+  const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
+  const [cursorPos,        setCursorPos]        = useState({ x: 0, y: 0 });
 
   // ── Space-key pan override ────────────────────────────────────────────────
   useEffect(() => {
-    const onKeyDown = (e) => {
-      if (e.code === 'Space' && !e.target.closest('input, textarea')) {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !(e.target as HTMLElement).closest('input, textarea')) {
         e.preventDefault();
         setSpaceHeld(true);
       }
     };
-    const onKeyUp = (e) => {
+    const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpaceHeld(false);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -96,13 +124,11 @@ export default function Canvas() {
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
-    const onKeyDown = (e) => {
-      // Ignore when typing in a text input
-      if (e.target.closest('input, textarea')) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('input, textarea')) return;
 
       const selected = [...selectedIds];
 
-      // Delete / Backspace → delete selected
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
         e.preventDefault();
         batchDelete(selected);
@@ -110,7 +136,6 @@ export default function Canvas() {
         return;
       }
 
-      // Escape → cancel pending line step 1, then deselect all
       if (e.key === 'Escape') {
         if (pendingLineStart) { setPendingLineStart(null); return; }
         deselectAll();
@@ -118,20 +143,17 @@ export default function Canvas() {
         return;
       }
 
-      // Ctrl/Cmd + A → select all
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         e.preventDefault();
         selectAll(objects.map((o) => o.id));
         return;
       }
 
-      // Ctrl/Cmd + C → copy
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selected.length > 0) {
         clipboardRef.current = objects.filter((o) => selected.includes(o.id));
         return;
       }
 
-      // Ctrl/Cmd + V → paste with +20px offset
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
         e.preventDefault();
         const items = clipboardRef.current.map(({ type, x, y, ...rest }) => ({
@@ -139,14 +161,12 @@ export default function Canvas() {
         }));
         const newIds = batchCreate(items);
         selectAll(newIds);
-        // Update clipboard so repeated paste keeps offsetting
         clipboardRef.current = clipboardRef.current.map((o) => ({
           ...o, x: o.x + 20, y: o.y + 20,
         }));
         return;
       }
 
-      // Ctrl/Cmd + D → duplicate (same as copy+paste)
       if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selected.length > 0) {
         e.preventDefault();
         const items = objects
@@ -163,8 +183,6 @@ export default function Canvas() {
   }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, deselectAll, selectAll]);
 
   // ── Transformer: attach to selected non-line nodes ───────────────────────
-  // Lines self-manage their handles (endpoint circles) so they must be
-  // excluded; otherwise the Transformer shows redundant handles over them.
   useEffect(() => {
     if (!transformerRef.current || !layerRef.current) return;
 
@@ -173,9 +191,9 @@ export default function Canvas() {
         .map((id) => {
           const obj = objects.find((o) => o.id === id);
           if (obj?.type === 'line') return null;
-          return layerRef.current.findOne(`#note-${id}`);
+          return layerRef.current!.findOne(`#note-${id}`);
         })
-        .filter(Boolean);
+        .filter((n): n is Konva.Node => n != null);
       transformerRef.current.nodes(nodes);
     } else {
       transformerRef.current.nodes([]);
@@ -184,33 +202,32 @@ export default function Canvas() {
   }, [selectedIds, objects]);
 
   // ── Tool change handlers ─────────────────────────────────────────────────
-  // box-select defaults to single-shot so it returns to cursor after one use.
-  // All other tools default to infinite.
-  const handleToolChange = (tool) => {
+  const handleToolChange = (tool: ActiveTool) => {
     setActiveTool(tool);
     setToolMode(tool === 'box-select' ? 'single' : 'infinite');
     setPendingLineStart(null);
   };
 
-  // Clicking the already-active tool button flips the mode.
   const handleModeToggle = () => {
     setToolMode((prev) => (prev === 'infinite' ? 'single' : 'infinite'));
   };
 
-  // box-select drag draws a selection rect instead of panning; all other tools pan.
   const isDraggable = activeTool !== 'box-select' || spaceHeld;
 
   // ── Right-click: cancel pending line step 1 ──────────────────────────────
-  const handleContextMenu = (e) => {
+  const handleContextMenu = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.evt.preventDefault();
     if (pendingLineStart) setPendingLineStart(null);
   };
 
   // ── Box-select drag ───────────────────────────────────────────────────────
-  const handleMouseDown = (e) => {
+  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (activeTool !== 'box-select') return;
     if (e.target !== e.target.getStage()) return;
-    const pointer = stageRef.current.getPointerPosition();
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
     const cx = (pointer.x - stagePos.x) / stageScale;
     const cy = (pointer.y - stagePos.y) / stageScale;
     isBoxDraggingRef.current = true;
@@ -223,11 +240,10 @@ export default function Canvas() {
     const { x, y, width, height } = boxSelectRect;
     if (width > 4 || height > 4) {
       const hit = objects.filter((obj) => {
-        const ox = obj.points ? Math.min(obj.points[0], obj.points[2]) : obj.x;
-        const oy = obj.points ? Math.min(obj.points[1], obj.points[3]) : obj.y;
-        const ow = obj.points ? Math.abs(obj.points[2] - obj.points[0]) : obj.width;
-        const oh = obj.points ? Math.abs(obj.points[3] - obj.points[1]) : obj.height;
-        // AABB intersection (more forgiving than strict containment)
+        const ox = obj.points ? Math.min(obj.points[0] ?? 0, obj.points[2] ?? 0) : obj.x;
+        const oy = obj.points ? Math.min(obj.points[1] ?? 0, obj.points[3] ?? 0) : obj.y;
+        const ow = obj.points ? Math.abs((obj.points[2] ?? 0) - (obj.points[0] ?? 0)) : obj.width;
+        const oh = obj.points ? Math.abs((obj.points[3] ?? 0) - (obj.points[1] ?? 0)) : obj.height;
         return ox < x + width && ox + ow > x && oy < y + height && oy + oh > y;
       });
       setSelection(new Set(hit.map((o) => o.id)));
@@ -240,13 +256,15 @@ export default function Canvas() {
   };
 
   // ── Zoom ─────────────────────────────────────────────────────────────────
-  const handleWheel = (e) => {
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
-    const stage    = stageRef.current;
+    const stage = stageRef.current;
+    if (!stage) return;
     const oldScale = stage.scaleX();
     const pointer  = stage.getPointerPosition();
-    const scaleBy  = 1.05;
-    const clamped  = Math.max(0.1, Math.min(5,
+    if (!pointer) return;
+    const scaleBy = 1.05;
+    const clamped = Math.max(0.1, Math.min(5,
       e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy));
     const mousePointTo = {
       x: (pointer.x - stage.x()) / oldScale,
@@ -260,31 +278,30 @@ export default function Canvas() {
   };
 
   // ── Pan + drag tracking ───────────────────────────────────────────────────
-  const handleDragEnd = (e) => {
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target === e.target.getStage()) {
       setStagePos({ x: e.target.x(), y: e.target.y() });
     } else {
-      // Shape drag ended — re-show action buttons
       setIsDraggingShape(false);
     }
   };
 
   // ── Object creation ───────────────────────────────────────────────────────
-  const handleDblClick = (e) => {
+  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (activeTool === 'cursor' || activeTool === 'box-select') return;
     if (e.target !== e.target.getStage()) return;
 
-    const stage   = stageRef.current;
+    const stage = stageRef.current;
+    if (!stage) return;
     const pointer = stage.getPointerPosition();
+    if (!pointer) return;
     const x = (pointer.x - stagePos.x) / stageScale;
     const y = (pointer.y - stagePos.y) / stageScale;
 
     if (activeTool === 'line') {
       if (!pendingLineStart) {
-        // Step 1: anchor the first vertex; preview follows cursor until second click
         setPendingLineStart({ x, y });
       } else {
-        // Step 2: commit the line with exact endpoints
         createObject('line', pendingLineStart.x, pendingLineStart.y, {
           points: [pendingLineStart.x, pendingLineStart.y, x, y],
         });
@@ -306,7 +323,8 @@ export default function Canvas() {
 
   // ── Cursor position + box-select rect update ─────────────────────────────
   const handleMouseMove = () => {
-    const stage   = stageRef.current;
+    const stage = stageRef.current;
+    if (!stage) return;
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
     const cx = (pointer.x - stagePos.x) / stageScale;
@@ -314,19 +332,23 @@ export default function Canvas() {
     updateCursorPosition(cx, cy);
     setCursorPos({ x: cx, y: cy });
     if (isBoxDraggingRef.current && boxSelectRect) {
-      setBoxSelectRect((prev) => ({
-        ...prev,
-        x:      Math.min(cx, prev.startX),
-        y:      Math.min(cy, prev.startY),
-        width:  Math.abs(cx - prev.startX),
-        height: Math.abs(cy - prev.startY),
-      }));
+      setBoxSelectRect((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          x:      Math.min(cx, prev.startX),
+          y:      Math.min(cy, prev.startY),
+          width:  Math.abs(cx - prev.startX),
+          height: Math.abs(cy - prev.startY),
+        };
+      });
     }
   };
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const handleSelect = useCallback((id, e) => {
-    if (e?.evt?.shiftKey) {
+  const handleSelect = useCallback((id: string, e?: unknown) => {
+    const konvaEvent = e as Konva.KonvaEventObject<MouseEvent> | undefined;
+    if (konvaEvent?.evt?.shiftKey) {
       toggleSelect(id);
     } else {
       select(id);
@@ -334,21 +356,22 @@ export default function Canvas() {
     updateObject(id, { zIndex: Date.now() });
   }, [select, toggleSelect, updateObject]);
 
-  const handleDeselectClick = (e) => {
+  const handleDeselectClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) {
       deselectAll();
       if (inlineEdit) setInlineEdit(null);
     }
   };
 
-  const handleDelete = useCallback((id) => {
+  const handleDelete = useCallback((id: string) => {
     deleteObject(id);
     deselectAll();
   }, [deleteObject, deselectAll]);
 
   // ── Inline editing ────────────────────────────────────────────────────────
-  const handleStartInlineEdit = useCallback((data) => {
-    const stage     = stageRef.current;
+  const handleStartInlineEdit = useCallback((data: BoardObject) => {
+    const stage = stageRef.current;
+    if (!stage) return;
     const container = stage.container().getBoundingClientRect();
     const scale     = stage.scaleX();
     setInlineEdit({
@@ -364,28 +387,29 @@ export default function Canvas() {
     });
   }, []);
 
-  const handleInlineEditBlur = (e) => {
+  const handleInlineEditBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
     if (inlineEdit) {
       updateObject(inlineEdit.id, { content: e.target.value });
       setInlineEdit(null);
     }
   };
 
-  const handleInlineEditKeyDown = (e) => {
+  const handleInlineEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!inlineEdit) return;
     if (e.key === 'Escape' || (e.key === 'Enter' && e.ctrlKey)) {
-      updateObject(inlineEdit.id, { content: e.target.value });
+      updateObject(inlineEdit.id, { content: e.currentTarget.value });
       setInlineEdit(null);
     }
     e.stopPropagation();
   };
 
   // ── Color picker ──────────────────────────────────────────────────────────
-  const handleShowColorPicker = (noteId, position) => {
+  const handleShowColorPicker = (noteId: string, position: { x: number; y: number }) => {
     setColorPickerNote(noteId);
     setColorPickerPos(position);
   };
 
-  const handleColorChange = (color) => {
+  const handleColorChange = (color: string) => {
     if (colorPickerNote) {
       updateObject(colorPickerNote, { color });
       setColorPickerNote(null);
@@ -451,10 +475,7 @@ export default function Canvas() {
             ref={transformerRef}
             onTransformStart={() => setIsDraggingShape(true)}
             onTransformEnd={() => setIsDraggingShape(false)}
-            boundBoxFunc={(oldBox, newBox) => {
-              if (newBox.width < 40 || newBox.height < 40) return oldBox;
-              return newBox;
-            }}
+            boundBoxFunc={boundBoxFunc}
           />
         </Layer>
 
@@ -465,7 +486,6 @@ export default function Canvas() {
         </Layer>
       </Stage>
 
-      {/* Inline edit textarea overlay */}
       {inlineEdit && (
         <textarea
           autoFocus
@@ -510,7 +530,6 @@ export default function Canvas() {
         loading={loading}
       />
 
-      {/* Selection count badge */}
       {selectedIds.size > 1 && (
         <div style={{
           position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)',
@@ -544,22 +563,22 @@ export default function Canvas() {
         onClose={() => setColorPickerNote(null)}
       />
 
-      {/* Selection action menu — HTML overlay so it never affects Transformer bbox.
-          Hidden while a shape drag is in progress (stale state would lag behind). */}
+      {/* Selection action menu — HTML overlay, never affects Transformer bbox.
+          Hidden while a shape drag is in progress to avoid stale position lag. */}
       {!isDraggingShape && selectedIds.size === 1 && (() => {
-        const selId = [...selectedIds][0];
+        const selId  = [...selectedIds][0];
         const selObj = objects.find((o) => o.id === selId);
-        if (!selObj) return null;
+        if (!selObj || !selId) return null;
 
-        let btnScreenX, btnScreenY;
+        let btnScreenX: number;
+        let btnScreenY: number;
         if (selObj.type === 'line') {
           const pts = selObj.points ?? [selObj.x, selObj.y, selObj.x + 200, selObj.y];
-          const mx = (pts[0] + pts[2]) / 2;
-          const my = (pts[1] + pts[3]) / 2;
+          const mx = ((pts[0] ?? 0) + (pts[2] ?? 0)) / 2;
+          const my = ((pts[1] ?? 0) + (pts[3] ?? 0)) / 2;
           btnScreenX = stagePos.x + mx * stageScale;
           btnScreenY = stagePos.y + my * stageScale - 28;
         } else {
-          // Compute rotated top-center in canvas space, then 44px "above" in screen space
           const r = (selObj.rotation ?? 0) * Math.PI / 180;
           const canvasTCX = selObj.x + (selObj.width / 2) * Math.cos(r);
           const canvasTCY = selObj.y + (selObj.width / 2) * Math.sin(r);
@@ -567,7 +586,7 @@ export default function Canvas() {
           btnScreenY = stagePos.y + canvasTCY * stageScale - Math.cos(r) * 28;
         }
 
-        const btnStyle = {
+        const btnStyle: React.CSSProperties = {
           width: 24, height: 24, border: 'none', borderRadius: '50%',
           cursor: 'pointer', fontSize: 12, fontWeight: 'bold', color: 'white',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
