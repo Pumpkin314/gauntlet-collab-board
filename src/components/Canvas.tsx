@@ -409,12 +409,12 @@ export default function Canvas() {
     setColorPickerPos(position);
   };
 
-  const handleColorChange = (color: string) => {
+  const handleColorChange = useCallback((color: string) => {
     if (colorPickerNote) {
       updateObject(colorPickerNote, { color });
       setColorPickerNote(null);
     }
-  };
+  }, [colorPickerNote, updateObject]);
 
   // ── Clear all ─────────────────────────────────────────────────────────────
   const handleClearAll = useCallback(() => {

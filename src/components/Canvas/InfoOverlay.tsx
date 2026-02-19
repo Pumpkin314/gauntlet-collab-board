@@ -1,6 +1,10 @@
 /**
  * InfoOverlay — bottom-left debug/status panel showing zoom, pan, object count, etc.
+ * Memoized: re-renders only when its numeric/boolean props change, not on every
+ * Canvas mouse-move re-render.
  */
+
+import { memo } from 'react';
 
 interface InfoOverlayProps {
   stageScale: number;
@@ -10,7 +14,7 @@ interface InfoOverlayProps {
   loading: boolean;
 }
 
-export default function InfoOverlay({
+export default memo(function InfoOverlay({
   stageScale,
   stagePos,
   objectCount,
@@ -36,4 +40,4 @@ export default function InfoOverlay({
       {loading && <div style={{ marginTop: 8, color: '#4ECDC4' }}>Syncing…</div>}
     </div>
   );
-}
+});

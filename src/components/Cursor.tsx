@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { memo, useRef, useEffect, useCallback } from 'react';
 import { Group, Rect, Text, Path } from 'react-konva';
 import Konva from 'konva';
 
@@ -16,7 +16,8 @@ const SNAP_THRESHOLD = 0.5;
 /** Module-level map: userId → current lerp distance (px) to target. Read by DebugOverlay. */
 export const cursorDeltas = new Map<string, number>();
 
-export default function Cursor({ data }: { data: PresenceUser }) {
+/** Memoized: prevents every cursor from re-rendering when one peer moves. */
+export default memo(function Cursor({ data }: { data: PresenceUser }) {
   const { cursorX, cursorY, userName, userColor } = data;
 
   const groupRef = useRef<Konva.Group>(null);
@@ -105,4 +106,4 @@ export default function Cursor({ data }: { data: PresenceUser }) {
       </Group>
     </Group>
   );
-}
+});
