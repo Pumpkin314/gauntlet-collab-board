@@ -27,6 +27,7 @@ dist-ssr
 .env
 .env.local
 .env.production
+.env.example
 
 # Test artifacts
 tests/screenshots/*.png
