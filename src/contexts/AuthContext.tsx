@@ -54,6 +54,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // In test mode, inject a static mock user so Google OAuth is never invoked.
+    // FirestoreYjsProvider and WebRTC are also skipped in BoardContext, keeping
+    // tests fully hermetic with no external dependencies.
+    if (import.meta.env.VITE_TEST_MODE === 'true') {
+      setCurrentUser({
+        uid: 'test-uid',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        photoURL: null,
+      } as unknown as User);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
