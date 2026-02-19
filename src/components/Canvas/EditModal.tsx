@@ -18,6 +18,7 @@ export default function EditModal({ note, onSave, onClose }: EditModalProps) {
 
   return (
     <div
+      data-testid="edit-modal"
       style={{
         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
         background: 'rgba(0,0,0,0.5)', display: 'flex',
@@ -34,6 +35,7 @@ export default function EditModal({ note, onSave, onClose }: EditModalProps) {
       >
         <h3 style={{ margin: '0 0 15px 0', fontSize: 18 }}>Edit Sticky Note</h3>
         <textarea
+          data-testid="edit-modal-textarea"
           ref={textareaRef}
           autoFocus
           defaultValue={note.content ?? ''}
@@ -49,6 +51,7 @@ export default function EditModal({ note, onSave, onClose }: EditModalProps) {
         />
         <div style={{ display: 'flex', gap: 10, marginTop: 15, justifyContent: 'flex-end' }}>
           <button
+            data-testid="edit-modal-cancel"
             onClick={onClose}
             style={{
               padding: '8px 16px', border: '2px solid #ddd', background: 'white',
@@ -58,6 +61,7 @@ export default function EditModal({ note, onSave, onClose }: EditModalProps) {
             Cancel
           </button>
           <button
+            data-testid="edit-modal-save"
             onClick={() => {
               if (textareaRef.current) onSave(textareaRef.current.value);
             }}

@@ -443,7 +443,7 @@ export default function Canvas() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
+    <div data-testid="canvas-stage" style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
       <Stage
         ref={stageRef}
         width={window.innerWidth}

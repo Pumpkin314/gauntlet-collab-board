@@ -38,6 +38,7 @@ export default function InactivityWarningModal({ onStayLoggedIn, onSignOut }: Pr
 
   return (
     <div
+      data-testid="inactivity-modal"
       style={{
         position: 'fixed',
         inset: 0,
@@ -72,6 +73,7 @@ export default function InactivityWarningModal({ onStayLoggedIn, onSignOut }: Pr
 
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'center' }}>
           <button
+            data-testid="stay-logged-in-btn"
             onClick={onStayLoggedIn}
             style={{
               background: '#4ECDC4',
@@ -87,6 +89,7 @@ export default function InactivityWarningModal({ onStayLoggedIn, onSignOut }: Pr
             Stay Logged In
           </button>
           <button
+            data-testid="sign-out-now-btn"
             onClick={onSignOut}
             style={{
               background: 'white',

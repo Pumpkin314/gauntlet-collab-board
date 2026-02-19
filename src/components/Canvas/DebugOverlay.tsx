@@ -53,6 +53,17 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
     return () => cancelAnimationFrame(rafId);
   }, [localCursorRef]);
 
+  // Backtick (`) keyboard shortcut to toggle the debug panel.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '`' && !(e.target as HTMLElement).closest('input, textarea')) {
+        setVisible((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   if (!visible) {
     return (
       <div style={{
@@ -74,7 +85,7 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
   const fpsColor = fps >= 55 ? '#4f4' : fps >= 30 ? '#fa0' : '#f44';
 
   return (
-    <div style={{
+    <div data-testid="debug-overlay" style={{
       position: 'absolute', top: 60, right: 20, width: 320,
       background: 'rgba(0,0,0,0.88)', color: '#ddd',
       padding: 12, borderRadius: 8, fontSize: 11,
