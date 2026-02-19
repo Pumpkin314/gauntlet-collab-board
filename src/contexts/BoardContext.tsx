@@ -190,10 +190,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
     updateDebug({ ydocClientId: ydoc.clientID });
 
-    // In test mode skip WebRTC and Firestore entirely — use a plain in-memory
-    // Yjs doc. All CRUD methods still work identically against the Yjs map,
-    // so tests exercise the same code paths with zero external dependencies.
-    if (import.meta.env.VITE_TEST_MODE === 'true') {
+    // Hermetic sync skip: use a plain in-memory Yjs doc with no network I/O.
+    // Set VITE_TEST_SKIP_SYNC=true to activate. Deliberately separate from
+    // VITE_TEST_AUTH_BYPASS so P2P latency tests can use real WebRTC while
+    // still bypassing Google OAuth.
+    if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') {
       const syncToReact = () => {
         const arr: BoardObject[] = [];
         yObjects.forEach((yObj) => {
@@ -329,8 +330,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!currentUser) return;
-    // Presence writes are skipped in test mode — no Firestore connection exists.
-    if (import.meta.env.VITE_TEST_MODE === 'true') return;
+    // Presence writes are skipped when sync is disabled — no Firestore connection exists.
+    if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') return;
 
     presenceRef.current = doc(db, `boards/${boardId}/presence`, currentUser.uid);
     const userColor = getUserColor(currentUser.uid);

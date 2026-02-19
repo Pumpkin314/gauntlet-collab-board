@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Master test runner for the CollabBoard Playwright suite.
+Master test runner for the CollabBoard Playwright suite (hermetic mode).
 
-Starts the Vite dev server in test mode (VITE_TEST_MODE=true), discovers
-all tests/playwright/test_*.py files, runs each as a subprocess, then
-prints a pass/fail summary and exits non-zero if any test failed.
+Starts the Vite dev server with VITE_TEST_AUTH_BYPASS=true and
+VITE_TEST_SKIP_SYNC=true (in-memory Yjs, no WebRTC, no Firestore),
+discovers all tests/playwright/test_*.py files, runs each as a subprocess,
+then prints a pass/fail summary and exits non-zero if any test failed.
 
-Usage:
-    python tests/run_all.py
+For P2P/latency tests (real WebRTC, auth bypass only) use:
+    python tests/run_p2p.py
 
 Running a single test without this runner:
     python .agents/skills/webapp-testing/scripts/with_server.py \\
-      --server "VITE_TEST_MODE=true npm run dev" --port 3000 \\
+      --server "VITE_TEST_AUTH_BYPASS=true VITE_TEST_SKIP_SYNC=true npm run dev" --port 3000 \\
       -- python tests/playwright/test_canvas_load.py
 """
 
@@ -24,7 +25,7 @@ from pathlib import Path
 
 REPO_ROOT  = Path(__file__).parent.parent
 TESTS_DIR  = REPO_ROOT / "tests" / "playwright"
-SERVER_CMD = "VITE_TEST_MODE=true npm run dev"
+SERVER_CMD = "VITE_TEST_AUTH_BYPASS=true VITE_TEST_SKIP_SYNC=true npm run dev"
 PORT       = 3000
 TIMEOUT    = 60  # seconds to wait for server readiness
 

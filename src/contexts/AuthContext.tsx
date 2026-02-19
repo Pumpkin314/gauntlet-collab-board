@@ -54,10 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // In test mode, inject a static mock user so Google OAuth is never invoked.
-    // FirestoreYjsProvider and WebRTC are also skipped in BoardContext, keeping
-    // tests fully hermetic with no external dependencies.
-    if (import.meta.env.VITE_TEST_MODE === 'true') {
+    // Auth bypass: inject a static mock user so Google OAuth is never invoked.
+    // Decoupled from VITE_TEST_SKIP_SYNC so P2P tests can run with real WebRTC
+    // while still skipping the Firebase auth round-trip.
+    if (import.meta.env.VITE_TEST_AUTH_BYPASS === 'true') {
       setCurrentUser({
         uid: 'test-uid',
         displayName: 'Test User',
