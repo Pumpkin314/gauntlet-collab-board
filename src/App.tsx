@@ -6,57 +6,52 @@ import { useAuth } from './contexts/AuthContext';
 import { useBoard } from './contexts/BoardContext';
 import './App.css';
 
+function getInitials(name: string): string {
+  const parts = name.split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] ?? '') + (parts[parts.length - 1]?.[0] ?? '');
+  }
+  return name.substring(0, 2);
+}
+
+function getColorFromName(name: string): string {
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length] ?? '#4ECDC4';
+}
+
 function App() {
   const { currentUser, logout, showInactivityWarning, stayLoggedIn } = useAuth();
   const { presence } = useBoard();
   const [imageError, setImageError] = useState(false);
   const [showPresence, setShowPresence] = useState(false);
 
-  // Show login screen if not authenticated
   if (!currentUser) {
     return <Login />;
   }
-
-  // Get user initials for fallback avatar
-  const getInitials = (name) => {
-    if (!name) return '?';
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return parts[0][0] + parts[parts.length - 1][0];
-    }
-    return name.substring(0, 2);
-  };
-
-  // Generate color from name
-  const getColorFromName = (name) => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  };
 
   return (
     <div className="app">
       {/* Top bar with user profile */}
       <div className="top-bar">
-        {/* User profile */}
         <div className="user-profile-section">
           <div className="user-profile">
             {currentUser.photoURL && !imageError ? (
               <img
                 src={currentUser.photoURL}
-                alt={currentUser.displayName}
+                alt={currentUser.displayName ?? undefined}
                 className="user-avatar"
                 onError={() => setImageError(true)}
               />
             ) : (
               <div
                 className="user-avatar-fallback"
-                style={{ background: getColorFromName(currentUser.displayName || 'User') }}
+                style={{ background: getColorFromName(currentUser.displayName ?? 'User') }}
               >
-                {getInitials(currentUser.displayName || 'User')}
+                {getInitials(currentUser.displayName ?? 'User')}
               </div>
             )}
             <span className="user-name">{currentUser.displayName}</span>
@@ -67,12 +62,11 @@ function App() {
             >
               👥 {presence.length + 1}
             </button>
-            <button onClick={logout} className="logout-btn">
+            <button onClick={() => void logout()} className="logout-btn">
               Sign Out
             </button>
           </div>
 
-          {/* Presence list */}
           {showPresence && (
             <div className="presence-list">
               <div className="presence-header">Active Users</div>
@@ -82,15 +76,15 @@ function App() {
                 {currentUser.photoURL && !imageError ? (
                   <img
                     src={currentUser.photoURL}
-                    alt={currentUser.displayName}
+                    alt={currentUser.displayName ?? undefined}
                     className="presence-avatar"
                   />
                 ) : (
                   <div
                     className="presence-avatar-fallback"
-                    style={{ background: getColorFromName(currentUser.displayName || 'User') }}
+                    style={{ background: getColorFromName(currentUser.displayName ?? 'User') }}
                   >
-                    {getInitials(currentUser.displayName || 'User')}
+                    {getInitials(currentUser.displayName ?? 'User')}
                   </div>
                 )}
                 <span className="presence-name">{currentUser.displayName} (you)</span>
@@ -115,22 +109,19 @@ function App() {
               ))}
 
               {presence.length === 0 && (
-                <div className="presence-empty">
-                  No other users online
-                </div>
+                <div className="presence-empty">No other users online</div>
               )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Render canvas */}
       <Canvas />
 
       {showInactivityWarning && (
         <InactivityWarningModal
           onStayLoggedIn={stayLoggedIn}
-          onSignOut={logout}
+          onSignOut={() => void logout()}
         />
       )}
     </div>
