@@ -1,6 +1,9 @@
 /**
  * ColorPicker — floating color palette popover anchored to a shape's hover menu.
+ * Memoized: only re-renders when noteId/position/callbacks change.
  */
+
+import { memo } from 'react';
 
 const COLOR_PALETTE = [
   '#FFE66D', '#FF6B6B', '#4ECDC4', '#95E1D3',
@@ -14,7 +17,7 @@ interface ColorPickerProps {
   onClose: () => void;
 }
 
-export default function ColorPicker({ noteId, position, onColorChange, onClose }: ColorPickerProps) {
+export default memo(function ColorPicker({ noteId, position, onColorChange, onClose }: ColorPickerProps) {
   if (!noteId) return null;
 
   return (
@@ -49,4 +52,4 @@ export default function ColorPicker({ noteId, position, onColorChange, onClose }
       </div>
     </>
   );
-}
+});

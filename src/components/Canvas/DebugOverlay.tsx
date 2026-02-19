@@ -29,12 +29,15 @@ function Dot({ color }: { color: string }) {
 }
 
 export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps) {
-  const { debugInfo, presence, objects } = useBoard();
+  const { debugInfo, presence, objects, localCursorRef } = useBoard();
   const [visible, setVisible] = useState(false);
   const [fps, setFps] = useState(0);
+  const [localCursor, setLocalCursor] = useState({ x: 0, y: 0 });
   const frameTimesRef = useRef<number[]>([]);
 
-  // FPS counter
+  // FPS counter + cursor position sampled from localCursorRef.
+  // Cursor position lives in a ref (not state) in BoardContext to avoid a
+  // React re-render on every mouse-move; we read it here once per frame.
   useEffect(() => {
     let rafId: number;
     const tick = (now: number) => {
@@ -43,11 +46,12 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
       // Keep last 1 second of frame timestamps
       while (times.length > 0 && times[0] <= now - 1000) times.shift();
       setFps(times.length);
+      setLocalCursor({ ...localCursorRef.current });
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, []);
+  }, [localCursorRef]);
 
   if (!visible) {
     return (
@@ -123,7 +127,7 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
 
       {/* Cursors */}
       <Section title="Cursors">
-        <Row label="Local" value={`(${Math.round(d.localCursor.x)}, ${Math.round(d.localCursor.y)})`} />
+        <Row label="Local" value={`(${Math.round(localCursor.x)}, ${Math.round(localCursor.y)})`} />
         {d.remoteCursors.map((c) => {
           const delta = cursorDeltas.get(c.userId) ?? 0;
           const deltaColor = delta < 1 ? '#4f4' : delta < 10 ? '#fa0' : '#f44';

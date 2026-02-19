@@ -202,15 +202,15 @@ export default function Canvas() {
   }, [selectedIds, objects]);
 
   // ── Tool change handlers ─────────────────────────────────────────────────
-  const handleToolChange = (tool: ActiveTool) => {
+  const handleToolChange = useCallback((tool: ActiveTool) => {
     setActiveTool(tool);
     setToolMode(tool === 'box-select' ? 'single' : 'infinite');
     setPendingLineStart(null);
-  };
+  }, []);
 
-  const handleModeToggle = () => {
+  const handleModeToggle = useCallback(() => {
     setToolMode((prev) => (prev === 'infinite' ? 'single' : 'infinite'));
-  };
+  }, []);
 
   const isDraggable = activeTool !== 'box-select' || spaceHeld;
 
@@ -409,20 +409,37 @@ export default function Canvas() {
     setColorPickerPos(position);
   };
 
-  const handleColorChange = (color: string) => {
+  const handleColorChange = useCallback((color: string) => {
     if (colorPickerNote) {
       updateObject(colorPickerNote, { color });
       setColorPickerNote(null);
     }
-  };
+  }, [colorPickerNote, updateObject]);
 
   // ── Clear all ─────────────────────────────────────────────────────────────
-  const handleClearAll = () => {
+  const handleClearAll = useCallback(() => {
     if (window.confirm('Delete all objects? This cannot be undone.')) {
       deleteAllObjects();
       deselectAll();
     }
-  };
+  }, [deleteAllObjects, deselectAll]);
+
+  // ── Stable callbacks for child props ─────────────────────────────────────
+  /** Called by ObjectRenderer when a transform begins; marks drag-in-progress
+   *  so the selection action menu stays hidden (avoids stale-position jitter). */
+  const handleTransformStart = useCallback(() => setIsDraggingShape(true), []);
+  const handleTransformEnd   = useCallback(() => setIsDraggingShape(false), []);
+
+  /** Called by ObjectRenderer after a resize so Transformer bbox stays in sync. */
+  const handleDimsChanged = useCallback(() => {
+    transformerRef.current?.forceUpdate();
+  }, []);
+
+  /** Fired when any drag begins on the Stage; distinguishes shape drags from
+   *  canvas pans so the selection action menu is hidden during shape movement. */
+  const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    if (e.target !== e.target.getStage()) setIsDraggingShape(true);
+  }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -437,7 +454,7 @@ export default function Canvas() {
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onContextMenu={handleContextMenu}
-        onDragStart={(e) => { if (e.target !== e.target.getStage()) setIsDraggingShape(true); }}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
         onClick={handleDeselectClick}
@@ -457,11 +474,9 @@ export default function Canvas() {
             onUpdate={updateObject}
             onDelete={handleDelete}
             onShowColorPicker={handleShowColorPicker}
-            onTransformStart={() => {}}
-            onTransformEnd={() => {}}
-            onDimsChanged={() => {
-              if (transformerRef.current) transformerRef.current.forceUpdate();
-            }}
+            onTransformStart={handleTransformStart}
+            onTransformEnd={handleTransformEnd}
+            onDimsChanged={handleDimsChanged}
             onStartEdit={handleStartInlineEdit}
           />
           {boxSelectRect && <SelectionRect {...boxSelectRect} />}
@@ -473,8 +488,8 @@ export default function Canvas() {
           )}
           <Transformer
             ref={transformerRef}
-            onTransformStart={() => setIsDraggingShape(true)}
-            onTransformEnd={() => setIsDraggingShape(false)}
+            onTransformStart={handleTransformStart}
+            onTransformEnd={handleTransformEnd}
             boundBoxFunc={boundBoxFunc}
           />
         </Layer>
