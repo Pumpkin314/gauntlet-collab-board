@@ -97,8 +97,7 @@ export interface DebugInfo {
   firestoreWriteCount: number;
   lastFirestoreWrite: number | null;
   ydocClientId: number | null;
-  // Cursors
-  localCursor: { x: number; y: number };
+  // Cursors — localCursor intentionally omitted; DebugOverlay reads localCursorRef directly
   remoteCursors: Array<{ userId: string; userName: string; x: number; y: number }>;
   // Awareness
   awarenessClientCount: number;
@@ -114,7 +113,6 @@ const EMPTY_DEBUG: DebugInfo = {
   firestoreWriteCount: 0,
   lastFirestoreWrite: null,
   ydocClientId: null,
-  localCursor: { x: 0, y: 0 },
   remoteCursors: [],
   awarenessClientCount: 0,
 };
@@ -126,6 +124,9 @@ interface BoardContextValue {
   presence: PresenceUser[];
   loading: boolean;
   debugInfo: DebugInfo;
+  /** Ref to the local cursor canvas position. Read directly in DebugOverlay's
+   *  RAF loop to avoid a React state update on every mouse-move event. */
+  localCursorRef: { readonly current: { x: number; y: number } };
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
   updateObject(id: string, updates: Partial<BoardObject>): void;
   deleteObject(id: string): void;
@@ -460,8 +461,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   // ── Presence ───────────────────────────────────────────────────────────────
 
   const updateCursorPosition = useCallback((x: number, y: number): void => {
+    // Write to a ref — no React state update, so no re-render on every mouse-move.
+    // DebugOverlay reads localCursorRef.current in its own RAF loop.
     localCursorRef.current = { x, y };
-    updateDebug({ localCursor: { x, y } });
 
     // Update awareness (P2P path — instant when peers connected)
     const provider = webrtcRef.current;
@@ -501,6 +503,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     presence,
     loading,
     debugInfo,
+    localCursorRef,
     createObject,
     updateObject,
     deleteObject,
