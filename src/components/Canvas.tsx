@@ -11,6 +11,7 @@ import SelectionRect from './Canvas/SelectionRect';
 import LinePreview from './Canvas/LinePreview';
 import InfoOverlay from './Canvas/InfoOverlay';
 import DebugOverlay from './Canvas/DebugOverlay';
+import DotGrid, { type DotGridHandle } from './Canvas/DotGrid';
 import { registerShape } from '../utils/shapeRegistry';
 import StickyNote from './shapes/StickyNote';
 import RectShape from './shapes/RectShape';
@@ -97,6 +98,7 @@ export default function Canvas() {
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const layerRef       = useRef<Konva.Layer | null>(null);
   const clipboardRef   = useRef<BoardObject[]>([]);
+  const dotGridRef     = useRef<DotGridHandle>(null);
 
   const [boxSelectRect,   setBoxSelectRect]   = useState<BoxSelectRect | null>(null);
   const isBoxDraggingRef  = useRef(false);
@@ -270,11 +272,15 @@ export default function Canvas() {
       x: (pointer.x - stage.x()) / oldScale,
       y: (pointer.y - stage.y()) / oldScale,
     };
-    setStageScale(clamped);
-    setStagePos({
+    const newPos = {
       x: pointer.x - mousePointTo.x * clamped,
       y: pointer.y - mousePointTo.y * clamped,
-    });
+    };
+    setStageScale(clamped);
+    setStagePos(newPos);
+    // Drive the grid directly so it updates in the same frame as the Stage,
+    // not one React render later (mirrors the localCursorRef pattern).
+    dotGridRef.current?.update(newPos, clamped);
   };
 
   // ── Pan + drag tracking ───────────────────────────────────────────────────
@@ -284,6 +290,17 @@ export default function Canvas() {
     } else {
       setIsDraggingShape(false);
     }
+  };
+
+  /** Keeps the dot grid in sync during canvas pan without waiting for dragEnd. */
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (e.target !== e.target.getStage()) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    dotGridRef.current?.update(
+      { x: stage.x(), y: stage.y() },
+      stage.scaleX(),
+    );
   };
 
   // ── Object creation ───────────────────────────────────────────────────────
@@ -443,7 +460,8 @@ export default function Canvas() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div data-testid="canvas-stage" style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
+    <div data-testid="canvas-stage" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
+      <DotGrid ref={dotGridRef} stagePos={stagePos} stageScale={stageScale} />
       <Stage
         ref={stageRef}
         width={window.innerWidth}
@@ -455,6 +473,7 @@ export default function Canvas() {
         onMouseUp={handleMouseUp}
         onContextMenu={handleContextMenu}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onDblClick={handleDblClick}
         onClick={handleDeselectClick}
