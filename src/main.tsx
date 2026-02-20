@@ -5,17 +5,27 @@ import { AuthProvider } from './contexts/AuthContext'
 import { BoardProvider } from './contexts/BoardContext'
 import { SelectionProvider } from './contexts/SelectionContext'
 
-const rootEl = document.getElementById('root');
-if (!rootEl) throw new Error('Root element #root not found');
+const isTestMode = import.meta.env.VITE_TEST_AUTH_BYPASS === 'true';
 
-createRoot(rootEl).render(
-  <StrictMode>
-    <AuthProvider>
-      <BoardProvider>
-        <SelectionProvider>
-          <App />
-        </SelectionProvider>
-      </BoardProvider>
-    </AuthProvider>
-  </StrictMode>,
-)
+const rootEl = document.getElementById('root')!;
+
+async function render() {
+  const PerfBridgeConnector = isTestMode
+    ? (await import('./components/PerfBridgeConnector')).default
+    : null;
+
+  createRoot(rootEl).render(
+    <StrictMode>
+      <AuthProvider>
+        <BoardProvider>
+          <SelectionProvider>
+            <App />
+            {PerfBridgeConnector && <PerfBridgeConnector />}
+          </SelectionProvider>
+        </BoardProvider>
+      </AuthProvider>
+    </StrictMode>,
+  );
+}
+
+render();
