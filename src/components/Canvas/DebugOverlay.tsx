@@ -189,6 +189,10 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
           <><Dot color={d.p2pGateActive ? '#4f4' : '#f44'} />
             {d.p2pGateActive ? 'active (Firestore blocked)' : 'open (Firestore running)'}</>
         } />
+        <Row
+          label="Presence list"
+          value={d.p2pGateActive ? 'p2p (awareness/yjs)' : 'firestore'}
+        />
         <Row label="Remote users" value={presence.length} />
       </Section>
 
