@@ -12,7 +12,7 @@
  *   </BaseShape>
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Group } from 'react-konva';
 import Konva from 'konva';
@@ -26,7 +26,7 @@ interface BaseShapeProps extends ShapeProps {
   children: (width: number, height: number) => ReactNode;
 }
 
-export default function BaseShape({
+export default memo(function BaseShape({
   id,
   data,
   isSelected,
@@ -113,4 +113,4 @@ export default function BaseShape({
       {children(localWidth, localHeight)}
     </Group>
   );
-}
+});

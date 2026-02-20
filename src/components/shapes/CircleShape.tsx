@@ -3,11 +3,12 @@
  * Konva Ellipse uses radiusX/radiusY; we derive them from width/height.
  */
 
+import { memo } from 'react';
 import { Ellipse } from 'react-konva';
 import BaseShape from './BaseShape';
 import type { ShapeProps } from '../../types/board';
 
-export default function CircleShape(props: ShapeProps) {
+export default memo(function CircleShape(props: ShapeProps) {
   const { data, isSelected } = props;
 
   return (
@@ -28,4 +29,4 @@ export default function CircleShape(props: ShapeProps) {
       )}
     </BaseShape>
   );
-}
+});
