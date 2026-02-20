@@ -35,3 +35,7 @@ dist-ssr
 # Test artifacts
 tests/screenshots/*.png
 tests/playwright/__pycache__/
+debug_screenshots/*.png
+
+# Repomix generated chunk outputs
+repomix-*.xml

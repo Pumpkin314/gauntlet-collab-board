@@ -27,6 +27,7 @@ import { useAuth } from './AuthContext';
 import { FirestoreYjsProvider } from './firestoreYjsProvider';
 import { createWebrtcProvider } from './webrtcProvider';
 import type { BoardObject, PresenceUser, ShapeType } from '../types/board';
+import { setCursorPosition, removeCursor } from '../utils/cursorStore';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -45,23 +46,30 @@ function getUserColor(userId: string): string {
 
 /** Shape of a validated Yjs awareness entry. */
 interface AwarenessState {
+  sessionId: string;
   userId: string;
   userName: string;
   userColor: string;
   cursorX: number;
   cursorY: number;
+  /** Unix ms timestamp set by the sender — used to compute one-way sync latency. */
+  ts?: number;
 }
 
-function isAwarenessState(s: unknown): s is AwarenessState {
-  if (!s || typeof s !== 'object') return false;
+function coerceAwarenessState(s: unknown, clientId: number): AwarenessState | null {
+  if (!s || typeof s !== 'object') return null;
   const o = s as Record<string, unknown>;
-  return (
-    typeof o['userId']    === 'string' &&
-    typeof o['userName']  === 'string' &&
-    typeof o['userColor'] === 'string' &&
-    typeof o['cursorX']   === 'number' &&
-    typeof o['cursorY']   === 'number'
-  );
+  const userId = typeof o['userId'] === 'string' ? o['userId'] : `client-${clientId}`;
+  const sessionId = typeof o['sessionId'] === 'string' ? o['sessionId'] : `${userId}:${clientId}`;
+  return {
+    sessionId,
+    userId,
+    userName: typeof o['userName'] === 'string' ? o['userName'] : 'Anonymous',
+    userColor: typeof o['userColor'] === 'string' ? o['userColor'] : getUserColor(userId),
+    cursorX: typeof o['cursorX'] === 'number' ? o['cursorX'] : 0,
+    cursorY: typeof o['cursorY'] === 'number' ? o['cursorY'] : 0,
+    ts: typeof o['ts'] === 'number' ? o['ts'] : undefined,
+  };
 }
 
 /** Shape of a Firestore presence document. */
@@ -89,32 +97,58 @@ export interface DebugInfo {
   // Connection
   webrtcConnected: boolean;
   webrtcPeerCount: number;
+  webrtcConnectedPeerCount: number;
+  webrtcSyncedPeerCount: number;
+  webrtcPath: 'direct' | 'relay' | 'mixed' | 'unknown';
+  webrtcRelayPeerCount: number;
+  webrtcDirectPeerCount: number;
   bcPeerCount: number;
   signalingStatus: string;
-  presenceSource: 'webrtc' | 'firestore' | 'none';
+  signalingUrl: string;
+  presenceSource: 'webrtc' | 'yjs' | 'firestore' | 'none';
   // Sync
   firestoreSynced: boolean;
+  webrtcSynced: boolean;
   firestoreWriteCount: number;
   lastFirestoreWrite: number | null;
   ydocClientId: number | null;
   // Cursors — localCursor intentionally omitted; DebugOverlay reads localCursorRef directly
-  remoteCursors: Array<{ userId: string; userName: string; x: number; y: number }>;
+  remoteCursors: Array<{ userId: string; userName: string; x: number; y: number; latencyMs?: number }>;
   // Awareness
   awarenessClientCount: number;
+  /** Raw count of remote awareness entries before isAwarenessState filtering. */
+  awarenessRawRemoteCount: number;
+  awarenessStatesSize: number;
+  awarenessLastUpdate: { added: number; updated: number; removed: number; origin: string } | null;
+  awarenessLocalSetCount: number;
+  /** True when hasWebrtcPeersRef is set from raw peer count — Firestore fallback is blocked. */
+  p2pGateActive: boolean;
 }
 
 const EMPTY_DEBUG: DebugInfo = {
   webrtcConnected: false,
   webrtcPeerCount: 0,
+  webrtcConnectedPeerCount: 0,
+  webrtcSyncedPeerCount: 0,
+  webrtcPath: 'unknown',
+  webrtcRelayPeerCount: 0,
+  webrtcDirectPeerCount: 0,
   bcPeerCount: 0,
   signalingStatus: 'disconnected',
+  signalingUrl: '',
   presenceSource: 'none',
   firestoreSynced: false,
+  webrtcSynced: false,
   firestoreWriteCount: 0,
   lastFirestoreWrite: null,
   ydocClientId: null,
   remoteCursors: [],
   awarenessClientCount: 0,
+  awarenessRawRemoteCount: 0,
+  awarenessStatesSize: 0,
+  awarenessLastUpdate: null,
+  awarenessLocalSetCount: 0,
+  p2pGateActive: false,
 };
 
 // ── context types ──────────────────────────────────────────────────────────
@@ -124,6 +158,12 @@ interface BoardContextValue {
   presence: PresenceUser[];
   loading: boolean;
   debugInfo: DebugInfo;
+  yjsLatencyMs: number | null;
+  yjsReceiveGapMs: number | null;
+  yjsLatestSampleMs: number | null;
+  yjsReceiveRate: number;
+  yjsSendRate: number;
+  p2pOnly: boolean;
   /** Ref to the local cursor canvas position. Read directly in DebugOverlay's
    *  RAF loop to avoid a React state update on every mouse-move event. */
   localCursorRef: { readonly current: { x: number; y: number } };
@@ -160,16 +200,47 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [debugInfo, setDebugInfo] = useState<DebugInfo>(EMPTY_DEBUG);
+  const [yjsLatencyMs, setYjsLatencyMs] = useState<number | null>(null);
+  const [yjsReceiveGapMs, setYjsReceiveGapMs] = useState<number | null>(null);
+  const [yjsLatestSampleMs, setYjsLatestSampleMs] = useState<number | null>(null);
+  const [yjsReceiveRate, setYjsReceiveRate] = useState(0);
+  const [yjsSendRate, setYjsSendRate] = useState(0);
+  const [p2pOnly, setP2pOnly] = useState(false);
 
   const ydocRef     = useRef<Y.Doc | null>(null);
   const yObjectsRef = useRef<Y.Map<Y.Map<unknown>> | null>(null);
+  const yPresenceRef = useRef<Y.Map<Y.Map<unknown>> | null>(null);
+  const yPresenceKeyRef = useRef<string | null>(null);
   const webrtcRef   = useRef<WebrtcProvider | null>(null);
   const presenceRef = useRef<ReturnType<typeof doc> | null>(null);
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yPresenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yjsPresenceActiveRef = useRef(false);
+  const p2pOnlyRef = useRef(false);
+  const lastYjsPresenceReceiveAtRef = useRef<number | null>(null);
+  const yjsReceiveCountRef = useRef(0);
+  const yjsSendCountRef = useRef(0);
   const hasWebrtcPeersRef = useRef(false);
+  const lastAwarenessRemoteAtRef = useRef<number | null>(null);
+  const awarenessResendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const localAwarenessBaseRef = useRef<{ sessionId: string; userId: string; userName: string; userColor: string } | null>(null);
   const debugRef = useRef<DebugInfo>(EMPTY_DEBUG);
   const localCursorRef = useRef({ x: 0, y: 0 });
   const firestoreWriteCountRef = useRef(0);
+  const awarenessLocalSetCountRef = useRef(0);
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
+  const cursorRafRef = useRef(0);
+  const remotePeerIdsRef = useRef(new Set<string>());
+  const debugSampleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const icePathTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const shouldBlockFirestoreFallback = useCallback((): boolean => {
+    if (yjsPresenceActiveRef.current) return true;
+    const lastAwareness = lastAwarenessRemoteAtRef.current;
+    return hasWebrtcPeersRef.current &&
+      lastAwareness !== null &&
+      Date.now() - lastAwareness < 3000;
+  }, []);
 
   // Helper to batch-update debug info
   const updateDebug = useCallback((patch: Partial<DebugInfo>) => {
@@ -182,11 +253,17 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!currentUser) return;
 
+    p2pOnlyRef.current = typeof window !== 'undefined' &&
+      window.localStorage.getItem('P2P_ONLY') === '1';
+    setP2pOnly(p2pOnlyRef.current);
+
     const ydoc = new Y.Doc();
     const yObjects = ydoc.getMap<Y.Map<unknown>>('objects');
+    const yPresence = ydoc.getMap<Y.Map<unknown>>('presence');
 
     ydocRef.current     = ydoc;
     yObjectsRef.current = yObjects;
+    yPresenceRef.current = yPresence;
 
     updateDebug({ ydocClientId: ydoc.clientID });
 
@@ -214,18 +291,112 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
 
     // P2P real-time sync via WebRTC
-    const webrtcProvider = createWebrtcProvider(ydoc, boardId);
+    const { provider: webrtcProvider, signalingUrl } = createWebrtcProvider(ydoc, boardId);
     webrtcRef.current = webrtcProvider;
+    updateDebug({ signalingUrl });
 
     // Set local awareness state
     const userColor = getUserColor(currentUser.uid);
-    webrtcProvider.awareness.setLocalState({
-      userId:    currentUser.uid,
-      userName:  currentUser.displayName || 'Anonymous',
+    localAwarenessBaseRef.current = {
+      sessionId: `${currentUser.uid}:${ydoc.clientID}`,
+      userId: currentUser.uid,
+      userName: currentUser.displayName || 'Anonymous',
       userColor,
+    };
+    webrtcProvider.awareness.setLocalState({
+      ...localAwarenessBaseRef.current,
       cursorX:   0,
       cursorY:   0,
     });
+    awarenessLocalSetCountRef.current++;
+    updateDebug({ awarenessLocalSetCount: awarenessLocalSetCountRef.current });
+
+    // Initialize Yjs presence (P2P doc-backed fallback for awareness)
+    const presenceKey = `${ydoc.clientID}`;
+    yPresenceKeyRef.current = presenceKey;
+    let myPresence = yPresence.get(presenceKey);
+    if (!myPresence) {
+      myPresence = new Y.Map<unknown>();
+      yPresence.set(presenceKey, myPresence);
+    }
+    myPresence.set('userId', currentUser.uid);
+    myPresence.set('sessionId', `${currentUser.uid}:${ydoc.clientID}`);
+    myPresence.set('userName', currentUser.displayName || 'Anonymous');
+    myPresence.set('userColor', userColor);
+    myPresence.set('cursorX', 0);
+    myPresence.set('cursorY', 0);
+    myPresence.set('ts', Date.now());
+
+    // Yjs doc-backed presence: only used for cursor positions (written to cursorStore)
+    // and latency metrics. Firestore drives the "who's online" list.
+    const syncPresenceFromYjs = () => {
+      const now = Date.now();
+      const key = yPresenceKeyRef.current;
+      let peerCount = 0;
+      let sumDelta = 0;
+      let countDelta = 0;
+      const remotePeers: PresenceUser[] = [];
+      yPresence.forEach((val, k) => {
+        if (k === key) return;
+        if (!(val instanceof Y.Map)) return;
+        const userId = typeof val.get('userId') === 'string' ? (val.get('userId') as string) : `client-${k}`;
+        const sessionId = typeof val.get('sessionId') === 'string'
+          ? (val.get('sessionId') as string)
+          : `${userId}:${k}`;
+        const userName = typeof val.get('userName') === 'string' ? (val.get('userName') as string) : 'Anonymous';
+        const userColor = typeof val.get('userColor') === 'string'
+          ? (val.get('userColor') as string)
+          : getUserColor(userId);
+        const cursorX = typeof val.get('cursorX') === 'number' ? (val.get('cursorX') as number) : 0;
+        const cursorY = typeof val.get('cursorY') === 'number' ? (val.get('cursorY') as number) : 0;
+        setCursorPosition(sessionId, cursorX, cursorY);
+        remotePeers.push({
+          id: sessionId,
+          userId,
+          userName,
+          userColor,
+          cursorX,
+          cursorY,
+          lastActive: null,
+        });
+        peerCount++;
+        const ts = typeof val.get('ts') === 'number' ? (val.get('ts') as number) : null;
+        if (ts !== null) {
+          sumDelta += now - ts;
+          countDelta++;
+        }
+      });
+      if (lastYjsPresenceReceiveAtRef.current !== null) {
+        setYjsReceiveGapMs(now - lastYjsPresenceReceiveAtRef.current);
+      }
+      lastYjsPresenceReceiveAtRef.current = now;
+      if (peerCount > 0) {
+        yjsReceiveCountRef.current++;
+      }
+      yjsPresenceActiveRef.current = peerCount > 0;
+      if (countDelta > 0) {
+        const avg = Math.round(sumDelta / countDelta);
+        setYjsLatencyMs(avg);
+        setYjsLatestSampleMs(avg);
+      } else {
+        setYjsLatencyMs(null);
+      }
+
+      // In P2P-only mode, derive visible presence from Yjs doc-backed presence.
+      // This keeps cursors/users synced even if awareness packets are dropped.
+      if (p2pOnlyRef.current) {
+        setPresence(remotePeers);
+      }
+    };
+
+    yPresence.observeDeep(syncPresenceFromYjs);
+
+    const rateTimer = setInterval(() => {
+      setYjsReceiveRate(yjsReceiveCountRef.current);
+      setYjsSendRate(yjsSendCountRef.current);
+      yjsReceiveCountRef.current = 0;
+      yjsSendCountRef.current = 0;
+    }, 1000);
 
     // Track WebRTC connection status
     const onStatus = ({ connected }: { connected: boolean }) => {
@@ -236,61 +407,199 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     };
     webrtcProvider.on('status', onStatus);
 
+    const onSynced = ({ synced }: { synced: boolean }) => {
+      updateDebug({ webrtcSynced: synced });
+    };
+    webrtcProvider.on('synced', onSynced);
+
     // Track peer changes
     const onPeers = ({ webrtcPeers, bcPeers }: { webrtcPeers: string[]; bcPeers: string[] }) => {
+      const hasPeers = webrtcPeers.length > 0 || bcPeers.length > 0;
+      // Drive the Firestore-gate from raw peer count so it activates even when
+      // awareness state hasn't propagated yet (the exact symptom we're debugging).
+      hasWebrtcPeersRef.current = hasPeers;
+      const shouldBlockFirestore = shouldBlockFirestoreFallback();
       updateDebug({
         webrtcPeerCount: webrtcPeers.length,
         bcPeerCount: bcPeers.length,
+        p2pGateActive: shouldBlockFirestore,
       });
+      console.log('[WebRTC] peers', { webrtcPeers, bcPeers });
+
+      // Re-broadcast our awareness state so the newly-connected peer receives it.
+      // y-webrtc does not automatically re-send on peer connect; without this, if
+      // setLocalState was called before the peer arrived, they will never see it.
+      if (hasPeers) {
+        const current = webrtcProvider.awareness.getLocalState();
+        if (current) webrtcProvider.awareness.setLocalState({ ...current });
+      }
     };
     webrtcProvider.on('peers', onPeers);
 
-    // Listen to awareness changes for remote cursors (P2P path)
+    // Listen to awareness changes for remote cursors (P2P path).
+    // HOT path: write cursor positions to cursorStore (no React).
+    // COLD path: only call setPresence when the set of peer IDs changes (join/leave).
     const onAwarenessChange = () => {
       const states = webrtcProvider.awareness.getStates();
+      const currentPeerIds = new Set<string>();
       const remotePeers: PresenceUser[] = [];
-      const remoteCursors: DebugInfo['remoteCursors'] = [];
+      let hasRemote = false;
+
       states.forEach((state, clientId) => {
         if (clientId === ydoc.clientID) return;
-        if (!isAwarenessState(state)) return;
+        const parsed = coerceAwarenessState(state, clientId);
+        if (!parsed) return;
+        hasRemote = true;
+        currentPeerIds.add(parsed.sessionId);
         remotePeers.push({
-          id:        state.userId,
-          userId:    state.userId,
-          userName:  state.userName,
-          userColor: state.userColor,
-          cursorX:   state.cursorX,
-          cursorY:   state.cursorY,
+          id: parsed.sessionId,
+          userId: parsed.userId,
+          userName: parsed.userName,
+          userColor: parsed.userColor,
+          cursorX: parsed.cursorX,
+          cursorY: parsed.cursorY,
+          lastActive: null,
         });
-        remoteCursors.push({
-          userId:   state.userId,
-          userName: state.userName,
-          x:        state.cursorX,
-          y:        state.cursorY,
-        });
+        setCursorPosition(parsed.sessionId, parsed.cursorX, parsed.cursorY);
       });
-      hasWebrtcPeersRef.current = remotePeers.length > 0;
-      updateDebug({
-        awarenessClientCount: states.size,
-        remoteCursors,
-        presenceSource: remotePeers.length > 0 ? 'webrtc' : debugRef.current.presenceSource === 'firestore' ? 'firestore' : 'none',
-      });
-      if (remotePeers.length > 0) {
+
+      if (hasRemote) {
+        lastAwarenessRemoteAtRef.current = Date.now();
+      }
+
+      // In P2P-only mode there is no Firestore presence listener, so awareness
+      // must drive which remote cursors are rendered.
+      if (p2pOnlyRef.current) {
         setPresence(remotePeers);
       }
+
+      // Cold path: detect join/leave by comparing peer ID sets
+      const prev = remotePeerIdsRef.current;
+      const joined = [...currentPeerIds].some((id) => !prev.has(id));
+      const left = [...prev].some((id) => !currentPeerIds.has(id));
+
+      if (joined || left) {
+        for (const id of prev) {
+          if (!currentPeerIds.has(id)) removeCursor(id);
+        }
+        remotePeerIdsRef.current = currentPeerIds;
+      }
     };
-    webrtcProvider.awareness.on('change', onAwarenessChange);
-
-    // Firestore persistence (durable backup)
-    const firestoreProvider = new FirestoreYjsProvider(ydoc, boardId);
-
-    // Track Firestore writes via the provider's onPersisted callback
-    firestoreProvider.onPersisted = () => {
-      firestoreWriteCountRef.current++;
+    const onAwarenessUpdate = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+      const originLabel = typeof origin === 'string' ? origin : origin ? 'remote' : 'unknown';
+      console.log('[Awareness] update', { added, updated, removed, origin: originLabel });
       updateDebug({
-        firestoreWriteCount: firestoreWriteCountRef.current,
-        lastFirestoreWrite: Date.now(),
+        awarenessLastUpdate: { added: added.length, updated: updated.length, removed: removed.length, origin: originLabel },
       });
     };
+
+    webrtcProvider.awareness.on('change', onAwarenessChange);
+    webrtcProvider.awareness.on('update', onAwarenessUpdate);
+
+    // Sample awareness state for debug overlay at a leisurely 500ms interval
+    // instead of on every awareness event.
+    debugSampleTimerRef.current = setInterval(() => {
+      const states = webrtcProvider.awareness.getStates();
+      const room = (webrtcProvider as unknown as {
+        room?: { webrtcConns: Map<string, { connected: boolean; synced: boolean }> };
+      }).room;
+      let connectedPeers = 0;
+      let syncedPeers = 0;
+      room?.webrtcConns?.forEach((conn) => {
+        if (conn.connected) connectedPeers++;
+        if (conn.synced) syncedPeers++;
+      });
+      const remoteCursors: DebugInfo['remoteCursors'] = [];
+      let rawRemote = 0;
+      states.forEach((state, clientId) => {
+        if (clientId === ydoc.clientID) return;
+        rawRemote++;
+        const parsed = coerceAwarenessState(state, clientId);
+        if (!parsed) return;
+        remoteCursors.push({
+          userId:    parsed.sessionId,
+          userName:  parsed.userName,
+          x:         parsed.cursorX,
+          y:         parsed.cursorY,
+          latencyMs: parsed.ts !== undefined ? Date.now() - parsed.ts : undefined,
+        });
+      });
+      const shouldBlockFirestore = shouldBlockFirestoreFallback();
+      const presenceSource = yjsPresenceActiveRef.current
+        ? 'yjs'
+        : (remoteCursors.length > 0 ? 'webrtc' : debugRef.current.presenceSource === 'firestore' ? 'firestore' : 'none');
+      updateDebug({
+        webrtcConnectedPeerCount: connectedPeers,
+        webrtcSyncedPeerCount: syncedPeers,
+        awarenessClientCount: states.size,
+        awarenessRawRemoteCount: rawRemote,
+        awarenessStatesSize: states.size,
+        remoteCursors,
+        p2pGateActive: shouldBlockFirestore,
+        presenceSource,
+      });
+    }, 500);
+
+    // Sample RTCPeerConnection candidate path (direct vs TURN relay).
+    icePathTimerRef.current = setInterval(() => {
+      const room = (webrtcProvider as unknown as {
+        room?: { webrtcConns: Map<string, { connected: boolean; peer?: { _pc?: RTCPeerConnection } }> };
+      }).room;
+      if (!room?.webrtcConns) {
+        updateDebug({ webrtcPath: 'unknown', webrtcRelayPeerCount: 0, webrtcDirectPeerCount: 0 });
+        return;
+      }
+
+      void (async () => {
+        let relayCount = 0;
+        let directCount = 0;
+        for (const conn of room.webrtcConns.values()) {
+          if (!conn.connected) continue;
+          const pc = conn.peer?._pc;
+          if (!pc || typeof pc.getStats !== 'function') continue;
+          try {
+            const stats = await pc.getStats();
+            let selectedPair: any = null;
+            stats.forEach((report: any) => {
+              if (report.type !== 'candidate-pair') return;
+              const selected = report.selected === true || (report.nominated === true && report.state === 'succeeded');
+              if (selected) selectedPair = report;
+            });
+            if (!selectedPair) continue;
+            const local = selectedPair.localCandidateId ? (stats.get(selectedPair.localCandidateId) as any) : null;
+            const remote = selectedPair.remoteCandidateId ? (stats.get(selectedPair.remoteCandidateId) as any) : null;
+            const localType = local?.candidateType as string | undefined;
+            const remoteType = remote?.candidateType as string | undefined;
+            if (localType === 'relay' || remoteType === 'relay') relayCount++;
+            else if (localType || remoteType) directCount++;
+          } catch (error) {
+            console.warn('[WebRTC] getStats failed', error);
+          }
+        }
+
+        const path: DebugInfo['webrtcPath'] = relayCount > 0 && directCount > 0
+          ? 'mixed'
+          : relayCount > 0
+            ? 'relay'
+            : directCount > 0
+              ? 'direct'
+              : 'unknown';
+        updateDebug({
+          webrtcPath: path,
+          webrtcRelayPeerCount: relayCount,
+          webrtcDirectPeerCount: directCount,
+        });
+      })();
+    }, 2000);
+
+    // Periodic rebroadcast of awareness while peers exist.
+    // Helps recover from missed initial awareness messages.
+    awarenessResendTimerRef.current = setInterval(() => {
+      if (!hasWebrtcPeersRef.current) return;
+      const current = webrtcProvider.awareness.getLocalState();
+      if (!current) return;
+      webrtcProvider.awareness.setLocalState({ ...current, ts: Date.now() });
+    }, 1000);
 
     // Derive React state whenever the Yjs map changes
     const syncToReact = () => {
@@ -304,34 +613,71 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
     yObjects.observeDeep(syncToReact);
 
-    firestoreProvider.onSynced = () => {
+    let firestoreProvider: FirestoreYjsProvider | null = null;
+    if (!p2pOnlyRef.current) {
+      // Firestore persistence (durable backup)
+      firestoreProvider = new FirestoreYjsProvider(ydoc, boardId);
+      // Track Firestore writes via the provider's onPersisted callback
+      firestoreProvider.onPersisted = () => {
+        firestoreWriteCountRef.current++;
+        updateDebug({
+          firestoreWriteCount: firestoreWriteCountRef.current,
+          lastFirestoreWrite: Date.now(),
+        });
+      };
+      firestoreProvider.onSynced = () => {
+        syncToReact();
+        setLoading(false);
+        updateDebug({ firestoreSynced: true });
+      };
+      firestoreProvider.connect();
+    } else {
+      // P2P-only: no Firestore snapshot. Ready immediately.
       syncToReact();
       setLoading(false);
-      updateDebug({ firestoreSynced: true });
-    };
-
-    firestoreProvider.connect();
+      updateDebug({ firestoreSynced: false });
+    }
 
     return () => {
       webrtcProvider.off('status', onStatus);
+      webrtcProvider.off('synced', onSynced);
       webrtcProvider.off('peers', onPeers);
       webrtcProvider.awareness.off('change', onAwarenessChange);
+      webrtcProvider.awareness.off('update', onAwarenessUpdate);
+      if (awarenessResendTimerRef.current) {
+        clearInterval(awarenessResendTimerRef.current);
+        awarenessResendTimerRef.current = null;
+      }
+      if (debugSampleTimerRef.current) {
+        clearInterval(debugSampleTimerRef.current);
+        debugSampleTimerRef.current = null;
+      }
+      if (icePathTimerRef.current) {
+        clearInterval(icePathTimerRef.current);
+        icePathTimerRef.current = null;
+      }
+      yPresence.unobserveDeep(syncPresenceFromYjs);
+      if (yPresenceKeyRef.current) {
+        yPresence.delete(yPresenceKeyRef.current);
+      }
+      clearInterval(rateTimer);
       webrtcProvider.destroy();
-      firestoreProvider.destroy();
+      if (firestoreProvider) firestoreProvider.destroy();
       ydoc.destroy();
       ydocRef.current     = null;
       yObjectsRef.current = null;
+      yPresenceRef.current = null;
       webrtcRef.current    = null;
       hasWebrtcPeersRef.current = false;
     };
-  }, [currentUser, boardId, updateDebug]);
+  }, [currentUser, boardId, shouldBlockFirestoreFallback, updateDebug]);
 
-  // ── Firestore presence (fallback when WebRTC peers not connected) ──────
+  // ── Firestore presence (always-on for "who's online") ──────────────────
 
   useEffect(() => {
     if (!currentUser) return;
-    // Presence writes are skipped when sync is disabled — no Firestore connection exists.
     if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') return;
+    if (p2pOnlyRef.current) return;
 
     presenceRef.current = doc(db, `boards/${boardId}/presence`, currentUser.uid);
     const userColor = getUserColor(currentUser.uid);
@@ -345,8 +691,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       lastActive: serverTimestamp(),
     }).catch((e) => console.error('presence set error:', e));
 
-    // Heartbeat: keep lastActive fresh so other clients can detect our presence.
-    // Without this, a force-closed tab leaves a stale doc forever.
     const heartbeat = setInterval(() => {
       if (presenceRef.current) {
         setDoc(presenceRef.current, { lastActive: serverTimestamp() }, { merge: true })
@@ -358,20 +702,22 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
     const presenceCol = collection(db, `boards/${boardId}/presence`);
     const unsub = onSnapshot(presenceCol, (snap) => {
-      // Only use Firestore presence when we have no WebRTC peers
-      if (hasWebrtcPeersRef.current) return;
+      // Firestore always drives the "who's online" list.
+      // Cursor positions come from cursorStore (P2P) — Firestore positions
+      // are only used as a fallback when cursorStore has no entry for a peer.
       const all: PresenceUser[] = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as PresenceDoc) }))
         .filter((p) => {
-          // Drop entries with no heartbeat or whose heartbeat is older than STALE_MS.
-          // This evicts tabs that closed without a graceful deleteDoc.
           if (!p.lastActive) return false;
           return Date.now() - p.lastActive.toDate().getTime() < STALE_MS;
         })
         .filter((p) => p.userId !== currentUser.uid);
       setPresence(all);
-      if (all.length > 0) {
-        updateDebug({ presenceSource: 'firestore' });
+      if (!shouldBlockFirestoreFallback()) {
+        updateDebug({
+          presenceSource: 'firestore',
+          remoteCursors: all.map((p) => ({ userId: p.userId, userName: p.userName, x: p.cursorX, y: p.cursorY })),
+        });
       }
     });
 
@@ -382,7 +728,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         deleteDoc(presenceRef.current).catch((e) => console.warn('[BoardContext] presence cleanup failed:', e));
       }
     };
-  }, [currentUser, boardId, updateDebug]);
+  }, [currentUser, boardId, shouldBlockFirestoreFallback, updateDebug]);
 
   // ── CRUD helpers ──────────────────────────────────────────────────────────
 
@@ -486,25 +832,48 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   // ── Presence ───────────────────────────────────────────────────────────────
 
   const updateCursorPosition = useCallback((x: number, y: number): void => {
-    // Write to a ref — no React state update, so no re-render on every mouse-move.
-    // DebugOverlay reads localCursorRef.current in its own RAF loop.
     localCursorRef.current = { x, y };
 
-    // Update awareness (P2P path — instant when peers connected)
-    const provider = webrtcRef.current;
-    if (provider) {
-      const current = provider.awareness.getLocalState();
-      provider.awareness.setLocalState({
-        ...current,
-        cursorX: x,
-        cursorY: y,
+    // RAF-gate: store pending position, only broadcast on next animation frame.
+    // Caps outbound awareness at ~60/sec regardless of mousemove frequency.
+    pendingCursorRef.current = { x, y };
+    if (!cursorRafRef.current) {
+      cursorRafRef.current = requestAnimationFrame(() => {
+        cursorRafRef.current = 0;
+        const pos = pendingCursorRef.current;
+        if (!pos) return;
+
+        const provider = webrtcRef.current;
+        if (provider) {
+          const base = localAwarenessBaseRef.current;
+          if (!base) return;
+          provider.awareness.setLocalState({
+            ...base,
+            cursorX: pos.x,
+            cursorY: pos.y,
+            ts: Date.now(),
+          });
+        }
+
+        const yPresence = yPresenceRef.current;
+        const key = yPresenceKeyRef.current;
+        if (yPresence && key) {
+          const myPresence = yPresence.get(key);
+          if (myPresence) {
+            myPresence.set('cursorX', pos.x);
+            myPresence.set('cursorY', pos.y);
+            myPresence.set('ts', Date.now());
+            yjsSendCountRef.current++;
+          }
+        }
       });
     }
 
-    // Also update Firestore presence (fallback, throttled)
+    // Firestore presence fallback (throttled at 100ms)
     if (cursorTimerRef.current !== null) return;
     cursorTimerRef.current = setTimeout(() => {
       cursorTimerRef.current = null;
+      if (shouldBlockFirestoreFallback()) return;
       if (presenceRef.current) {
         updateDoc(presenceRef.current, {
           cursorX: x,
@@ -513,7 +882,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         }).catch(() => {});
       }
     }, 100);
-  }, []);
+  }, [shouldBlockFirestoreFallback]);
 
   // ── Query helpers ─────────────────────────────────────────────────────────
 
@@ -528,6 +897,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     presence,
     loading,
     debugInfo,
+    yjsLatencyMs,
+    yjsReceiveGapMs,
+    yjsLatestSampleMs,
+    yjsReceiveRate,
+    yjsSendRate,
+    p2pOnly,
     localCursorRef,
     createObject,
     updateObject,

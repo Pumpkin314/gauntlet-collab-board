@@ -1,6 +1,7 @@
 import { memo, useRef, useEffect, useCallback } from 'react';
 import { Group, Rect, Text, Path } from 'react-konva';
 import Konva from 'konva';
+import { getCursorPosition } from '../utils/cursorStore';
 
 interface PresenceUser {
   id: string;
@@ -10,7 +11,7 @@ interface PresenceUser {
   userColor: string;
 }
 
-const SMOOTHING = 0.3;
+const SMOOTHING = 0.7;
 const SNAP_THRESHOLD = 0.5;
 
 /** Module-level map: userId → current lerp distance (px) to target. Read by DebugOverlay. */
@@ -28,32 +29,34 @@ export default memo(function Cursor({ data }: { data: PresenceUser }) {
     const node = groupRef.current;
     if (!node) return;
 
-    // Lerp toward target
-    displayPos.current.x += (cursorX - displayPos.current.x) * SMOOTHING;
-    displayPos.current.y += (cursorY - displayPos.current.y) * SMOOTHING;
+    // Read latest target from the module-level store (bypasses React props)
+    const storePos = getCursorPosition(data.id);
+    const targetX = storePos ? storePos.x : displayPos.current.x;
+    const targetY = storePos ? storePos.y : displayPos.current.y;
+
+    displayPos.current.x += (targetX - displayPos.current.x) * SMOOTHING;
+    displayPos.current.y += (targetY - displayPos.current.y) * SMOOTHING;
 
     node.x(displayPos.current.x);
     node.y(displayPos.current.y);
     node.getLayer()?.batchDraw();
 
-    const remainX = cursorX - displayPos.current.x;
-    const remainY = cursorY - displayPos.current.y;
-    const delta = Math.hypot(remainX, remainY);
+    const delta = Math.hypot(targetX - displayPos.current.x, targetY - displayPos.current.y);
     cursorDeltas.set(data.id, delta);
 
     if (delta > SNAP_THRESHOLD) {
       rafId.current = requestAnimationFrame(animate);
     } else {
-      // Snap to exact target
-      displayPos.current.x = cursorX;
-      displayPos.current.y = cursorY;
-      node.x(cursorX);
-      node.y(cursorY);
+      displayPos.current.x = targetX;
+      displayPos.current.y = targetY;
+      node.x(targetX);
+      node.y(targetY);
       node.getLayer()?.batchDraw();
       cursorDeltas.set(data.id, 0);
-      rafId.current = 0;
+      // Keep polling — new updates may arrive at any time
+      rafId.current = requestAnimationFrame(animate);
     }
-  }, [cursorX, cursorY, data.id]);
+  }, [data.id]);
 
   useEffect(() => {
     if (!rafId.current) {

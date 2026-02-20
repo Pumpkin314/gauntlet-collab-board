@@ -58,10 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Decoupled from VITE_TEST_SKIP_SYNC so P2P tests can run with real WebRTC
     // while still skipping the Firebase auth round-trip.
     if (import.meta.env.VITE_TEST_AUTH_BYPASS === 'true') {
+      const key = 'TEST_BYPASS_UID';
+      let uid = window.sessionStorage.getItem(key);
+      if (!uid) {
+        uid = `test-${crypto.randomUUID()}`;
+        window.sessionStorage.setItem(key, uid);
+      }
+      const suffix = uid.slice(-4);
       setCurrentUser({
-        uid: 'test-uid',
-        displayName: 'Test User',
-        email: 'test@example.com',
+        uid,
+        displayName: `Test User ${suffix}`,
+        email: `${uid}@example.com`,
         photoURL: null,
       } as unknown as User);
       setLoading(false);

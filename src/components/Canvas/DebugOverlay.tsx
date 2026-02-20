@@ -6,7 +6,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBoard } from '../../contexts/BoardContext';
 import type { DebugInfo } from '../../contexts/BoardContext';
-import { cursorDeltas } from '../Cursor';
 
 interface DebugOverlayProps {
   stageScale: number;
@@ -29,7 +28,7 @@ function Dot({ color }: { color: string }) {
 }
 
 export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps) {
-  const { debugInfo, presence, objects, localCursorRef } = useBoard();
+  const { debugInfo, presence, objects, localCursorRef, yjsLatencyMs, yjsReceiveGapMs, yjsLatestSampleMs, yjsReceiveRate, yjsSendRate, p2pOnly } = useBoard();
   const [visible, setVisible] = useState(false);
   const [fps, setFps] = useState(0);
   const [localCursor, setLocalCursor] = useState({ x: 0, y: 0 });
@@ -52,6 +51,41 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, [localCursorRef]);
+
+  /**
+   * Rolling 1-second latency average per remote cursor.
+   * Each time remoteCursors updates (awareness event), we push the raw sample
+   * into a per-user ring buffer and evict samples older than 1 s, then
+   * recompute averages. This smooths the spiky per-sample values.
+   */
+  const latHistoryRef = useRef<Map<string, Array<{ t: number; ms: number }>>>(new Map());
+  const [avgLatencies, setAvgLatencies] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    const now = Date.now();
+    const history = latHistoryRef.current;
+    const WINDOW = 1000;
+
+    debugInfo.remoteCursors.forEach((c) => {
+      if (c.latencyMs === undefined) return;
+      const samples = history.get(c.userId) ?? [];
+      samples.push({ t: now, ms: c.latencyMs });
+      history.set(c.userId, samples.filter((s) => s.t > now - WINDOW));
+    });
+
+    // Clean up entries for cursors that have gone away
+    const active = new Set(debugInfo.remoteCursors.map((c) => c.userId));
+    for (const key of history.keys()) {
+      if (!active.has(key)) history.delete(key);
+    }
+
+    const next = new Map<string, number>();
+    history.forEach((samples, userId) => {
+      if (samples.length === 0) return;
+      next.set(userId, Math.round(samples.reduce((s, e) => s + e.ms, 0) / samples.length));
+    });
+    setAvgLatencies(next);
+  }, [debugInfo.remoteCursors]);
 
   // Backtick (`) keyboard shortcut to toggle the debug panel.
   useEffect(() => {
@@ -81,7 +115,13 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
 
   const webrtcColor = d.webrtcConnected ? '#4f4' : '#f44';
   const firestoreColor = d.firestoreSynced ? '#4f4' : '#fa0';
-  const presColor = d.presenceSource === 'webrtc' ? '#4ff' : d.presenceSource === 'firestore' ? '#fa0' : '#f44';
+  const presColor = d.presenceSource === 'webrtc'
+    ? '#4ff'
+    : d.presenceSource === 'yjs'
+      ? '#6f6'
+      : d.presenceSource === 'firestore'
+        ? '#fa0'
+        : '#f44';
   const fpsColor = fps >= 55 ? '#4f4' : fps >= 30 ? '#fa0' : '#f44';
 
   return (
@@ -112,9 +152,14 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
         <Row label="WebRTC" value={
           <><Dot color={webrtcColor} />{d.webrtcConnected ? 'connected' : 'disconnected'}</>
         } />
+        <Row label="WebRTC synced" value={d.webrtcSynced ? 'yes' : 'no'} />
         <Row label="WebRTC peers" value={d.webrtcPeerCount} />
+        <Row label="Connected peers" value={d.webrtcConnectedPeerCount} />
+        <Row label="Synced peers" value={d.webrtcSyncedPeerCount} />
+        <Row label="Path" value={`${d.webrtcPath} (d:${d.webrtcDirectPeerCount} r:${d.webrtcRelayPeerCount})`} />
         <Row label="BC peers" value={d.bcPeerCount} />
         <Row label="Signaling" value={d.signalingStatus} />
+        <Row label="Signaling URL" value={d.signalingUrl || '—'} />
         <Row label="Yjs client ID" value={d.ydocClientId ?? '—'} />
       </Section>
 
@@ -132,16 +177,37 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
         <Row label="Source" value={
           <><Dot color={presColor} />{d.presenceSource}</>
         } />
-        <Row label="Awareness clients" value={d.awarenessClientCount} />
+        <Row label="Awareness (raw/valid)" value={`${d.awarenessRawRemoteCount + 1} / ${d.remoteCursors.length + 1}`} />
+        <Row label="Awareness states" value={d.awarenessStatesSize} />
+        <Row label="Awareness last" value={
+          d.awarenessLastUpdate
+            ? `${d.awarenessLastUpdate.origin} +${d.awarenessLastUpdate.added} ~${d.awarenessLastUpdate.updated} -${d.awarenessLastUpdate.removed}`
+            : '—'
+        } />
+        <Row label="Local set count" value={d.awarenessLocalSetCount} />
+        <Row label="P2P gate" value={
+          <><Dot color={d.p2pGateActive ? '#4f4' : '#f44'} />
+            {d.p2pGateActive ? 'active (Firestore blocked)' : 'open (Firestore running)'}</>
+        } />
         <Row label="Remote users" value={presence.length} />
       </Section>
 
       {/* Cursors */}
       <Section title="Cursors">
         <Row label="Local" value={`(${Math.round(localCursor.x)}, ${Math.round(localCursor.y)})`} />
+        <Row label="P2P only" value={p2pOnly ? 'on' : 'off'} />
+        <Row label="Yjs latency" value={yjsLatencyMs !== null ? `${yjsLatencyMs}ms` : '—'} />
+        <Row label="Yjs last sample" value={yjsLatestSampleMs !== null ? `${yjsLatestSampleMs}ms` : '—'} />
+        <Row label="Yjs receive gap" value={yjsReceiveGapMs !== null ? `${yjsReceiveGapMs}ms` : '—'} />
+        <Row label="Yjs recv rate" value={`${yjsReceiveRate}/s`} />
+        <Row label="Yjs send rate" value={`${yjsSendRate}/s`} />
         {d.remoteCursors.map((c) => {
-          const delta = cursorDeltas.get(c.userId) ?? 0;
-          const deltaColor = delta < 1 ? '#4f4' : delta < 10 ? '#fa0' : '#f44';
+          const avgMs = avgLatencies.get(c.userId);
+          const sampleCount = latHistoryRef.current.get(c.userId)?.length ?? 0;
+          // No latencyMs means cursor arrived via Firestore (no ts stamp) — show path instead
+          const noTs = c.latencyMs === undefined;
+          const latColor = avgMs === undefined ? '#aaa' : avgMs < 20 ? '#4f4' : avgMs < 100 ? '#fa0' : '#f44';
+          const latLabel = noTs ? '(fs path)' : avgMs === undefined ? `—(n=${sampleCount})` : `${avgMs}ms (n=${sampleCount})`;
           return (
             <Row
               key={c.userId}
@@ -149,8 +215,8 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
               value={
                 <>
                   {`(${Math.round(c.x)}, ${Math.round(c.y)})`}
-                  <span style={{ marginLeft: 8, color: deltaColor }}>
-                    {`Δ ${Math.round(delta)}px`}
+                  <span style={{ marginLeft: 8, color: latColor }}>
+                    {latLabel}
                   </span>
                 </>
               }

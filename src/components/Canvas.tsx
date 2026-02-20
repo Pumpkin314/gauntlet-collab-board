@@ -103,7 +103,8 @@ export default function Canvas() {
   const [boxSelectRect,   setBoxSelectRect]   = useState<BoxSelectRect | null>(null);
   const isBoxDraggingRef  = useRef(false);
   const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
-  const [cursorPos,        setCursorPos]        = useState({ x: 0, y: 0 });
+  const cursorPosRef = useRef({ x: 0, y: 0 });
+  const [lineCursorPos, setLineCursorPos] = useState({ x: 0, y: 0 });
 
   // ── Space-key pan override ────────────────────────────────────────────────
   useEffect(() => {
@@ -347,7 +348,10 @@ export default function Canvas() {
     const cx = (pointer.x - stagePos.x) / stageScale;
     const cy = (pointer.y - stagePos.y) / stageScale;
     updateCursorPosition(cx, cy);
-    setCursorPos({ x: cx, y: cy });
+    cursorPosRef.current = { x: cx, y: cy };
+    if (pendingLineStart) {
+      setLineCursorPos({ x: cx, y: cy });
+    }
     if (isBoxDraggingRef.current && boxSelectRect) {
       setBoxSelectRect((prev) => {
         if (!prev) return null;
@@ -502,7 +506,7 @@ export default function Canvas() {
           {pendingLineStart && (
             <LinePreview
               x1={pendingLineStart.x} y1={pendingLineStart.y}
-              x2={cursorPos.x}        y2={cursorPos.y}
+              x2={lineCursorPos.x}    y2={lineCursorPos.y}
             />
           )}
           <Transformer

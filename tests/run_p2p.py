@@ -3,7 +3,7 @@
 P2P test runner for WebRTC latency tests.
 
 Starts two servers:
-  1. y-webrtc signaling server on port 4444  (npm run dev:signal)
+  1. y-webrtc signaling server on port 4445  (npm run dev:signal)
   2. Vite dev server on port 3000            (VITE_TEST_AUTH_BYPASS=true npm run dev)
 
 VITE_TEST_SKIP_SYNC is intentionally NOT set, so WebRTC and Yjs sync
@@ -27,7 +27,7 @@ REPO_ROOT     = Path(__file__).parent.parent
 P2P_TESTS_DIR = REPO_ROOT / "tests" / "playwright" / "p2p"
 
 SIGNAL_CMD  = "npm run dev:signal"
-SIGNAL_PORT = 4444
+SIGNAL_PORT = 4445
 
 DEV_CMD  = "VITE_TEST_AUTH_BYPASS=true npm run dev"
 DEV_PORT = 3000

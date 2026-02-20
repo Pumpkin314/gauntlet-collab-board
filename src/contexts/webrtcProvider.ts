@@ -9,15 +9,62 @@
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 
-const DEFAULT_SIGNALING = ['ws://localhost:4444'];
+const DEFAULT_SIGNALING = ['ws://localhost:4445'];
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
 
-export function createWebrtcProvider(ydoc: Y.Doc, boardId: string): WebrtcProvider {
+function resolveIceServers(): RTCIceServer[] {
+  const raw = import.meta.env.VITE_ICE_SERVERS as string | undefined;
+  if (!raw) return DEFAULT_ICE_SERVERS;
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('VITE_ICE_SERVERS must be a JSON array');
+    const valid = parsed.filter((v): v is RTCIceServer => {
+      if (!v || typeof v !== 'object') return false;
+      const urls = (v as Record<string, unknown>).urls;
+      return typeof urls === 'string' || Array.isArray(urls);
+    });
+    if (valid.length === 0) throw new Error('VITE_ICE_SERVERS contained no valid entries');
+    return valid;
+  } catch (error) {
+    console.warn('[webrtcProvider] invalid VITE_ICE_SERVERS, using defaults', error);
+    return DEFAULT_ICE_SERVERS;
+  }
+}
+
+function resolveIceTransportPolicy(): RTCIceTransportPolicy | undefined {
+  const raw = import.meta.env.VITE_ICE_TRANSPORT_POLICY as string | undefined;
+  if (!raw) return undefined;
+  if (raw === 'all' || raw === 'relay') return raw;
+  console.warn('[webrtcProvider] invalid VITE_ICE_TRANSPORT_POLICY, expected "all" or "relay"');
+  return undefined;
+}
+
+export function createWebrtcProvider(
+  ydoc: Y.Doc,
+  boardId: string,
+): { provider: WebrtcProvider; signalingUrl: string } {
   const signalingEnv = import.meta.env.VITE_SIGNALING_SERVERS as string | undefined;
   const signaling = signalingEnv
     ? signalingEnv.split(',').map((s) => s.trim())
     : DEFAULT_SIGNALING;
+  const iceServers = resolveIceServers();
+  const iceTransportPolicy = resolveIceTransportPolicy();
 
-  return new WebrtcProvider(`collab-board-${boardId}`, ydoc, {
-    signaling,
-  });
+  return {
+    provider: new WebrtcProvider(`collab-board-${boardId}`, ydoc, {
+      signaling,
+      peerOpts: {
+        config: {
+          iceServers,
+          iceTransportPolicy,
+          iceCandidatePoolSize: 8,
+        },
+      },
+    }),
+    signalingUrl: signaling[0],
+  };
 }
