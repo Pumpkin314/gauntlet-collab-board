@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Stage, Layer, Transformer } from 'react-konva';
 import Konva from 'konva';
 import { useBoard } from '../contexts/BoardContext';
@@ -76,6 +76,32 @@ const boundBoxFunc = (
   newBox: { x: number; y: number; width: number; height: number; rotation: number },
 ) => (newBox.width < 40 || newBox.height < 40 ? oldBox : newBox);
 
+/** Conservative viewport hit-test using bounding-circle (shapes) or AABB (lines). */
+function isInViewport(
+  obj: BoardObject,
+  vl: number, vt: number, vr: number, vb: number,
+): boolean {
+  if (obj.type === 'line') {
+    const pts = obj.points;
+    if (!pts || pts.length < 4) return true;
+    const minX = Math.min(pts[0]!, pts[2]!);
+    const maxX = Math.max(pts[0]!, pts[2]!);
+    const minY = Math.min(pts[1]!, pts[3]!);
+    const maxY = Math.max(pts[1]!, pts[3]!);
+    return maxX >= vl && minX <= vr && maxY >= vt && minY <= vb;
+  }
+  const w = obj.width ?? 0;
+  const h = obj.height ?? 0;
+  const cx = obj.x + w / 2;
+  const cy = obj.y + h / 2;
+  const r = Math.sqrt(w * w + h * h) / 2;
+  const closestX = Math.max(vl, Math.min(cx, vr));
+  const closestY = Math.max(vt, Math.min(cy, vb));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  return dx * dx + dy * dy <= r * r;
+}
+
 export default function Canvas() {
   const {
     objects, presence, createObject, updateObject,
@@ -94,6 +120,8 @@ export default function Canvas() {
   const [inlineEdit,      setInlineEdit]      = useState<InlineEdit | null>(null);
   const [isDraggingShape, setIsDraggingShape] = useState(false);
 
+  const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+
   const stageRef       = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const layerRef       = useRef<Konva.Layer | null>(null);
@@ -103,8 +131,41 @@ export default function Canvas() {
   const [boxSelectRect,   setBoxSelectRect]   = useState<BoxSelectRect | null>(null);
   const isBoxDraggingRef  = useRef(false);
   const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
+  const isPanningRef = useRef(false);
+  const panSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorPosRef = useRef({ x: 0, y: 0 });
+  const stagePosRef = useRef(stagePos);
+  if (!isPanningRef.current) stagePosRef.current = stagePos;
+  const stageScaleRef = useRef(stageScale);
+  stageScaleRef.current = stageScale;
   const [lineCursorPos, setLineCursorPos] = useState({ x: 0, y: 0 });
+
+  // ── Window resize tracking ──────────────────────────────────────────────
+  useEffect(() => {
+    const onResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // ── Cleanup throttle timer on unmount ────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (panSyncTimerRef.current) clearTimeout(panSyncTimerRef.current);
+    };
+  }, []);
+
+  // ── Viewport culling ──────────────────────────────────────────────────────
+  const visibleObjects = useMemo(() => {
+    const margin = 200;
+    const vl = (-stagePos.x - margin) / stageScale;
+    const vt = (-stagePos.y - margin) / stageScale;
+    const vr = (windowSize.width - stagePos.x + margin) / stageScale;
+    const vb = (windowSize.height - stagePos.y + margin) / stageScale;
+
+    return objects.filter(obj =>
+      selectedIds.has(obj.id) || isInViewport(obj, vl, vt, vr, vb)
+    );
+  }, [objects, stagePos, stageScale, windowSize, selectedIds]);
 
   // ── Space-key pan override ────────────────────────────────────────────────
   useEffect(() => {
@@ -221,26 +282,28 @@ export default function Canvas() {
   const isDraggable = activeTool !== 'box-select' || spaceHeld;
 
   // ── Right-click: cancel pending line step 1 ──────────────────────────────
-  const handleContextMenu = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleContextMenu = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.evt.preventDefault();
     if (pendingLineStart) setPendingLineStart(null);
-  };
+  }, [pendingLineStart]);
 
   // ── Box-select drag ───────────────────────────────────────────────────────
-  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (activeTool !== 'box-select') return;
     if (e.target !== e.target.getStage()) return;
     const stage = stageRef.current;
     if (!stage) return;
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
-    const cx = (pointer.x - stagePos.x) / stageScale;
-    const cy = (pointer.y - stagePos.y) / stageScale;
+    const pos = stagePosRef.current;
+    const scale = stageScaleRef.current;
+    const cx = (pointer.x - pos.x) / scale;
+    const cy = (pointer.y - pos.y) / scale;
     isBoxDraggingRef.current = true;
     setBoxSelectRect({ startX: cx, startY: cy, x: cx, y: cy, width: 0, height: 0 });
-  };
+  }, [activeTool]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (!isBoxDraggingRef.current || !boxSelectRect) return;
     isBoxDraggingRef.current = false;
     const { x, y, width, height } = boxSelectRect;
@@ -259,7 +322,7 @@ export default function Canvas() {
       setActiveTool('cursor');
       setToolMode('infinite');
     }
-  };
+  }, [boxSelectRect, objects, setSelection, toolMode]);
 
   // ── Zoom ─────────────────────────────────────────────────────────────────
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -288,27 +351,41 @@ export default function Canvas() {
   };
 
   // ── Pan + drag tracking ───────────────────────────────────────────────────
-  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+  const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target === e.target.getStage()) {
-      setStagePos({ x: e.target.x(), y: e.target.y() });
+      isPanningRef.current = false;
+      if (panSyncTimerRef.current) {
+        clearTimeout(panSyncTimerRef.current);
+        panSyncTimerRef.current = null;
+      }
+      const pos = { x: e.target.x(), y: e.target.y() };
+      setStagePos(pos);
+      dotGridRef.current?.update(pos, stageScaleRef.current);
     } else {
       setIsDraggingShape(false);
     }
-  };
+  }, []);
 
-  /** Keeps the dot grid in sync during canvas pan without waiting for dragEnd. */
-  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+  /** Ref-first pan: update ref + imperative DotGrid every frame,
+   *  throttle state sync to ~150ms for viewport culling. */
+  const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) return;
     const stage = stageRef.current;
     if (!stage) return;
-    dotGridRef.current?.update(
-      { x: stage.x(), y: stage.y() },
-      stage.scaleX(),
-    );
-  };
+    const pos = { x: stage.x(), y: stage.y() };
+    stagePosRef.current = pos;
+    dotGridRef.current?.update(pos, stage.scaleX());
+
+    if (!panSyncTimerRef.current) {
+      panSyncTimerRef.current = setTimeout(() => {
+        panSyncTimerRef.current = null;
+        setStagePos(stagePosRef.current);
+      }, 150);
+    }
+  }, []);
 
   // ── Object creation ───────────────────────────────────────────────────────
-  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (activeTool === 'cursor' || activeTool === 'box-select') return;
     if (e.target !== e.target.getStage()) return;
 
@@ -316,8 +393,10 @@ export default function Canvas() {
     if (!stage) return;
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
-    const x = (pointer.x - stagePos.x) / stageScale;
-    const y = (pointer.y - stagePos.y) / stageScale;
+    const pos = stagePosRef.current;
+    const scale = stageScaleRef.current;
+    const x = (pointer.x - pos.x) / scale;
+    const y = (pointer.y - pos.y) / scale;
 
     if (activeTool === 'line') {
       if (!pendingLineStart) {
@@ -340,17 +419,21 @@ export default function Canvas() {
       setActiveTool('cursor');
       setToolMode('infinite');
     }
-  };
+  }, [activeTool, pendingLineStart, toolMode, createObject]);
 
   // ── Cursor position + box-select rect update ─────────────────────────────
-  const handleMouseMove = () => {
+  const handleMouseMove = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
-    const cx = (pointer.x - stagePos.x) / stageScale;
-    const cy = (pointer.y - stagePos.y) / stageScale;
-    updateCursorPosition(cx, cy);
+    const pos = stagePosRef.current;
+    const scale = stageScaleRef.current;
+    const cx = (pointer.x - pos.x) / scale;
+    const cy = (pointer.y - pos.y) / scale;
+    if (!isPanningRef.current) {
+      updateCursorPosition(cx, cy);
+    }
     cursorPosRef.current = { x: cx, y: cy };
     if (pendingLineStart) {
       setLineCursorPos({ x: cx, y: cy });
@@ -367,7 +450,7 @@ export default function Canvas() {
         };
       });
     }
-  };
+  }, [updateCursorPosition, pendingLineStart, boxSelectRect]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const handleSelect = useCallback((id: string, e?: unknown) => {
@@ -380,12 +463,12 @@ export default function Canvas() {
     updateObject(id, { zIndex: Date.now() });
   }, [select, toggleSelect, updateObject]);
 
-  const handleDeselectClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleDeselectClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) {
       deselectAll();
       if (inlineEdit) setInlineEdit(null);
     }
-  };
+  }, [deselectAll, inlineEdit]);
 
   const handleDelete = useCallback((id: string) => {
     deleteObject(id);
@@ -463,16 +546,17 @@ export default function Canvas() {
    *  canvas pans so the selection action menu is hidden during shape movement. */
   const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) setIsDraggingShape(true);
+    else isPanningRef.current = true;
   }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div data-testid="canvas-stage" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#f5f5f5' }}>
-      <DotGrid ref={dotGridRef} stagePos={stagePos} stageScale={stageScale} />
+      <DotGrid ref={dotGridRef} />
       <Stage
         ref={stageRef}
-        width={window.innerWidth}
-        height={window.innerHeight}
+        width={windowSize.width}
+        height={windowSize.height}
         draggable={isDraggable}
         style={{ cursor: isDraggable ? 'grab' : 'crosshair' }}
         onWheel={handleWheel}
@@ -493,7 +577,7 @@ export default function Canvas() {
       >
         <Layer ref={layerRef}>
           <ObjectRenderer
-            objects={objects}
+            objects={visibleObjects}
             selectedIds={selectedIds}
             inlineEditId={inlineEdit?.id ?? null}
             onSelect={handleSelect}
@@ -595,7 +679,7 @@ export default function Canvas() {
         </button>
       )}
 
-      <DebugOverlay stageScale={stageScale} stagePos={stagePos} />
+      <DebugOverlay stageScaleRef={stageScaleRef} stagePosRef={stagePosRef} />
 
       <ColorPicker
         noteId={colorPickerNote}
@@ -606,7 +690,7 @@ export default function Canvas() {
 
       {/* Selection action menu — HTML overlay, never affects Transformer bbox.
           Hidden while a shape drag is in progress to avoid stale position lag. */}
-      {!isDraggingShape && selectedIds.size === 1 && (() => {
+      {!isDraggingShape && !isPanningRef.current && selectedIds.size === 1 && (() => {
         const selId  = [...selectedIds][0];
         const selObj = objects.find((o) => o.id === selId);
         if (!selObj || !selId) return null;

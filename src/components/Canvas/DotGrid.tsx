@@ -1,12 +1,7 @@
-import { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 
 export interface DotGridHandle {
   update(pos: { x: number; y: number }, scale: number): void;
-}
-
-interface Props {
-  stagePos:   { x: number; y: number };
-  stageScale: number;
 }
 
 /**
@@ -80,14 +75,11 @@ function computeGridStyle(
  * Rendered as a plain `<div>` behind the Stage so zero Canvas draw calls are
  * needed — the browser compositor handles the radial-gradient tiling on the GPU.
  *
- * The `update()` method exposed via `forwardRef` is called imperatively from
- * `handleWheel` and `onDragMove` so the grid stays live during pan/zoom without
- * waiting for a React re-render.
+ * All runtime updates come through the imperative `update()` handle, called from
+ * `handleWheel`, `handleDragMove`, and `handleDragEnd` in Canvas. No props are
+ * needed — the grid is fully driven by the imperative path.
  */
-const DotGrid = forwardRef<DotGridHandle, Props>(function DotGrid(
-  { stagePos, stageScale },
-  ref,
-) {
+const DotGrid = forwardRef<DotGridHandle>(function DotGrid(_props, ref) {
   const divRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -101,17 +93,7 @@ const DotGrid = forwardRef<DotGridHandle, Props>(function DotGrid(
     },
   }));
 
-  // Sync when React-managed viewport state changes (e.g. external reset to origin).
-  useEffect(() => {
-    const div = divRef.current;
-    if (!div) return;
-    const s = computeGridStyle(stagePos, stageScale);
-    div.style.backgroundImage    = s.backgroundImage;
-    div.style.backgroundSize     = s.backgroundSize;
-    div.style.backgroundPosition = s.backgroundPosition;
-  }, [stagePos, stageScale]);
-
-  const initial = computeGridStyle(stagePos, stageScale);
+  const initial = computeGridStyle({ x: 0, y: 0 }, 1);
 
   return (
     <div
