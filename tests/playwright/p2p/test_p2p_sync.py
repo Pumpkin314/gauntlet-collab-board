@@ -85,7 +85,7 @@ def test_p2p_latency():
 
             if not received:
                 print(f"  FAIL  Session B did not receive the shape within {MAX_WAIT_S}s")
-                print(f"        Check that the signaling server is running on port 4444")
+                print(f"        Check that the signaling server is running on port 4445")
                 print(f"        and that both sessions joined the same WebRTC room.")
                 sys.exit(1)
 
