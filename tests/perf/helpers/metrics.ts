@@ -136,7 +136,7 @@ export async function measurePanFpsDiag(
 
 /** Simulates a drag of one object and measures FPS. */
 export async function measureDragFps(
-  page: Page, durationMs = 2000
+  page: Page, durationMs = 2000, steps = 50
 ): Promise<number> {
   const canvas = page.locator('canvas').first();
   const box = await canvas.boundingBox();
@@ -152,7 +152,6 @@ export async function measureDragFps(
   // runs on rAF and captures real throughput regardless of event rate.
   const fpsPromise = measureFps(page, durationMs);
 
-  const steps = 50;
   for (let i = 0; i < steps; i++) {
     await page.mouse.move(cx + i * 2, cy + i);
   }
