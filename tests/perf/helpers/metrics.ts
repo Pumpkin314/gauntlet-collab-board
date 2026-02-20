@@ -1,20 +1,61 @@
 import type { Page } from '@playwright/test';
 
+export interface IdleDiagnostics {
+  fps: number;
+  rawFrames: number;
+  rawElapsedMs: number;
+  konvaNodeCount: number;
+  objectCount: number;
+  reactRendersDuringIdle: number;
+}
+
+export interface DragDiagnostics {
+  fps: number;
+  rawFrames: number;
+  rawElapsedMs: number;
+  konvaNodeCount: number;
+  objectCount: number;
+  reactRendersDuringDrag: number;
+  /** Canvas-space position of drag start (confirms we hit the canvas) */
+  dragStartPx: { x: number; y: number };
+}
+
 /** Measures FPS over `durationMs` by counting discrete rAF frames. */
 export async function measureFps(page: Page, durationMs = 2000): Promise<number> {
-  return page.evaluate((duration) => new Promise<number>(resolve => {
-    const startTime = performance.now();
+  return (await measureIdleFpsDiag(page, durationMs)).fps;
+}
+
+/** Idle FPS with full diagnostics — no mouse interaction. */
+export async function measureIdleFpsDiag(
+  page: Page, durationMs = 2000
+): Promise<IdleDiagnostics> {
+  const before = await page.evaluate(() => ({
+    renderCount: window.__perfBridge?.renderCount ?? 0,
+    konvaNodeCount: window.__perfBridge?.getKonvaNodeCount() ?? 0,
+    objectCount: window.__perfBridge?.getObjects().length ?? 0,
+  }));
+
+  const raw = await page.evaluate((duration) => new Promise<{ frames: number; elapsedMs: number }>(resolve => {
+    const t0 = performance.now();
     let frames = 0;
     const tick = (now: number) => {
       frames++;
-      if (now - startTime < duration) {
-        requestAnimationFrame(tick);
-      } else {
-        resolve(frames / ((now - startTime) / 1000));
-      }
+      if (now - t0 < duration) requestAnimationFrame(tick);
+      else resolve({ frames, elapsedMs: now - t0 });
     };
     requestAnimationFrame(tick);
   }), durationMs);
+
+  const afterRenderCount = await page.evaluate(() => window.__perfBridge?.renderCount ?? 0);
+
+  return {
+    fps: raw.frames / (raw.elapsedMs / 1000),
+    rawFrames: raw.frames,
+    rawElapsedMs: raw.elapsedMs,
+    konvaNodeCount: before.konvaNodeCount,
+    objectCount: before.objectCount,
+    reactRendersDuringIdle: afterRenderCount - before.renderCount,
+  };
 }
 
 /** Measures time from batchCreate call to second rAF (React commit + Konva redraw). */
@@ -138,26 +179,60 @@ export async function measurePanFpsDiag(
 export async function measureDragFps(
   page: Page, durationMs = 2000, steps = 50
 ): Promise<number> {
+  return (await measureDragFpsDiag(page, durationMs, steps)).fps;
+}
+
+/** Drag FPS with full diagnostics. */
+export async function measureDragFpsDiag(
+  page: Page, durationMs = 2000, steps = 50
+): Promise<DragDiagnostics> {
   const canvas = page.locator('canvas').first();
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Canvas not found');
 
+  // Drag from canvas center — should land on an object (seeded from top-left)
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
+
+  const before = await page.evaluate(() => ({
+    renderCount: window.__perfBridge?.renderCount ?? 0,
+    konvaNodeCount: window.__perfBridge?.getKonvaNodeCount() ?? 0,
+    objectCount: window.__perfBridge?.getObjects().length ?? 0,
+  }));
 
   await page.mouse.move(cx, cy);
   await page.mouse.down();
 
-  // Fire mouse events without a per-step delay; the FPS counter in the page
-  // runs on rAF and captures real throughput regardless of event rate.
-  const fpsPromise = measureFps(page, durationMs);
+  // FPS counter runs in the page while mouse events fire from Node.js side
+  const fpsPromise = page.evaluate((duration) => new Promise<{ frames: number; elapsedMs: number }>(resolve => {
+    const t0 = performance.now();
+    let frames = 0;
+    const tick = (now: number) => {
+      frames++;
+      if (now - t0 < duration) requestAnimationFrame(tick);
+      else resolve({ frames, elapsedMs: now - t0 });
+    };
+    requestAnimationFrame(tick);
+  }), durationMs);
 
   for (let i = 0; i < steps; i++) {
     await page.mouse.move(cx + i * 2, cy + i);
   }
 
   await page.mouse.up();
-  return fpsPromise;
+  const raw = await fpsPromise;
+
+  const afterRenderCount = await page.evaluate(() => window.__perfBridge?.renderCount ?? 0);
+
+  return {
+    fps: raw.frames / (raw.elapsedMs / 1000),
+    rawFrames: raw.frames,
+    rawElapsedMs: raw.elapsedMs,
+    konvaNodeCount: before.konvaNodeCount,
+    objectCount: before.objectCount,
+    reactRendersDuringDrag: afterRenderCount - before.renderCount,
+    dragStartPx: { x: cx, y: cy },
+  };
 }
 
 /** Returns the current render count from the perf bridge. */

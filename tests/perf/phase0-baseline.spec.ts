@@ -1,11 +1,25 @@
 import { test, expect } from '@playwright/test';
-import { measureFps, measureCreateLatency, measurePanFps, measurePanFpsDiag, measureDragFps, getRenderCount, resetRenderCount } from './helpers/metrics';
+import {
+  measureIdleFpsDiag, measurePanFpsDiag, measureDragFpsDiag,
+  measureCreateLatency, getRenderCount, resetRenderCount,
+} from './helpers/metrics';
 import { launchApp, clearBoard, createObjects, formatReport } from './helpers/setup';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** One-line summary for a diag result — keeps console output scannable. */
+function idleTag(d: { rawFrames: number; rawElapsedMs: number; konvaNodeCount: number; objectCount: number; reactRendersDuringIdle: number }) {
+  return `[frames=${d.rawFrames} elapsed=${d.rawElapsedMs.toFixed(0)}ms konvaNodes=${d.konvaNodeCount} objects=${d.objectCount} reactRenders=${d.reactRendersDuringIdle}]`;
+}
+function panTag(d: { rawFrames: number; rawElapsedMs: number; konvaNodeCount: number; objectCount: number; stageBefore: {x:number}; stageAfter: {x:number}; reactRendersDuringPan: number }) {
+  return `[frames=${d.rawFrames} elapsed=${d.rawElapsedMs.toFixed(0)}ms konvaNodes=${d.konvaNodeCount} objects=${d.objectCount} stageΔx=${(d.stageAfter.x - d.stageBefore.x).toFixed(1)} reactRenders=${d.reactRendersDuringPan}]`;
+}
+function dragTag(d: { rawFrames: number; rawElapsedMs: number; konvaNodeCount: number; objectCount: number; reactRendersDuringDrag: number; dragStartPx: {x:number;y:number} }) {
+  return `[frames=${d.rawFrames} elapsed=${d.rawElapsedMs.toFixed(0)}ms konvaNodes=${d.konvaNodeCount} objects=${d.objectCount} dragStart=(${d.dragStartPx.x.toFixed(0)},${d.dragStartPx.y.toFixed(0)}) reactRenders=${d.reactRendersDuringDrag}]`;
+}
 
 test.describe('Phase 0 — Baseline', () => {
   const results: Record<string, unknown> = {};
@@ -15,95 +29,103 @@ test.describe('Phase 0 — Baseline', () => {
     await clearBoard(page);
   });
 
+  // ── Idle FPS ──────────────────────────────────────────────────────────────
+
   test('idle FPS with 0 objects', async ({ page }) => {
-    const fps = await measureFps(page);
-    results['idleFps_0'] = fps;
-    console.log(`Idle FPS (0 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const d = await measureIdleFpsDiag(page);
+    results['idleFps_0'] = d.fps;
+    console.log(`Idle FPS (0 objects): ${d.fps.toFixed(1)} ${idleTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('idle FPS with 5 objects', async ({ page }) => {
     await createObjects(page, 5);
-    const fps = await measureFps(page);
-    results['idleFps_5'] = fps;
-    console.log(`Idle FPS (5 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
-  });
-
-  test('pan FPS with 5 objects', async ({ page }) => {
-    await createObjects(page, 5);
-    const diag = await measurePanFpsDiag(page);
-    results['panFps_5'] = diag.fps;
-    console.log(`Pan FPS (5 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms konvaNodes=${diag.konvaNodeCount} objects=${diag.objectCount} stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
-    expect(diag.fps).toBeGreaterThan(0);
+    const d = await measureIdleFpsDiag(page);
+    results['idleFps_5'] = d.fps;
+    console.log(`Idle FPS (5 objects): ${d.fps.toFixed(1)} ${idleTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('idle FPS with 10 objects', async ({ page }) => {
     await createObjects(page, 10);
-    const fps = await measureFps(page);
-    results['idleFps_10'] = fps;
-    console.log(`Idle FPS (10 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
-  });
-
-  test('pan FPS with 10 objects', async ({ page }) => {
-    await createObjects(page, 10);
-    const diag = await measurePanFpsDiag(page);
-    results['panFps_10'] = diag.fps;
-    console.log(`Pan FPS (10 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms konvaNodes=${diag.konvaNodeCount} objects=${diag.objectCount} stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
-    expect(diag.fps).toBeGreaterThan(0);
+    const d = await measureIdleFpsDiag(page);
+    results['idleFps_10'] = d.fps;
+    console.log(`Idle FPS (10 objects): ${d.fps.toFixed(1)} ${idleTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('idle FPS with 100 objects', async ({ page }) => {
     await createObjects(page, 100);
-    const fps = await measureFps(page);
-    results['idleFps_100'] = fps;
-    console.log(`Idle FPS (100 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const d = await measureIdleFpsDiag(page);
+    results['idleFps_100'] = d.fps;
+    console.log(`Idle FPS (100 objects): ${d.fps.toFixed(1)} ${idleTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('idle FPS with 1000 objects', async ({ page }) => {
     await createObjects(page, 1000);
-    const fps = await measureFps(page);
-    results['idleFps_1000'] = fps;
-    console.log(`Idle FPS (1000 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const d = await measureIdleFpsDiag(page);
+    results['idleFps_1000'] = d.fps;
+    console.log(`Idle FPS (1000 objects): ${d.fps.toFixed(1)} ${idleTag(d)}`);
+    expect(d.fps).toBeGreaterThanOrEqual(0);
+  });
+
+  // ── Pan FPS ───────────────────────────────────────────────────────────────
+
+  test('pan FPS with 5 objects', async ({ page }) => {
+    await createObjects(page, 5);
+    const d = await measurePanFpsDiag(page);
+    results['panFps_5'] = d.fps;
+    console.log(`Pan FPS (5 objects): ${d.fps.toFixed(1)} ${panTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
+  });
+
+  test('pan FPS with 10 objects', async ({ page }) => {
+    await createObjects(page, 10);
+    const d = await measurePanFpsDiag(page);
+    results['panFps_10'] = d.fps;
+    console.log(`Pan FPS (10 objects): ${d.fps.toFixed(1)} ${panTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('pan FPS with 100 objects', async ({ page }) => {
     await createObjects(page, 100);
-    const diag = await measurePanFpsDiag(page);
-    results['panFps_100'] = diag.fps;
-    console.log(`Pan FPS (100 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms konvaNodes=${diag.konvaNodeCount} objects=${diag.objectCount} stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
-    expect(diag.fps).toBeGreaterThan(0);
+    const d = await measurePanFpsDiag(page);
+    results['panFps_100'] = d.fps;
+    console.log(`Pan FPS (100 objects): ${d.fps.toFixed(1)} ${panTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('pan FPS with 1000 objects', { timeout: 600_000 }, async ({ page }) => {
     await createObjects(page, 1000);
     // 1000-object page is near-frozen: use 3 mouse steps (not 60) to avoid
     // blocking Playwright for minutes waiting for CDP acknowledgements.
-    const diag = await measurePanFpsDiag(page, 3, 2000);
-    results['panFps_1000'] = diag.fps;
-    console.log(`Pan FPS (1000 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
-    expect(diag.fps).toBeGreaterThanOrEqual(0);
+    const d = await measurePanFpsDiag(page, 3, 2000);
+    results['panFps_1000'] = d.fps;
+    console.log(`Pan FPS (1000 objects): ${d.fps.toFixed(1)} ${panTag(d)}`);
+    expect(d.fps).toBeGreaterThanOrEqual(0);
   });
+
+  // ── Drag FPS ──────────────────────────────────────────────────────────────
 
   test('drag FPS with 100 objects', async ({ page }) => {
     await createObjects(page, 100);
-    const fps = await measureDragFps(page);
-    results['dragFps_100'] = fps;
-    console.log(`Drag FPS (100 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const d = await measureDragFpsDiag(page);
+    results['dragFps_100'] = d.fps;
+    console.log(`Drag FPS (100 objects): ${d.fps.toFixed(1)} ${dragTag(d)}`);
+    expect(d.fps).toBeGreaterThan(0);
   });
 
   test('drag FPS with 1000 objects', { timeout: 600_000 }, async ({ page }) => {
     await createObjects(page, 1000);
     // Use 3 steps — page is near-frozen so each mouse.move blocks for seconds.
-    const fps = await measureDragFps(page, 2000, 3);
-    results['dragFps_1000'] = fps;
-    console.log(`Drag FPS (1000 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThanOrEqual(0);
+    const d = await measureDragFpsDiag(page, 2000, 3);
+    results['dragFps_1000'] = d.fps;
+    console.log(`Drag FPS (1000 objects): ${d.fps.toFixed(1)} ${dragTag(d)}`);
+    expect(d.fps).toBeGreaterThanOrEqual(0);
   });
+
+  // ── Create latency ────────────────────────────────────────────────────────
 
   test('create latency (1, 10, 50, 100 objects)', async ({ page }) => {
     for (const count of [1, 10, 50, 100]) {
@@ -115,6 +137,8 @@ test.describe('Phase 0 — Baseline', () => {
     }
   });
 
+  // ── React render count ────────────────────────────────────────────────────
+
   test('render count during 500ms pan with 100 objects', async ({ page }) => {
     await createObjects(page, 100);
     await resetRenderCount(page);
@@ -123,14 +147,15 @@ test.describe('Phase 0 — Baseline', () => {
     const box = await canvas.boundingBox();
     expect(box).toBeTruthy();
 
+    // mousemove only (no mousedown) — tests the hot path without triggering drag
     for (let i = 0; i < 30; i++) {
       await page.mouse.move(box!.x + box!.width / 2 + i * 3, box!.y + box!.height / 2);
       await page.waitForTimeout(16);
     }
 
     const renderCount = await getRenderCount(page);
-    results['renderCount_pan_100'] = renderCount;
-    console.log(`Render count during pan (100 objects): ${renderCount}`);
+    results['renderCount_mousemove_100'] = renderCount;
+    console.log(`Render count during mousemove (100 objects, no drag): ${renderCount}`);
   });
 
   test.afterAll(() => {
