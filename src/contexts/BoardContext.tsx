@@ -382,9 +382,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         setYjsLatencyMs(null);
       }
 
-      // In P2P-only mode, derive visible presence from Yjs doc-backed presence.
-      // This keeps cursors/users synced even if awareness packets are dropped.
-      if (p2pOnlyRef.current) {
+      // When Firestore fallback is blocked, derive visible presence from Yjs
+      // doc-backed presence. This keeps cursors/users synced even if awareness
+      // packets are dropped.
+      if (shouldBlockFirestoreFallback()) {
         setPresence(remotePeers);
       }
     };
@@ -467,9 +468,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         lastAwarenessRemoteAtRef.current = Date.now();
       }
 
-      // In P2P-only mode there is no Firestore presence listener, so awareness
-      // must drive which remote cursors are rendered.
-      if (p2pOnlyRef.current) {
+      // When Firestore fallback is blocked, awareness must drive which remote
+      // cursors are rendered (presence ids must match cursorStore keys).
+      if (shouldBlockFirestoreFallback()) {
         setPresence(remotePeers);
       }
 
@@ -712,6 +713,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           return Date.now() - p.lastActive.toDate().getTime() < STALE_MS;
         })
         .filter((p) => p.userId !== currentUser.uid);
+      if (shouldBlockFirestoreFallback()) {
+        // P2P presence (awareness/Yjs) is active; don't overwrite presence with Firestore
+        // or cursors will fall back to stale (0,0) Firestore positions.
+        return;
+      }
       setPresence(all);
       if (!shouldBlockFirestoreFallback()) {
         updateDebug({
