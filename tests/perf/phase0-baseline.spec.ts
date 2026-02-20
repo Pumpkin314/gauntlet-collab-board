@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { measureFps, measureCreateLatency, measurePanFps, measureDragFps, getRenderCount, resetRenderCount } from './helpers/metrics';
+import { measureFps, measureCreateLatency, measurePanFps, measurePanFpsDiag, measureDragFps, getRenderCount, resetRenderCount } from './helpers/metrics';
 import { launchApp, clearBoard, createObjects, formatReport } from './helpers/setup';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -32,10 +32,10 @@ test.describe('Phase 0 — Baseline', () => {
 
   test('pan FPS with 5 objects', async ({ page }) => {
     await createObjects(page, 5);
-    const fps = await measurePanFps(page);
-    results['panFps_5'] = fps;
-    console.log(`Pan FPS (5 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const diag = await measurePanFpsDiag(page);
+    results['panFps_5'] = diag.fps;
+    console.log(`Pan FPS (5 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms konvaNodes=${diag.konvaNodeCount} objects=${diag.objectCount} stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
+    expect(diag.fps).toBeGreaterThan(0);
   });
 
   test('idle FPS with 10 objects', async ({ page }) => {
@@ -48,10 +48,10 @@ test.describe('Phase 0 — Baseline', () => {
 
   test('pan FPS with 10 objects', async ({ page }) => {
     await createObjects(page, 10);
-    const fps = await measurePanFps(page);
-    results['panFps_10'] = fps;
-    console.log(`Pan FPS (10 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const diag = await measurePanFpsDiag(page);
+    results['panFps_10'] = diag.fps;
+    console.log(`Pan FPS (10 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms konvaNodes=${diag.konvaNodeCount} objects=${diag.objectCount} stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
+    expect(diag.fps).toBeGreaterThan(0);
   });
 
   test('idle FPS with 100 objects', async ({ page }) => {
@@ -72,10 +72,10 @@ test.describe('Phase 0 — Baseline', () => {
 
   test('pan FPS with 100 objects', async ({ page }) => {
     await createObjects(page, 100);
-    const fps = await measurePanFps(page);
-    results['panFps_100'] = fps;
-    console.log(`Pan FPS (100 objects): ${fps.toFixed(1)}`);
-    expect(fps).toBeGreaterThan(0);
+    const diag = await measurePanFpsDiag(page);
+    results['panFps_100'] = diag.fps;
+    console.log(`Pan FPS (100 objects): ${diag.fps.toFixed(1)} [frames=${diag.rawFrames} elapsed=${diag.rawElapsedMs.toFixed(0)}ms konvaNodes=${diag.konvaNodeCount} objects=${diag.objectCount} stageΔx=${(diag.stageAfter.x - diag.stageBefore.x).toFixed(1)} reactRenders=${diag.reactRendersDuringPan}]`);
+    expect(diag.fps).toBeGreaterThan(0);
   });
 
   test('pan FPS with 1000 objects', async ({ page }) => {
