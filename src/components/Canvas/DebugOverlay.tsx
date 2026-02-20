@@ -5,7 +5,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useBoard } from '../../contexts/BoardContext';
-import type { DebugInfo } from '../../contexts/BoardContext';
+import { useDebug } from '../../contexts/DebugContext';
+import type { DebugInfo } from '../../contexts/DebugContext';
 
 interface DebugOverlayProps {
   stageScale: number;
@@ -28,7 +29,8 @@ function Dot({ color }: { color: string }) {
 }
 
 export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps) {
-  const { debugInfo, presence, objects, localCursorRef, yjsLatencyMs, yjsReceiveGapMs, yjsLatestSampleMs, yjsReceiveRate, yjsSendRate, p2pOnly } = useBoard();
+  const { presence, objects } = useBoard();
+  const { debugInfo, localCursorRef, yjsLatencyMs, yjsReceiveGapMs, yjsLatestSampleMs, yjsReceiveRate, yjsSendRate, p2pOnly } = useDebug();
   const [visible, setVisible] = useState(false);
   const [fps, setFps] = useState(0);
   const [localCursor, setLocalCursor] = useState({ x: 0, y: 0 });

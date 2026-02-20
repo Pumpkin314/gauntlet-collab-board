@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import { BoardProvider } from './contexts/BoardContext'
+import { DebugProvider } from './contexts/DebugContext'
 import { SelectionProvider } from './contexts/SelectionContext'
 
 const isTestMode = import.meta.env.VITE_TEST_AUTH_BYPASS === 'true';
@@ -17,12 +18,14 @@ async function render() {
   createRoot(rootEl).render(
     <StrictMode>
       <AuthProvider>
-        <BoardProvider>
-          <SelectionProvider>
-            <App />
-            {PerfBridgeConnector && <PerfBridgeConnector />}
-          </SelectionProvider>
-        </BoardProvider>
+        <DebugProvider>
+          <BoardProvider>
+            <SelectionProvider>
+              <App />
+              {PerfBridgeConnector && <PerfBridgeConnector />}
+            </SelectionProvider>
+          </BoardProvider>
+        </DebugProvider>
       </AuthProvider>
     </StrictMode>,
   );

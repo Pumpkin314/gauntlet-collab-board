@@ -8,8 +8,8 @@
  * - Firestore persists durable Yjs snapshots as backup (~500ms debounce)
  */
 
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import type { ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { ReactNode, MutableRefObject, Dispatch, SetStateAction } from 'react';
 import * as Y from 'yjs';
 import type { WebrtcProvider } from 'y-webrtc';
 import {
@@ -28,6 +28,8 @@ import { FirestoreYjsProvider } from './firestoreYjsProvider';
 import { createWebrtcProvider } from './webrtcProvider';
 import type { BoardObject, PresenceUser, ShapeType } from '../types/board';
 import { setCursorPosition, removeCursor } from '../utils/cursorStore';
+import { useDebug } from './DebugContext';
+import type { DebugInfo } from './DebugContext';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -91,82 +93,97 @@ const SHAPE_DEFAULTS: Record<ShapeType, Partial<BoardObject>> = {
   connector: { width:   0, height:   0, color: '#666666', strokeWidth: 2 },
 };
 
-// ── debug info type ───────────────────────────────────────────────────────
+// DebugInfo type and EMPTY_DEBUG are now in DebugContext.tsx
 
-export interface DebugInfo {
-  // Connection
-  webrtcConnected: boolean;
-  webrtcPeerCount: number;
-  webrtcConnectedPeerCount: number;
-  webrtcSyncedPeerCount: number;
-  webrtcPath: 'direct' | 'relay' | 'mixed' | 'unknown';
-  webrtcRelayPeerCount: number;
-  webrtcDirectPeerCount: number;
-  bcPeerCount: number;
-  signalingStatus: string;
-  signalingUrl: string;
-  presenceSource: 'webrtc' | 'yjs' | 'firestore' | 'none';
-  // Sync
-  firestoreSynced: boolean;
-  webrtcSynced: boolean;
-  firestoreWriteCount: number;
-  lastFirestoreWrite: number | null;
-  ydocClientId: number | null;
-  // Cursors — localCursor intentionally omitted; DebugOverlay reads localCursorRef directly
-  remoteCursors: Array<{ userId: string; userName: string; x: number; y: number; latencyMs?: number }>;
-  // Awareness
-  awarenessClientCount: number;
-  /** Raw count of remote awareness entries before isAwarenessState filtering. */
-  awarenessRawRemoteCount: number;
-  awarenessStatesSize: number;
-  awarenessLastUpdate: { added: number; updated: number; removed: number; origin: string } | null;
-  awarenessLocalSetCount: number;
-  /** True when hasWebrtcPeersRef is set from raw peer count — Firestore fallback is blocked. */
-  p2pGateActive: boolean;
+// ── diff-based Yjs → React sync ───────────────────────────────────────────
+
+/**
+ * Creates a diff-based sync callback for observeDeep.
+ * Maintains a Map cache of BoardObjects keyed by ID. On each Yjs event:
+ * - Detects added/changed/deleted entries
+ * - Produces new object references ONLY for changed entries
+ * - Re-sorts only when structure changes (add/delete/zIndex change)
+ * This lets React.memo skip unchanged shapes.
+ */
+function makeDiffSync(
+  yObjects: Y.Map<Y.Map<unknown>>,
+  cacheRef: MutableRefObject<Map<string, BoardObject>>,
+  sortedRef: MutableRefObject<BoardObject[]>,
+  setObjects: Dispatch<SetStateAction<BoardObject[]>>,
+) {
+  return () => {
+    const cache = cacheRef.current;
+    const currentIds = new Set<string>();
+    let structuralChange = false;
+
+    yObjects.forEach((yObj, id) => {
+      currentIds.add(id);
+      const newObj = Object.fromEntries(yObj.entries()) as unknown as BoardObject;
+      const cached = cache.get(id);
+
+      if (!cached) {
+        // New entry
+        cache.set(id, newObj);
+        structuralChange = true;
+      } else {
+        // Check if anything changed
+        let changed = false;
+        let zIndexChanged = false;
+
+        for (const key of Object.keys(newObj) as (keyof BoardObject)[]) {
+          if (cached[key] !== newObj[key]) {
+            changed = true;
+            if (key === 'zIndex') zIndexChanged = true;
+          }
+        }
+        // Also check if cached has keys that newObj doesn't
+        for (const key of Object.keys(cached) as (keyof BoardObject)[]) {
+          if (!(key in newObj)) {
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          cache.set(id, newObj);
+          if (zIndexChanged) structuralChange = true;
+        }
+      }
+    });
+
+    // Detect deletions
+    for (const id of cache.keys()) {
+      if (!currentIds.has(id)) {
+        cache.delete(id);
+        structuralChange = true;
+      }
+    }
+
+    if (structuralChange) {
+      // Full re-sort needed
+      const arr = [...cache.values()];
+      arr.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+      sortedRef.current = arr;
+      setObjects(arr);
+    } else {
+      // Property-only changes: rebuild array preserving sort order,
+      // swapping in new references only for changed entries
+      const prev = sortedRef.current;
+      const next = prev.map((obj) => cache.get(obj.id) ?? obj);
+      sortedRef.current = next;
+      setObjects(next);
+    }
+  };
 }
-
-const EMPTY_DEBUG: DebugInfo = {
-  webrtcConnected: false,
-  webrtcPeerCount: 0,
-  webrtcConnectedPeerCount: 0,
-  webrtcSyncedPeerCount: 0,
-  webrtcPath: 'unknown',
-  webrtcRelayPeerCount: 0,
-  webrtcDirectPeerCount: 0,
-  bcPeerCount: 0,
-  signalingStatus: 'disconnected',
-  signalingUrl: '',
-  presenceSource: 'none',
-  firestoreSynced: false,
-  webrtcSynced: false,
-  firestoreWriteCount: 0,
-  lastFirestoreWrite: null,
-  ydocClientId: null,
-  remoteCursors: [],
-  awarenessClientCount: 0,
-  awarenessRawRemoteCount: 0,
-  awarenessStatesSize: 0,
-  awarenessLastUpdate: null,
-  awarenessLocalSetCount: 0,
-  p2pGateActive: false,
-};
 
 // ── context types ──────────────────────────────────────────────────────────
 
-interface BoardContextValue {
+interface BoardDataValue {
   objects: BoardObject[];
   presence: PresenceUser[];
   loading: boolean;
-  debugInfo: DebugInfo;
-  yjsLatencyMs: number | null;
-  yjsReceiveGapMs: number | null;
-  yjsLatestSampleMs: number | null;
-  yjsReceiveRate: number;
-  yjsSendRate: number;
-  p2pOnly: boolean;
-  /** Ref to the local cursor canvas position. Read directly in DebugOverlay's
-   *  RAF loop to avoid a React state update on every mouse-move event. */
-  localCursorRef: { readonly current: { x: number; y: number } };
+}
+
+interface BoardActionsValue {
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
   updateObject(id: string, updates: Partial<BoardObject>): void;
   deleteObject(id: string): void;
@@ -180,14 +197,26 @@ interface BoardContextValue {
   getAllObjects(): BoardObject[];
 }
 
-// ── context + hook ─────────────────────────────────────────────────────────
+type BoardContextValue = BoardDataValue & BoardActionsValue;
 
-const BoardContext = createContext<BoardContextValue | null>(null);
+// ── contexts + hooks ──────────────────────────────────────────────────────
 
-export function useBoard(): BoardContextValue {
-  const ctx = useContext(BoardContext);
-  if (!ctx) throw new Error('useBoard must be used within BoardProvider');
+const BoardDataContext    = createContext<BoardDataValue | null>(null);
+const BoardActionsContext = createContext<BoardActionsValue | null>(null);
+
+/** Actions-only hook — stable references, never triggers re-render on data changes. */
+export function useBoardActions(): BoardActionsValue {
+  const ctx = useContext(BoardActionsContext);
+  if (!ctx) throw new Error('useBoardActions must be used within BoardProvider');
   return ctx;
+}
+
+/** Combined hook for backward compatibility. Prefer useBoardActions() when you only need actions. */
+export function useBoard(): BoardContextValue {
+  const data = useContext(BoardDataContext);
+  const actions = useContext(BoardActionsContext);
+  if (!data || !actions) throw new Error('useBoard must be used within BoardProvider');
+  return { ...data, ...actions };
 }
 
 // ── provider ───────────────────────────────────────────────────────────────
@@ -196,16 +225,18 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const boardId = 'default-board';
 
+  const {
+    updateDebug, debugInfoRef, setYjsLatencyMs, setYjsReceiveGapMs,
+    setYjsLatestSampleMs, setYjsReceiveRate, setYjsSendRate, setP2pOnly,
+    localCursorRef,
+  } = useDebug();
+
   const [objects, setObjects] = useState<BoardObject[]>([]);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [debugInfo, setDebugInfo] = useState<DebugInfo>(EMPTY_DEBUG);
-  const [yjsLatencyMs, setYjsLatencyMs] = useState<number | null>(null);
-  const [yjsReceiveGapMs, setYjsReceiveGapMs] = useState<number | null>(null);
-  const [yjsLatestSampleMs, setYjsLatestSampleMs] = useState<number | null>(null);
-  const [yjsReceiveRate, setYjsReceiveRate] = useState(0);
-  const [yjsSendRate, setYjsSendRate] = useState(0);
-  const [p2pOnly, setP2pOnly] = useState(false);
+
+  const objectsCacheRef = useRef<Map<string, BoardObject>>(new Map());
+  const sortedArrayRef = useRef<BoardObject[]>([]);
 
   const ydocRef     = useRef<Y.Doc | null>(null);
   const yObjectsRef = useRef<Y.Map<Y.Map<unknown>> | null>(null);
@@ -224,8 +255,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const lastAwarenessRemoteAtRef = useRef<number | null>(null);
   const awarenessResendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const localAwarenessBaseRef = useRef<{ sessionId: string; userId: string; userName: string; userColor: string } | null>(null);
-  const debugRef = useRef<DebugInfo>(EMPTY_DEBUG);
-  const localCursorRef = useRef({ x: 0, y: 0 });
   const firestoreWriteCountRef = useRef(0);
   const awarenessLocalSetCountRef = useRef(0);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
@@ -242,11 +271,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       Date.now() - lastAwareness < 3000;
   }, []);
 
-  // Helper to batch-update debug info
-  const updateDebug = useCallback((patch: Partial<DebugInfo>) => {
-    debugRef.current = { ...debugRef.current, ...patch };
-    setDebugInfo(debugRef.current);
-  }, []);
+  // debugRef used by updateDebug to accumulate patches within DebugContext.
+  // The ref inside DebugProvider tracks current debug state; BoardProvider just
+  // calls updateDebug() which is stable (useCallback with no deps).
 
   // ── Yjs + WebRTC P2P sync + Firestore persistence ──────────────────────
 
@@ -272,14 +299,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // VITE_TEST_AUTH_BYPASS so P2P latency tests can use real WebRTC while
     // still bypassing Google OAuth.
     if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') {
-      const syncToReact = () => {
-        const arr: BoardObject[] = [];
-        yObjects.forEach((yObj) => {
-          arr.push(Object.fromEntries(yObj.entries()) as unknown as BoardObject);
-        });
-        arr.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-        setObjects(arr);
-      };
+      const syncToReact = makeDiffSync(yObjects, objectsCacheRef, sortedArrayRef, setObjects);
       yObjects.observeDeep(syncToReact);
       setLoading(false);
       updateDebug({ firestoreSynced: true, presenceSource: 'none' });
@@ -528,7 +548,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const shouldBlockFirestore = shouldBlockFirestoreFallback();
       const presenceSource = yjsPresenceActiveRef.current
         ? 'yjs'
-        : (remoteCursors.length > 0 ? 'webrtc' : debugRef.current.presenceSource === 'firestore' ? 'firestore' : 'none');
+        : (remoteCursors.length > 0 ? 'webrtc' : debugInfoRef.current.presenceSource === 'firestore' ? 'firestore' : 'none');
       updateDebug({
         webrtcConnectedPeerCount: connectedPeers,
         webrtcSyncedPeerCount: syncedPeers,
@@ -602,15 +622,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       webrtcProvider.awareness.setLocalState({ ...current, ts: Date.now() });
     }, 1000);
 
-    // Derive React state whenever the Yjs map changes
-    const syncToReact = () => {
-      const arr: BoardObject[] = [];
-      yObjects.forEach((yObj) => {
-        arr.push(Object.fromEntries(yObj.entries()) as unknown as BoardObject);
-      });
-      arr.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-      setObjects(arr);
-    };
+    // Derive React state whenever the Yjs map changes (diff-based)
+    const syncToReact = makeDiffSync(yObjects, objectsCacheRef, sortedArrayRef, setObjects);
 
     yObjects.observeDeep(syncToReact);
 
@@ -722,7 +735,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       if (!shouldBlockFirestoreFallback()) {
         updateDebug({
           presenceSource: 'firestore',
-          remoteCursors: all.map((p) => ({ userId: p.userId, userName: p.userName, x: p.cursorX, y: p.cursorY })),
         });
       }
     });
@@ -736,16 +748,20 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     };
   }, [currentUser, boardId, shouldBlockFirestoreFallback, updateDebug]);
 
-  // ── CRUD helpers ──────────────────────────────────────────────────────────
+  // ── CRUD helpers (stable refs for React.memo) ───────────────────────────
 
-  const createObject = (
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+
+  const createObject = useCallback((
     type: ShapeType,
     x: number,
     y: number,
     overrides: Partial<BoardObject> = {}
   ): string => {
     const yObjects = yObjectsRef.current;
-    if (!yObjects || !currentUser) return '';
+    const user = currentUserRef.current;
+    if (!yObjects || !user) return '';
 
     const id = crypto.randomUUID();
     const obj: BoardObject = {
@@ -758,8 +774,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       rotation:      0,
       color:         '#FFE66D',
       zIndex:        Date.now(),
-      createdBy:     currentUser.uid,
-      createdByName: currentUser.displayName || 'Anonymous',
+      createdBy:     user.uid,
+      createdByName: user.displayName || 'Anonymous',
       ...SHAPE_DEFAULTS[type],
       ...overrides,
     };
@@ -770,9 +786,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
     yObjects.set(id, yObj);
     return id;
-  };
+  }, []);
 
-  const updateObject = (id: string, updates: Partial<BoardObject>): void => {
+  const updateObject = useCallback((id: string, updates: Partial<BoardObject>): void => {
     const yObjects = yObjectsRef.current;
     const ydoc     = ydocRef.current;
     if (!yObjects || !ydoc) return;
@@ -785,28 +801,29 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         yObj.set(k, v as unknown);
       }
     });
-  };
+  }, []);
 
-  const deleteObject = (id: string): void => {
+  const deleteObject = useCallback((id: string): void => {
     yObjectsRef.current?.delete(id);
-  };
+  }, []);
 
-  const deleteAllObjects = (): void => {
+  const deleteAllObjects = useCallback((): void => {
     const yObjects = yObjectsRef.current;
     const ydoc     = ydocRef.current;
     if (!yObjects || !ydoc) return;
     ydoc.transact(() => {
       [...yObjects.keys()].forEach((k) => yObjects.delete(k));
     });
-  };
+  }, []);
 
   // ── Batch operations ──────────────────────────────────────────────────────
 
-  const batchCreate = (
+  const batchCreate = useCallback((
     items: Array<{ type: ShapeType; x: number; y: number } & Partial<BoardObject>>
   ): string[] => {
     const ydoc = ydocRef.current;
-    if (!ydoc || !currentUser) return [];
+    const user = currentUserRef.current;
+    if (!ydoc || !user) return [];
     const ids: string[] = [];
     ydoc.transact(() => {
       for (const { type, x, y, ...rest } of items) {
@@ -814,9 +831,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       }
     });
     return ids;
-  };
+  }, [createObject]);
 
-  const batchUpdate = (updates: Array<{ id: string; changes: Partial<BoardObject> }>): void => {
+  const batchUpdate = useCallback((updates: Array<{ id: string; changes: Partial<BoardObject> }>): void => {
     const ydoc = ydocRef.current;
     if (!ydoc) return;
     ydoc.transact(() => {
@@ -824,16 +841,16 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         updateObject(id, changes);
       }
     });
-  };
+  }, [updateObject]);
 
-  const batchDelete = (ids: string[]): void => {
+  const batchDelete = useCallback((ids: string[]): void => {
     const yObjects = yObjectsRef.current;
     const ydoc     = ydocRef.current;
     if (!yObjects || !ydoc) return;
     ydoc.transact(() => {
       ids.forEach((id) => yObjects.delete(id));
     });
-  };
+  }, []);
 
   // ── Presence ───────────────────────────────────────────────────────────────
 
@@ -875,57 +892,41 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    // Firestore presence fallback (throttled at 100ms)
-    if (cursorTimerRef.current !== null) return;
-    cursorTimerRef.current = setTimeout(() => {
-      cursorTimerRef.current = null;
-      if (shouldBlockFirestoreFallback()) return;
-      if (presenceRef.current) {
-        updateDoc(presenceRef.current, {
-          cursorX: x,
-          cursorY: y,
-          lastActive: serverTimestamp(),
-        }).catch(() => {});
-      }
-    }, 100);
+    // Firestore cursor fallback disabled by design.
   }, [shouldBlockFirestoreFallback]);
 
-  // ── Query helpers ─────────────────────────────────────────────────────────
+  // ── Query helpers (read from ref for stable callback identity) ───────────
 
-  const getObjectById     = (id: string)       => objects.find((o) => o.id === id);
-  const getObjectsByType  = (type: ShapeType)  => objects.filter((o) => o.type === type);
-  const getAllObjects      = ()                 => objects;
+  const objectsRef = useRef(objects);
+  objectsRef.current = objects;
 
-  // ── Context value ─────────────────────────────────────────────────────────
+  const getObjectById    = useCallback((id: string) => objectsRef.current.find((o) => o.id === id), []);
+  const getObjectsByType = useCallback((type: ShapeType) => objectsRef.current.filter((o) => o.type === type), []);
+  const getAllObjects     = useCallback(() => objectsRef.current, []);
 
-  const value: BoardContextValue = {
-    objects,
-    presence,
-    loading,
-    debugInfo,
-    yjsLatencyMs,
-    yjsReceiveGapMs,
-    yjsLatestSampleMs,
-    yjsReceiveRate,
-    yjsSendRate,
-    p2pOnly,
-    localCursorRef,
-    createObject,
-    updateObject,
-    deleteObject,
-    deleteAllObjects,
-    batchCreate,
-    batchUpdate,
-    batchDelete,
+  // ── Context values ────────────────────────────────────────────────────────
+
+  const dataValue = useMemo<BoardDataValue>(() => ({
+    objects, presence, loading,
+  }), [objects, presence, loading]);
+
+  const actionsValue = useMemo<BoardActionsValue>(() => ({
+    createObject, updateObject, deleteObject, deleteAllObjects,
+    batchCreate, batchUpdate, batchDelete,
     updateCursorPosition,
-    getObjectById,
-    getObjectsByType,
-    getAllObjects,
-  };
+    getObjectById, getObjectsByType, getAllObjects,
+  }), [
+    createObject, updateObject, deleteObject, deleteAllObjects,
+    batchCreate, batchUpdate, batchDelete,
+    updateCursorPosition,
+    getObjectById, getObjectsByType, getAllObjects,
+  ]);
 
   return (
-    <BoardContext.Provider value={value}>
-      {children}
-    </BoardContext.Provider>
+    <BoardActionsContext.Provider value={actionsValue}>
+      <BoardDataContext.Provider value={dataValue}>
+        {children}
+      </BoardDataContext.Provider>
+    </BoardActionsContext.Provider>
   );
 }
