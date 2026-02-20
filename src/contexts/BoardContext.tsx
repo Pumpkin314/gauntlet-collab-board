@@ -84,6 +84,9 @@ interface PresenceDoc {
   lastActive: Timestamp | null;
 }
 
+/** Max age (ms) before a P2P presence entry is considered stale and ignored. */
+const PRESENCE_STALE_MS = 2000;
+
 const SHAPE_DEFAULTS: Record<ShapeType, Partial<BoardObject>> = {
   sticky:    { width: 200, height: 200, color: '#FFE66D', content: 'Double-click to edit' },
   rect:      { width: 160, height: 100, color: '#85C1E2' },
@@ -359,6 +362,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       yPresence.forEach((val, k) => {
         if (k === key) return;
         if (!(val instanceof Y.Map)) return;
+        // Skip stale entries
+        const ts = typeof val.get('ts') === 'number' ? (val.get('ts') as number) : null;
+        if (ts === null || now - ts > PRESENCE_STALE_MS) return;
         const userId = typeof val.get('userId') === 'string' ? (val.get('userId') as string) : `client-${k}`;
         const sessionId = typeof val.get('sessionId') === 'string'
           ? (val.get('sessionId') as string)
@@ -380,7 +386,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           lastActive: null,
         });
         peerCount++;
-        const ts = typeof val.get('ts') === 'number' ? (val.get('ts') as number) : null;
         if (ts !== null) {
           sumDelta += now - ts;
           countDelta++;
@@ -461,6 +466,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // HOT path: write cursor positions to cursorStore (no React).
     // COLD path: only call setPresence when the set of peer IDs changes (join/leave).
     const onAwarenessChange = () => {
+      const now = Date.now();
       const states = webrtcProvider.awareness.getStates();
       const currentPeerIds = new Set<string>();
       const remotePeers: PresenceUser[] = [];
@@ -470,6 +476,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         if (clientId === ydoc.clientID) return;
         const parsed = coerceAwarenessState(state, clientId);
         if (!parsed) return;
+        // Skip stale entries (no timestamp or too old)
+        if (parsed.ts === undefined || now - parsed.ts > PRESENCE_STALE_MS) return;
         hasRemote = true;
         currentPeerIds.add(parsed.sessionId);
         remotePeers.push({
@@ -617,9 +625,14 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // Helps recover from missed initial awareness messages.
     awarenessResendTimerRef.current = setInterval(() => {
       if (!hasWebrtcPeersRef.current) return;
+      const now = Date.now();
       const current = webrtcProvider.awareness.getLocalState();
-      if (!current) return;
-      webrtcProvider.awareness.setLocalState({ ...current, ts: Date.now() });
+      if (current) webrtcProvider.awareness.setLocalState({ ...current, ts: now });
+      // Keep Yjs doc-backed presence ts fresh so syncPresenceFromYjs
+      // doesn't filter us out as stale while idle.
+      const yKey = yPresenceKeyRef.current;
+      const myPresence = yKey ? yPresence.get(yKey) : null;
+      if (myPresence) myPresence.set('ts', now);
     }, 1000);
 
     // Derive React state whenever the Yjs map changes (diff-based)

@@ -3,14 +3,14 @@
  * Press ` (backtick) to toggle.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
+import type { MutableRefObject } from 'react';
 import { useBoard } from '../../contexts/BoardContext';
 import { useDebug } from '../../contexts/DebugContext';
-import type { DebugInfo } from '../../contexts/DebugContext';
 
 interface DebugOverlayProps {
-  stageScale: number;
-  stagePos: { x: number; y: number };
+  stageScaleRef: MutableRefObject<number>;
+  stagePosRef: MutableRefObject<{ x: number; y: number }>;
 }
 
 function formatTime(ts: number | null): string {
@@ -28,31 +28,34 @@ function Dot({ color }: { color: string }) {
   );
 }
 
-export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps) {
+export default memo(function DebugOverlay({ stageScaleRef, stagePosRef }: DebugOverlayProps) {
   const { presence, objects } = useBoard();
   const { debugInfo, localCursorRef, yjsLatencyMs, yjsReceiveGapMs, yjsLatestSampleMs, yjsReceiveRate, yjsSendRate, p2pOnly } = useDebug();
   const [visible, setVisible] = useState(false);
   const [fps, setFps] = useState(0);
   const [localCursor, setLocalCursor] = useState({ x: 0, y: 0 });
+  const [stageScale, setStageScale] = useState(1);
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const frameTimesRef = useRef<number[]>([]);
 
-  // FPS counter + cursor position sampled from localCursorRef.
-  // Cursor position lives in a ref (not state) in BoardContext to avoid a
-  // React re-render on every mouse-move; we read it here once per frame.
+  // FPS counter + cursor/viewport sampled from refs.
+  // Only runs when overlay is visible — no setState calls when hidden.
   useEffect(() => {
+    if (!visible) return;
     let rafId: number;
     const tick = (now: number) => {
       const times = frameTimesRef.current;
       times.push(now);
-      // Keep last 1 second of frame timestamps
       while (times.length > 0 && times[0] <= now - 1000) times.shift();
       setFps(times.length);
       setLocalCursor({ ...localCursorRef.current });
+      setStageScale(stageScaleRef.current);
+      setStagePos({ ...stagePosRef.current });
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [localCursorRef]);
+  }, [visible, localCursorRef, stageScaleRef, stagePosRef]);
 
   /**
    * Rolling 1-second latency average per remote cursor.
@@ -242,7 +245,7 @@ export default function DebugOverlay({ stageScale, stagePos }: DebugOverlayProps
 
     </div>
   );
-}
+});
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

@@ -13,9 +13,21 @@ interface PresenceUser {
 
 const SMOOTHING = 0.7;
 const SNAP_THRESHOLD = 0.5;
+const IDLE_POLL_MS = 200;
 
 /** Module-level map: userId → current lerp distance (px) to target. Read by DebugOverlay. */
 export const cursorDeltas = new Map<string, number>();
+
+/** Coalesced batchDraw — multiple cursors share one layer, one draw per frame suffices. */
+let batchDrawScheduled = false;
+function scheduleBatchDraw(layer: Konva.Layer) {
+  if (batchDrawScheduled) return;
+  batchDrawScheduled = true;
+  requestAnimationFrame(() => {
+    batchDrawScheduled = false;
+    layer.batchDraw();
+  });
+}
 
 /** Memoized: prevents every cursor from re-rendering when one peer moves. */
 export default memo(function Cursor({ data }: { data: PresenceUser }) {
@@ -24,12 +36,13 @@ export default memo(function Cursor({ data }: { data: PresenceUser }) {
   const groupRef = useRef<Konva.Group>(null);
   const displayPos = useRef({ x: cursorX, y: cursorY });
   const rafId = useRef<number>(0);
+  const timeoutId = useRef<number>(0);
 
   const animate = useCallback(() => {
+    rafId.current = 0;
     const node = groupRef.current;
     if (!node) return;
 
-    // Read latest target from the module-level store (bypasses React props)
     const storePos = getCursorPosition(data.id);
     const targetX = storePos ? storePos.x : displayPos.current.x;
     const targetY = storePos ? storePos.y : displayPos.current.y;
@@ -39,22 +52,25 @@ export default memo(function Cursor({ data }: { data: PresenceUser }) {
 
     node.x(displayPos.current.x);
     node.y(displayPos.current.y);
-    node.getLayer()?.batchDraw();
 
+    const layer = node.getLayer();
     const delta = Math.hypot(targetX - displayPos.current.x, targetY - displayPos.current.y);
     cursorDeltas.set(data.id, delta);
 
     if (delta > SNAP_THRESHOLD) {
+      if (layer) scheduleBatchDraw(layer);
       rafId.current = requestAnimationFrame(animate);
     } else {
       displayPos.current.x = targetX;
       displayPos.current.y = targetY;
       node.x(targetX);
       node.y(targetY);
-      node.getLayer()?.batchDraw();
+      if (layer) scheduleBatchDraw(layer);
       cursorDeltas.set(data.id, 0);
-      // Keep polling — new updates may arrive at any time
-      rafId.current = requestAnimationFrame(animate);
+      timeoutId.current = window.setTimeout(() => {
+        timeoutId.current = 0;
+        rafId.current = requestAnimationFrame(animate);
+      }, IDLE_POLL_MS);
     }
   }, [data.id]);
 
@@ -66,6 +82,10 @@ export default memo(function Cursor({ data }: { data: PresenceUser }) {
       if (rafId.current) {
         cancelAnimationFrame(rafId.current);
         rafId.current = 0;
+      }
+      if (timeoutId.current) {
+        clearTimeout(timeoutId.current);
+        timeoutId.current = 0;
       }
       cursorDeltas.delete(data.id);
     };
