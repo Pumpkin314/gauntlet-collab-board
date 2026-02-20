@@ -3,6 +3,9 @@ import { measureFps, measureCreateLatency, measurePanFps, measureDragFps, getRen
 import { launchApp, clearBoard, createObjects, formatReport } from './helpers/setup';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test.describe('Phase 0 — Baseline', () => {
   const results: Record<string, unknown> = {};

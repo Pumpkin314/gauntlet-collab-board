@@ -75,13 +75,13 @@ export async function measureDragFps(
   await page.mouse.move(cx, cy);
   await page.mouse.down();
 
+  // Fire mouse events without a per-step delay; the FPS counter in the page
+  // runs on rAF and captures real throughput regardless of event rate.
   const fpsPromise = measureFps(page, durationMs);
 
-  const steps = 100;
-  const stepDelay = durationMs / steps;
+  const steps = 50;
   for (let i = 0; i < steps; i++) {
-    await page.mouse.move(cx + i, cy + i * 0.5);
-    await page.waitForTimeout(stepDelay);
+    await page.mouse.move(cx + i * 2, cy + i);
   }
 
   await page.mouse.up();
