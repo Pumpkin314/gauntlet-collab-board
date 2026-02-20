@@ -4,10 +4,11 @@
  * Points stored as absolute canvas coords: [x1, y1, x2, y2].
  */
 
+import { memo } from 'react';
 import { Group, Line, Circle } from 'react-konva';
 import type { ShapeProps } from '../../types/board';
 
-export default function LineShape({ id, data, isSelected, onSelect, onUpdate, onDelete }: ShapeProps) {
+export default memo(function LineShape({ id, data, isSelected, onSelect, onUpdate, onDelete }: ShapeProps) {
   const pts = data.points ?? [data.x, data.y, data.x + 200, data.y];
   const [x1, y1, x2, y2] = pts;
 
@@ -51,4 +52,4 @@ export default function LineShape({ id, data, isSelected, onSelect, onUpdate, on
 
     </Group>
   );
-}
+});

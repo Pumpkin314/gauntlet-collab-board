@@ -2,11 +2,12 @@
  * RectShape — a plain resizable/draggable rectangle.
  */
 
+import { memo } from 'react';
 import { Rect } from 'react-konva';
 import BaseShape from './BaseShape';
 import type { ShapeProps } from '../../types/board';
 
-export default function RectShape(props: ShapeProps) {
+export default memo(function RectShape(props: ShapeProps) {
   const { data, isSelected } = props;
 
   return (
@@ -26,4 +27,4 @@ export default function RectShape(props: ShapeProps) {
       )}
     </BaseShape>
   );
-}
+});

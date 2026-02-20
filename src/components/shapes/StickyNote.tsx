@@ -2,6 +2,7 @@
  * StickyNote shape — sticky note with text content and double-click to edit.
  */
 
+import { memo } from 'react';
 import { Rect, Text } from 'react-konva';
 import BaseShape from './BaseShape';
 import type { ShapeProps, BoardObject } from '../../types/board';
@@ -12,7 +13,7 @@ interface StickyNoteProps extends ShapeProps {
   isInlineEditing?: boolean;
 }
 
-export default function StickyNote({ onStartEdit, isInlineEditing, ...props }: StickyNoteProps) {
+export default memo(function StickyNote({ onStartEdit, isInlineEditing, ...props }: StickyNoteProps) {
   const { data, isSelected } = props;
 
   return (
@@ -54,4 +55,4 @@ export default function StickyNote({ onStartEdit, isInlineEditing, ...props }: S
       )}
     </BaseShape>
   );
-}
+});

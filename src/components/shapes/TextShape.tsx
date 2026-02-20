@@ -3,6 +3,7 @@
  * Supports inline editing via onStartEdit (same path as StickyNote).
  */
 
+import { memo } from 'react';
 import { Text, Rect } from 'react-konva';
 import BaseShape from './BaseShape';
 import type { ShapeProps, BoardObject } from '../../types/board';
@@ -12,7 +13,7 @@ interface TextShapeProps extends ShapeProps {
   isInlineEditing?: boolean;
 }
 
-export default function TextShape({ onStartEdit, isInlineEditing, ...props }: TextShapeProps) {
+export default memo(function TextShape({ onStartEdit, isInlineEditing, ...props }: TextShapeProps) {
   const { data, isSelected } = props;
 
   return (
@@ -54,4 +55,4 @@ export default function TextShape({ onStartEdit, isInlineEditing, ...props }: Te
       )}
     </BaseShape>
   );
-}
+});

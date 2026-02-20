@@ -6,7 +6,7 @@
  * onSelect now receives (id, nativeEvent) so Canvas can detect shift+click.
  */
 
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import type { BoardObject } from '../../types/board';
 import { getShapeEntry } from '../../utils/shapeRegistry';
 import type {} from '../../test-bridge'; // pull in Window.__perfBridge declaration
@@ -27,7 +27,7 @@ interface ObjectRendererProps {
   onStartEdit: (data: BoardObject) => void;
 }
 
-export default function ObjectRenderer({
+export default memo(function ObjectRenderer({
   objects,
   selectedIds,
   inlineEditId,
@@ -77,4 +77,4 @@ export default function ObjectRenderer({
       })}
     </>
   );
-}
+});
