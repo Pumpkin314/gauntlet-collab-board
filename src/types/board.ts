@@ -50,6 +50,7 @@ export interface PresenceUser {
   userColor: string;
   cursorX: number;
   cursorY: number;
+  lastActive: import('firebase/firestore').Timestamp | null | undefined;
 }
 
 // Props shared by all shape components

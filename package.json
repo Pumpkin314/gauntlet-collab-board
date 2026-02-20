@@ -8,7 +8,11 @@
     "dev:signal": "PORT=4445 node node_modules/y-webrtc/bin/server.js",
     "dev:all": "npm run dev:signal & npm run dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:perf": "playwright test tests/perf",
+    "test:perf:baseline": "playwright test tests/perf/phase0-baseline.spec.ts",
+    "test:perf:phase1": "playwright test tests/perf/phase1-render.spec.ts",
+    "test:perf:all": "playwright test tests/perf --reporter=json > tests/perf/reports/latest.json"
   },
   "dependencies": {
     "firebase": "^11.1.0",
@@ -20,6 +24,7 @@
     "yjs": "^13.6.29"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^25.2.3",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",

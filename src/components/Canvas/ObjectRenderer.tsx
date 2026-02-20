@@ -6,8 +6,12 @@
  * onSelect now receives (id, nativeEvent) so Canvas can detect shift+click.
  */
 
+import { useEffect } from 'react';
 import type { BoardObject } from '../../types/board';
 import { getShapeEntry } from '../../utils/shapeRegistry';
+import type {} from '../../test-bridge'; // pull in Window.__perfBridge declaration
+
+const isTestMode = import.meta.env.VITE_TEST_AUTH_BYPASS === 'true';
 
 interface ObjectRendererProps {
   objects: BoardObject[];
@@ -36,6 +40,12 @@ export default function ObjectRenderer({
   onDimsChanged,
   onStartEdit,
 }: ObjectRendererProps) {
+  useEffect(() => {
+    if (isTestMode && window.__perfBridge) {
+      window.__perfBridge.renderCount++;
+    }
+  });
+
   return (
     <>
       {objects.map((obj) => {
