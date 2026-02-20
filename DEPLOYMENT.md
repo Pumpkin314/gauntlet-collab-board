@@ -34,6 +34,10 @@
    VITE_FIREBASE_MESSAGING_SENDER_ID=123456789012
    VITE_FIREBASE_APP_ID=1:123456789012:web:abcdefghijk
    ```
+7. **Set your WebRTC signaling server** (prod):
+   ```env
+   VITE_SIGNALING_SERVERS=wss://g4-collab-board.fly.dev
+   ```
 
 ---
 
