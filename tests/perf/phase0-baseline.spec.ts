@@ -19,6 +19,38 @@ test.describe('Phase 0 — Baseline', () => {
     expect(fps).toBeGreaterThan(0);
   });
 
+  test('idle FPS with 5 objects', async ({ page }) => {
+    await createObjects(page, 5);
+    const fps = await measureFps(page);
+    results['idleFps_5'] = fps;
+    console.log(`Idle FPS (5 objects): ${fps.toFixed(1)}`);
+    expect(fps).toBeGreaterThan(0);
+  });
+
+  test('pan FPS with 5 objects', async ({ page }) => {
+    await createObjects(page, 5);
+    const fps = await measurePanFps(page);
+    results['panFps_5'] = fps;
+    console.log(`Pan FPS (5 objects): ${fps.toFixed(1)}`);
+    expect(fps).toBeGreaterThan(0);
+  });
+
+  test('idle FPS with 10 objects', async ({ page }) => {
+    await createObjects(page, 10);
+    const fps = await measureFps(page);
+    results['idleFps_10'] = fps;
+    console.log(`Idle FPS (10 objects): ${fps.toFixed(1)}`);
+    expect(fps).toBeGreaterThan(0);
+  });
+
+  test('pan FPS with 10 objects', async ({ page }) => {
+    await createObjects(page, 10);
+    const fps = await measurePanFps(page);
+    results['panFps_10'] = fps;
+    console.log(`Pan FPS (10 objects): ${fps.toFixed(1)}`);
+    expect(fps).toBeGreaterThan(0);
+  });
+
   test('idle FPS with 100 objects', async ({ page }) => {
     await createObjects(page, 100);
     const fps = await measureFps(page);
