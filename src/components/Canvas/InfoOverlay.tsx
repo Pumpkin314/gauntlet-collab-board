@@ -40,4 +40,11 @@ export default memo(function InfoOverlay({
       {loading && <div style={{ marginTop: 8, color: '#4ECDC4' }}>Syncing…</div>}
     </div>
   );
-});
+}, (prev, next) =>
+  prev.stageScale === next.stageScale
+  && prev.stagePos.x === next.stagePos.x
+  && prev.stagePos.y === next.stagePos.y
+  && prev.objectCount === next.objectCount
+  && prev.usersOnline === next.usersOnline
+  && prev.loading === next.loading
+);
