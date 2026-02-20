@@ -9,10 +9,15 @@ export async function launchApp(page: Page) {
   );
 }
 
-/** Clears all objects on the board via the perf bridge. */
+/** Clears all objects on the board and waits until the object list is empty. */
 export async function clearBoard(page: Page) {
   await page.evaluate(() => window.__perfBridge!.deleteAllObjects());
-  await page.waitForTimeout(100);
+  // Poll until board state is empty rather than fixed-sleep — avoids stale
+  // leftover objects when clearing after a large batch (e.g. 1000 objects).
+  await page.waitForFunction(
+    () => (window.__perfBridge?.getObjects().length ?? 0) === 0,
+    { timeout: 10_000 },
+  );
 }
 
 /** Creates `count` sticky notes in a grid layout and waits for render. */
