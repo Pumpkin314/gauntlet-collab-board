@@ -18,3 +18,7 @@
 
 ## Skills
 - Project-specific skills are located in .claude/skills/ and .agents/skills/. These give you access to specialized knowledge that could be useful to tasks.
+
+
+## Unit tests
+- After making major changes and finalizing them, be sure to run the unit tests to make sure everything runs right.

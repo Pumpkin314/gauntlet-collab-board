@@ -26,10 +26,17 @@ Real-time collaborative whiteboard with infinite canvas, built with React, Konva
      VITE_FIREBASE_API_KEY=your_api_key
      VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
      VITE_FIREBASE_PROJECT_ID=your_project_id
-     VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-     VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-     VITE_FIREBASE_APP_ID=your_app_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   ```
+   - Set your WebRTC signaling server (prod):
+     ```env
+     VITE_SIGNALING_SERVERS=wss://g4-collab-board.fly.dev
      ```
+   - Dev vs prod env behavior:
+     - `npm run dev` reads `.env` only.
+     - Vercel builds read `.env.production` (and Vercel project env vars).
 
 3. **Run development server:**
    ```bash
@@ -61,6 +68,7 @@ Real-time collaborative whiteboard with infinite canvas, built with React, Konva
    vercel env add VITE_FIREBASE_STORAGE_BUCKET
    vercel env add VITE_FIREBASE_MESSAGING_SENDER_ID
    vercel env add VITE_FIREBASE_APP_ID
+   vercel env add VITE_SIGNALING_SERVERS
    ```
 
 4. **Redeploy with environment variables:**
