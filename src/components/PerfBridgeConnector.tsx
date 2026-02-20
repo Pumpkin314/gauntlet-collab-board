@@ -4,11 +4,11 @@
  */
 
 import { useEffect } from 'react';
-import { useBoard } from '../contexts/BoardContext';
+import { useBoardActions } from '../contexts/BoardContext';
 import { initPerfBridge } from '../test-bridge';
 
 export default function PerfBridgeConnector() {
-  const { batchCreate, deleteAllObjects, getAllObjects } = useBoard();
+  const { batchCreate, deleteAllObjects, getAllObjects } = useBoardActions();
 
   useEffect(() => {
     initPerfBridge({ batchCreate, deleteAllObjects, getAllObjects });

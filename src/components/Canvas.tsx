@@ -186,13 +186,16 @@ export default function Canvas() {
   }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, deselectAll, selectAll]);
 
   // ── Transformer: attach to selected non-line nodes ───────────────────────
+  const objectsForTransformerRef = useRef(objects);
+  objectsForTransformerRef.current = objects;
+
   useEffect(() => {
     if (!transformerRef.current || !layerRef.current) return;
 
     if (selectedIds.size > 0) {
       const nodes = [...selectedIds]
         .map((id) => {
-          const obj = objects.find((o) => o.id === id);
+          const obj = objectsForTransformerRef.current.find((o) => o.id === id);
           if (obj?.type === 'line') return null;
           return layerRef.current!.findOne(`#note-${id}`);
         })
@@ -202,7 +205,7 @@ export default function Canvas() {
       transformerRef.current.nodes([]);
     }
     transformerRef.current.getLayer()?.batchDraw();
-  }, [selectedIds, objects]);
+  }, [selectedIds]);
 
   // ── Tool change handlers ─────────────────────────────────────────────────
   const handleToolChange = useCallback((tool: ActiveTool) => {
@@ -425,10 +428,10 @@ export default function Canvas() {
   };
 
   // ── Color picker ──────────────────────────────────────────────────────────
-  const handleShowColorPicker = (noteId: string, position: { x: number; y: number }) => {
+  const handleShowColorPicker = useCallback((noteId: string, position: { x: number; y: number }) => {
     setColorPickerNote(noteId);
     setColorPickerPos(position);
-  };
+  }, []);
 
   const handleColorChange = useCallback((color: string) => {
     if (colorPickerNote) {
