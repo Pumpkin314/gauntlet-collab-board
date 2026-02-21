@@ -1306,6 +1306,103 @@ Tracks actual implementation status against the plan. Updated after each merged 
 - Each template routes correctly via `applyTemplate` ✅
 - Inner frames carry correct `parentId` → dragging outer frame moves children ✅
 
-### Epic 3: Planner LLM (Phase 3) — NOT STARTED
-### Epic 4: UX Polish (Phase 4) — NOT STARTED
-### Epic 5: Observability (Phase 5) — NOT STARTED
+### Epic 3: Planner LLM (Phase 3) — COMPLETE
+
+**Commits on `main`** (2026-02-21)
+
+| Commit | Scope | Files |
+|--------|-------|-------|
+| `8bcb8a1` | Geometry helpers extracted + circlePositions/flowPositions/fitInside added | geometryHelpers.ts |
+| `14c1f53` | executor imports gridPositions from geometryHelpers | executor.ts |
+| `c8cc39f` | Planner prompt builder (JSON text output, coordinate system docs, helpers) | plannerPrompt.ts |
+| `417a086` | delegateToPlanner schema + tool def + PLANNER_TOOL_DEFINITIONS | tools.ts |
+| `0e2f51e` | Optional model + maxTokens + timeoutMs params on callAnthropic | apiClient.ts |
+| `1e06012` | delegateToPlanner branch in pipeline (single Sonnet call, JSON parse, Zod validation, retry) | pipeline.ts |
+| `9db8f02` | Delegation routing rules + examples in system prompt | systemPrompt.ts |
+
+**Key implementation decisions vs. plan:**
+- **JSON text output instead of tool-use API**: Original plan had Sonnet use the tool-calling API. Switched to JSON text response after discovering the tool-use mechanism chunks generation into 5+ sequential API calls (stop_reason="tool_use" after every batch), adding ~35s latency. Sonnet now outputs a raw JSON array in one shot; pipeline parses + Zod-validates each item.
+- **No PLANNER_TOOL_DEFINITIONS passed to API**: The export exists but the planner call passes `tools: []`. Tool catalog is embedded as documentation in the system prompt only.
+- **Coordinate system clarification added**: Sonnet defaulted to treating x/y as shape center; added explicit bounding-box documentation + corrected geometry helper formulas to output top-left coordinates.
+- **30s timeout** for planner calls (default is 15s); will become less necessary once Epic 4 pre-specifies layout intent.
+
+**Verified:**
+- `delegateToPlanner` routing fires for world-knowledge requests ✅
+- Simple requests (< 5 objects) bypass delegation ✅
+- `applyTemplate` still fires for exact template matches ✅
+- Solar system diagram: all 8 planets + sun + labels in single Sonnet call ✅
+
+---
+
+### Sprint 2 Roadmap
+
+Priority order confirmed by product decision (2026-02-21):
+
+| Epic | Theme | Status |
+|------|-------|--------|
+| **Epic 4** | Structured Agent Dialogue — interview loop + choice buttons | NEXT |
+| **Epic 5** | Langfuse Observability | FOLLOWING |
+| **Epic 6** | Streaming Status (progress during execution) | LAST IN SPRINT |
+| Future sprint | Remaining UX polish, undo/redo, multi-board, auth hardening | DEFERRED |
+
+---
+
+### Epic 4: Structured Agent Dialogue — NOT STARTED
+
+**Goal:** For ambiguous or complex requests, Haiku enters an interview mode — asking one targeted clarifying question at a time with structured choice buttons — before delegating to the planner. This reduces planner prompt vagueness and improves layout quality.
+
+**New tool:** `askClarification(question: string, options: {label: string, value: string}[], allowFreeText: boolean)`
+
+**Flow:**
+```
+User: "I want a solar system diagram"
+Haiku → askClarification("How should I arrange the planets?",
+          [{label: "Up to you"}, {label: "Flat line"}, {label: "Circular orbits"}])
+User picks "Circular orbits"
+Haiku → askClarification("Include orbital rings?",
+          [{label: "Yes"}, {label: "No"}, {label: "Just do it"}])
+User picks "Just do it"
+Haiku → delegateToPlanner("Solar system, circular layout, orbital rings, all 8 planets")
+```
+
+**Pipeline changes:**
+- New pipeline branch for `askClarification`: returns early, surfaces buttons in UI, re-enters pipeline with accumulated context on user response
+- Conversation history carries clarification answers forward to the next Haiku call
+
+**UI changes:**
+- Choice buttons rendered inline in chat (multi-select where options are non-exclusive)
+- "Just do it with what you have" always available as an escape hatch
+
+**Relationship to Epic 3:** Reduces planner prompt ambiguity → faster Sonnet responses, better coordinate layouts, less reliance on the 30s timeout.
+
+---
+
+### Epic 5: Langfuse Observability — NOT STARTED
+
+Full trace structure already designed in §10 of this document. Implementation is purely additive (wrapping spans around existing pipeline calls).
+
+**Key instrumentation points:**
+- `guardrail` span
+- `tool_calling_llm` generation (Haiku call)
+- `board_state_fetch` span (when requestBoardState fires)
+- `planner_llm` generation (Sonnet call, when delegateToPlanner fires)
+- `execution` span with per-action results
+- Trace-level metadata: outcome, total cost, routing path
+
+---
+
+### Epic 6: Streaming Status — NOT STARTED
+
+Show incremental progress in the chat widget while multi-step commands execute.
+
+**Scope:**
+- "Planning…" indicator during LLM calls
+- Per-action status lines streamed as executor runs: `✓ Created Sun  ✓ Created Mercury  …`
+- Progress counter for large batches: `Creating objects… (5/28)`
+- Do NOT stream when order matters for visual coherence (swap, batch-delete)
+
+**Deferred to future sprint:**
+- Undo/redo for agent actions
+- Confirmation dialogs for destructive actions (`confirmDestructive`)
+- Multi-board support and auth hardening
+- Minimap, object grouping, export/import (see feature-wishlist.md)
