@@ -65,4 +65,5 @@ export interface ShapeProps {
   onTransformStart?: () => void;
   onTransformEnd?: () => void;
   onDimsChanged?: () => void;
+  disableShadows?: boolean;
 }

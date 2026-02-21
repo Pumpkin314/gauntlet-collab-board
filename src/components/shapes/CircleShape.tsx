@@ -9,7 +9,7 @@ import BaseShape from './BaseShape';
 import type { ShapeProps } from '../../types/board';
 
 export default memo(function CircleShape(props: ShapeProps) {
-  const { data, isSelected } = props;
+  const { data, isSelected, disableShadows } = props;
 
   return (
     <BaseShape {...props} minWidth={40} minHeight={40}>
@@ -22,7 +22,7 @@ export default memo(function CircleShape(props: ShapeProps) {
           fill={data.color}
           stroke={isSelected ? '#4ECDC4' : '#333'}
           strokeWidth={isSelected ? 3 : 2}
-          shadowBlur={8}
+          shadowBlur={disableShadows ? 0 : 8}
           shadowColor="rgba(0,0,0,0.2)"
           shadowOffset={{ x: 2, y: 2 }}
         />
