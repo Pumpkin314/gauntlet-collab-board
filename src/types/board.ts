@@ -28,6 +28,8 @@ export interface BoardObject {
 
   // Line-specific: absolute points [x1,y1,x2,y2,...]
   points?: number[];
+  arrowStart?: boolean;
+  arrowEnd?: boolean;
 
   // Connector-specific
   fromId?: string;
