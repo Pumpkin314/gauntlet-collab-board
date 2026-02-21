@@ -18,6 +18,7 @@ import RectShape from './shapes/RectShape';
 import CircleShape from './shapes/CircleShape';
 import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
+import FrameShape from './shapes/FrameShape';
 import type { ActiveTool, BoardObject } from '../types/board';
 
 // ── Register all shape types ───────────────────────────────────────────────────
@@ -45,6 +46,11 @@ registerShape('line', {
   component: LineShape,
   defaults:  { width: 200, height: 0, color: '#333333', strokeWidth: 2 },
   minWidth: 0, minHeight: 0,
+});
+registerShape('frame', {
+  component: FrameShape,
+  defaults:  { width: 400, height: 300, color: '#f0f0f0', content: 'Frame' },
+  minWidth: 200, minHeight: 150,
 });
 
 // ── local types ────────────────────────────────────────────────────────────────
@@ -102,10 +108,38 @@ function isInViewport(
   return dx * dx + dy * dy <= r * r;
 }
 
+/** Check if child's AABB is fully inside frame's AABB */
+function isFullyInside(child: BoardObject, frame: BoardObject): boolean {
+  const cw = child.width ?? 0;
+  const ch = child.height ?? 0;
+  return (
+    child.x >= frame.x &&
+    child.y >= frame.y &&
+    child.x + cw <= frame.x + frame.width &&
+    child.y + ch <= frame.y + frame.height
+  );
+}
+
+/** Collect all descendant IDs of a frame (recursive) */
+function getDescendantIds(frameId: string, allObjects: BoardObject[]): Set<string> {
+  const result = new Set<string>();
+  const queue = [frameId];
+  while (queue.length > 0) {
+    const parentId = queue.pop()!;
+    for (const obj of allObjects) {
+      if (obj.parentId === parentId && !result.has(obj.id)) {
+        result.add(obj.id);
+        if (obj.type === 'frame') queue.push(obj.id);
+      }
+    }
+  }
+  return result;
+}
+
 export default function Canvas() {
   const {
     objects, presence, createObject, updateObject,
-    deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchDelete, loading,
+    deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchUpdate, batchDelete, loading,
   } = useBoard();
 
   const { selectedIds, select, toggleSelect, setSelection, deselectAll, selectAll } = useSelection();
@@ -146,6 +180,78 @@ export default function Canvas() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // ── Frame-aware update: containment check + move children ───────────────
+  const objectsRef = useRef(objects);
+  objectsRef.current = objects;
+
+  const handleFrameAwareUpdate = useCallback((id: string, updates: Partial<BoardObject>) => {
+    updateObject(id, updates);
+
+    // Only run frame logic when position changes (drag end)
+    if (updates.x === undefined && updates.y === undefined) return;
+
+    const allObjs = objectsRef.current;
+    const obj = allObjs.find(o => o.id === id);
+    if (!obj) return;
+
+    const updatedObj = { ...obj, ...updates };
+
+    // If a frame was dragged, move all descendants by the delta
+    if (obj.type === 'frame') {
+      const dx = (updates.x ?? obj.x) - obj.x;
+      const dy = (updates.y ?? obj.y) - obj.y;
+      if (dx !== 0 || dy !== 0) {
+        const descendantIds = getDescendantIds(id, allObjs);
+        if (descendantIds.size > 0) {
+          const childUpdates = allObjs
+            .filter(o => descendantIds.has(o.id))
+            .map(child => {
+              if (child.type === 'line' && child.points && child.points.length >= 4) {
+                return {
+                  id: child.id,
+                  changes: {
+                    x: child.x + dx,
+                    y: child.y + dy,
+                    points: [
+                      child.points[0]! + dx, child.points[1]! + dy,
+                      child.points[2]! + dx, child.points[3]! + dy,
+                    ],
+                  },
+                };
+              }
+              return { id: child.id, changes: { x: child.x + dx, y: child.y + dy } };
+            });
+          batchUpdate(childUpdates);
+        }
+      }
+    }
+
+    // Containment check: assign/release parentId based on frame containment
+    const ownDescendants = obj.type === 'frame' ? getDescendantIds(id, allObjs) : new Set<string>();
+    const frames = allObjs.filter(
+      f => f.type === 'frame' && f.id !== id && !ownDescendants.has(f.id)
+    );
+
+    // Find the smallest frame that fully contains this object (prefer tightest fit)
+    let bestFrame: BoardObject | null = null;
+    let bestArea = Infinity;
+    for (const frame of frames) {
+      if (isFullyInside(updatedObj, frame)) {
+        const area = frame.width * frame.height;
+        if (area < bestArea) {
+          bestArea = area;
+          bestFrame = frame;
+        }
+      }
+    }
+
+    const newParentId = bestFrame?.id ?? '';
+    const oldParentId = obj.parentId ?? '';
+    if (oldParentId !== newParentId) {
+      updateObject(id, { parentId: newParentId as any });
+    }
+  }, [updateObject, batchUpdate]);
 
   // ── Cleanup throttle timer on unmount ────────────────────────────────────
   useEffect(() => {
@@ -206,6 +312,11 @@ export default function Canvas() {
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
         e.preventDefault();
+        const deletingSet = new Set(selected);
+        const releaseUpdates = objectsRef.current
+          .filter(o => o.parentId && deletingSet.has(o.parentId) && !deletingSet.has(o.id))
+          .map(o => ({ id: o.id, changes: { parentId: '' as any } }));
+        if (releaseUpdates.length > 0) batchUpdate(releaseUpdates);
         batchDelete(selected);
         deselectAll();
         return;
@@ -255,7 +366,7 @@ export default function Canvas() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, deselectAll, selectAll]);
+  }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, batchUpdate, deselectAll, selectAll]);
 
   // ── Transformer: attach to selected non-line nodes ───────────────────────
   const objectsForTransformerRef = useRef(objects);
@@ -375,13 +486,31 @@ export default function Canvas() {
       dotGridRef.current?.update(pos, stageScaleRef.current);
     } else {
       setIsDraggingShape(false);
+      frameDragStartRef.current = null;
+      frameDragChildNodesRef.current.clear();
+      frameDragChildOriginsRef.current.clear();
     }
   }, []);
 
   /** Ref-first pan: update ref + imperative DotGrid every frame,
    *  throttle state sync to ~150ms for viewport culling. */
   const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    if (e.target !== e.target.getStage()) return;
+    if (e.target !== e.target.getStage()) {
+      // Frame drag: imperatively move cached descendant nodes
+      if (frameDragStartRef.current) {
+        const node = e.target;
+        const dx = node.x() - frameDragStartRef.current.x;
+        const dy = node.y() - frameDragStartRef.current.y;
+        for (const [childId, childNode] of frameDragChildNodesRef.current) {
+          const origin = frameDragChildOriginsRef.current.get(childId);
+          if (origin) {
+            childNode.x(origin.x + dx);
+            childNode.y(origin.y + dy);
+          }
+        }
+      }
+      return;
+    }
     const stage = stageRef.current;
     if (!stage) return;
     const pos = { x: stage.x(), y: stage.y() };
@@ -472,7 +601,10 @@ export default function Canvas() {
     } else {
       select(id);
     }
-    updateObject(id, { zIndex: Date.now() });
+    const obj = objectsRef.current.find(o => o.id === id);
+    if (obj?.type !== 'frame') {
+      updateObject(id, { zIndex: Date.now() });
+    }
   }, [select, toggleSelect, updateObject]);
 
   const handleDeselectClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -483,9 +615,16 @@ export default function Canvas() {
   }, [deselectAll, inlineEdit]);
 
   const handleDelete = useCallback((id: string) => {
+    const obj = objectsRef.current.find(o => o.id === id);
+    if (obj?.type === 'frame') {
+      const children = objectsRef.current.filter(o => o.parentId === id);
+      if (children.length > 0) {
+        batchUpdate(children.map(c => ({ id: c.id, changes: { parentId: '' as any } })));
+      }
+    }
     deleteObject(id);
     deselectAll();
-  }, [deleteObject, deselectAll]);
+  }, [deleteObject, deselectAll, batchUpdate]);
 
   // ── Inline editing ────────────────────────────────────────────────────────
   const handleStartInlineEdit = useCallback((data: BoardObject) => {
@@ -554,11 +693,42 @@ export default function Canvas() {
     transformerRef.current?.forceUpdate();
   }, []);
 
+  // ── Frame drag: imperative child movement (local-only until dragEnd) ─────
+  const frameDragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const frameDragChildNodesRef = useRef<Map<string, Konva.Node>>(new Map());
+  const frameDragChildOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
   /** Fired when any drag begins on the Stage; distinguishes shape drags from
    *  canvas pans so the selection action menu is hidden during shape movement. */
   const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) {
       setIsDraggingShape(true);
+
+      // If dragging a frame, cache descendant node refs for imperative movement
+      const node = e.target;
+      const konvaId = node.id();
+      const objId = konvaId.replace('note-', '');
+      const obj = objectsRef.current.find(o => o.id === objId);
+      if (obj?.type === 'frame') {
+        frameDragStartRef.current = { x: node.x(), y: node.y() };
+        const descendants = getDescendantIds(objId, objectsRef.current);
+        const layer = layerRef.current;
+        const nodeMap = new Map<string, Konva.Node>();
+        const originMap = new Map<string, { x: number; y: number }>();
+        if (layer) {
+          for (const childId of descendants) {
+            const childNode = layer.findOne(`#note-${childId}`);
+            if (childNode) {
+              nodeMap.set(childId, childNode);
+              originMap.set(childId, { x: childNode.x(), y: childNode.y() });
+            }
+          }
+        }
+        frameDragChildNodesRef.current = nodeMap;
+        frameDragChildOriginsRef.current = originMap;
+      } else {
+        frameDragStartRef.current = null;
+      }
     } else {
       isPanningRef.current = true;
       layerRef.current?.listening(false);
@@ -597,7 +767,7 @@ export default function Canvas() {
             selectedIds={selectedIds}
             inlineEditId={inlineEdit?.id ?? null}
             onSelect={handleSelect}
-            onUpdate={updateObject}
+            onUpdate={handleFrameAwareUpdate}
             onDelete={handleDelete}
             onShowColorPicker={handleShowColorPicker}
             onTransformStart={handleTransformStart}
