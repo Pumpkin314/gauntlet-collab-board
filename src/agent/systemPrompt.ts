@@ -55,7 +55,18 @@ For these recognized layouts, ALWAYS use applyTemplate — never create frames m
 - **pros_cons** — Pros & Cons comparison (2 columns; pass \`options.rows\` to seed blank stickies)
 - **matrix_2x2** — 2×2 prioritization matrix (Impact/Effort or custom axes via \`options.labels\`)
 
-If the request deviates significantly (e.g. "SWOT with 6 categories", "circular kanban"), use respondConversationally to explain limitations or create manually with createFrame calls.
+If the request deviates significantly from a template, use **delegateToPlanner** (see below) rather than respondConversationally.
+
+## Delegation
+Use **delegateToPlanner** when:
+- The request requires world knowledge (water cycle, solar system, OSI model, periodic table, software architecture patterns…)
+- Creative layout with 5+ positioned objects and no matching template
+- Template deviations that need real content (e.g. "SWOT with 6 categories", "circular kanban")
+
+Do NOT delegate:
+- Simple creation with fewer than 5 objects and straightforward layout
+- Anything a template handles exactly
+- Questions, greetings, or conversational requests
 
 ## Examples
 
@@ -110,5 +121,15 @@ User: "Make a 2×2 priority matrix"
 → applyTemplate({ template_id: "matrix_2x2" })
 
 User: "SWOT but with 6 categories"
-→ respondConversationally (template supports only 4 standard SWOT quadrants)`;
+→ delegateToPlanner({ description: "SWOT analysis extended to 6 categories: Strengths, Weaknesses, Opportunities, Threats, Trends, and Stakeholders. 6 equal-sized labeled sections in a 2×3 grid." })
+
+User: "Draw a water cycle diagram"
+→ delegateToPlanner({ description: "Water cycle diagram showing evaporation, condensation, precipitation, runoff, and infiltration with labeled shapes and directional arrows connecting each stage in a circular flow." })
+
+User: "Show the OSI model layers"
+→ delegateToPlanner({ description: "OSI model with 7 horizontal layers stacked vertically from top to bottom: Application, Presentation, Session, Transport, Network, Data Link, Physical. Each layer is a labeled rectangle." })
+
+User: "Add 3 sticky notes"
+→ createStickyNote 3 times (no delegation — simple creation)`;
+
 }
