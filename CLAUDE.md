@@ -21,4 +21,4 @@
 
 
 ## Unit tests
-- After making major changes and finalizing them, be sure to run the unit tests to make sure everything runs right.
+- After making major changes and finalizing them, be sure to run the unit tests to make sure everything runs right so we don't play bug whack-a-mole. This should happen at the end of big changes, e.g. before a PR is merged.

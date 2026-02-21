@@ -154,7 +154,8 @@ export default function Canvas() {
     };
   }, []);
 
-  // ── Viewport culling ──────────────────────────────────────────────────────
+  // ── Viewport culling (stable identity) ───────────────────────────────────
+  const prevVisibleRef = useRef<{ ids: string; result: typeof objects }>({ ids: '', result: [] });
   const visibleObjects = useMemo(() => {
     const margin = 200;
     const vl = (-stagePos.x - margin) / stageScale;
@@ -162,9 +163,19 @@ export default function Canvas() {
     const vr = (windowSize.width - stagePos.x + margin) / stageScale;
     const vb = (windowSize.height - stagePos.y + margin) / stageScale;
 
-    return objects.filter(obj =>
+    const filtered = objects.filter(obj =>
       selectedIds.has(obj.id) || isInViewport(obj, vl, vt, vr, vb)
     );
+
+    const idKey = filtered.map(o => o.id).join(',');
+    const prev = prevVisibleRef.current;
+    if (idKey === prev.ids && filtered.length === prev.result.length) {
+      // Same visible set — check if any object reference changed
+      const changed = filtered.some((obj, i) => obj !== prev.result[i]);
+      if (!changed) return prev.result;
+    }
+    prevVisibleRef.current = { ids: idKey, result: filtered };
+    return filtered;
   }, [objects, stagePos, stageScale, windowSize, selectedIds]);
 
   // ── Space-key pan override ────────────────────────────────────────────────
