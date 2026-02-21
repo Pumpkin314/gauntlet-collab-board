@@ -99,6 +99,21 @@ const SHAPE_DEFAULTS: Record<ShapeType, Partial<BoardObject>> = {
 
 // DebugInfo type and EMPTY_DEBUG are now in DebugContext.tsx
 
+/** Walk parentId chain to compute nesting depth (0 = top-level frame). */
+function getFrameDepth(obj: BoardObject, cache: Map<string, BoardObject>): number {
+  let depth = 0;
+  let current = obj;
+  const seen = new Set<string>();
+  while (current.parentId && !seen.has(current.parentId)) {
+    seen.add(current.parentId);
+    const parent = cache.get(current.parentId);
+    if (!parent) break;
+    depth++;
+    current = parent;
+  }
+  return depth;
+}
+
 // ── diff-based Yjs → React sync ───────────────────────────────────────────
 
 /**
@@ -165,7 +180,17 @@ function makeDiffSync(
     if (structuralChange) {
       // Full re-sort needed
       const arr = [...cache.values()];
-      arr.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+      arr.sort((a, b) => {
+        const aIsFrame = a.type === 'frame';
+        const bIsFrame = b.type === 'frame';
+        if (aIsFrame !== bIsFrame) return aIsFrame ? -1 : 1;
+        if (aIsFrame && bIsFrame) {
+          const aDepth = getFrameDepth(a, cache);
+          const bDepth = getFrameDepth(b, cache);
+          if (aDepth !== bDepth) return aDepth - bDepth;
+        }
+        return (a.zIndex ?? 0) - (b.zIndex ?? 0);
+      });
       sortedRef.current = arr;
       setObjects(arr);
     } else {

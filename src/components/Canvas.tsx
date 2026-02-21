@@ -486,13 +486,31 @@ export default function Canvas() {
       dotGridRef.current?.update(pos, stageScaleRef.current);
     } else {
       setIsDraggingShape(false);
+      frameDragStartRef.current = null;
+      frameDragChildNodesRef.current.clear();
+      frameDragChildOriginsRef.current.clear();
     }
   }, []);
 
   /** Ref-first pan: update ref + imperative DotGrid every frame,
    *  throttle state sync to ~150ms for viewport culling. */
   const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    if (e.target !== e.target.getStage()) return;
+    if (e.target !== e.target.getStage()) {
+      // Frame drag: imperatively move cached descendant nodes
+      if (frameDragStartRef.current) {
+        const node = e.target;
+        const dx = node.x() - frameDragStartRef.current.x;
+        const dy = node.y() - frameDragStartRef.current.y;
+        for (const [childId, childNode] of frameDragChildNodesRef.current) {
+          const origin = frameDragChildOriginsRef.current.get(childId);
+          if (origin) {
+            childNode.x(origin.x + dx);
+            childNode.y(origin.y + dy);
+          }
+        }
+      }
+      return;
+    }
     const stage = stageRef.current;
     if (!stage) return;
     const pos = { x: stage.x(), y: stage.y() };
@@ -583,7 +601,10 @@ export default function Canvas() {
     } else {
       select(id);
     }
-    updateObject(id, { zIndex: Date.now() });
+    const obj = objectsRef.current.find(o => o.id === id);
+    if (obj?.type !== 'frame') {
+      updateObject(id, { zIndex: Date.now() });
+    }
   }, [select, toggleSelect, updateObject]);
 
   const handleDeselectClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -672,11 +693,42 @@ export default function Canvas() {
     transformerRef.current?.forceUpdate();
   }, []);
 
+  // ── Frame drag: imperative child movement (local-only until dragEnd) ─────
+  const frameDragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const frameDragChildNodesRef = useRef<Map<string, Konva.Node>>(new Map());
+  const frameDragChildOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
   /** Fired when any drag begins on the Stage; distinguishes shape drags from
    *  canvas pans so the selection action menu is hidden during shape movement. */
   const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) {
       setIsDraggingShape(true);
+
+      // If dragging a frame, cache descendant node refs for imperative movement
+      const node = e.target;
+      const konvaId = node.id();
+      const objId = konvaId.replace('note-', '');
+      const obj = objectsRef.current.find(o => o.id === objId);
+      if (obj?.type === 'frame') {
+        frameDragStartRef.current = { x: node.x(), y: node.y() };
+        const descendants = getDescendantIds(objId, objectsRef.current);
+        const layer = layerRef.current;
+        const nodeMap = new Map<string, Konva.Node>();
+        const originMap = new Map<string, { x: number; y: number }>();
+        if (layer) {
+          for (const childId of descendants) {
+            const childNode = layer.findOne(`#note-${childId}`);
+            if (childNode) {
+              nodeMap.set(childId, childNode);
+              originMap.set(childId, { x: childNode.x(), y: childNode.y() });
+            }
+          }
+        }
+        frameDragChildNodesRef.current = nodeMap;
+        frameDragChildOriginsRef.current = originMap;
+      } else {
+        frameDragStartRef.current = null;
+      }
     } else {
       isPanningRef.current = true;
       layerRef.current?.listening(false);
