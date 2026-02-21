@@ -200,7 +200,7 @@ export async function runAgentCommand(
         [{ role: 'user', content: plannerUserText }],
         [], // no tools — Sonnet outputs JSON text, not tool_use blocks
         plannerSystem,
-        { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 60_000 },
+        { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000 },
       );
 
       const rawText = resp.content.find((b) => b.type === 'text')?.text ?? '';
@@ -218,7 +218,7 @@ export async function runAgentCommand(
           ],
           [],
           plannerSystem,
-          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 60_000 },
+          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000 },
         );
         const retryText = retryResp.content.find((b) => b.type === 'text')?.text ?? '';
         ({ calls: plannerCalls, errors: parseErrors } = parsePlannerJSON(retryText));
