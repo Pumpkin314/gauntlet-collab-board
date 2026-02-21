@@ -2,8 +2,9 @@ import type { AgentMessage, AgentToolCall, ViewportCenter } from './types';
 import type { BoardObject, ShapeType } from '../types/board';
 import { sanitizeInput, checkRateLimit, validateActionCount } from './guardrails';
 import { buildSystemPrompt } from './systemPrompt';
+import { buildPlannerPrompt } from './plannerPrompt';
 import { callAnthropic } from './apiClient';
-import { TOOL_DEFINITIONS } from './tools';
+import { TOOL_DEFINITIONS, PLANNER_TOOL_DEFINITIONS } from './tools';
 import { executeToolCalls } from './executor';
 import { resolveObjects } from './objectResolver';
 import type { BoardStateFilter } from './objectResolver';
@@ -137,8 +138,60 @@ export async function runAgentCommand(
     }
   }
 
-  // Filter out any leftover requestBoardState calls (shouldn't be executed)
-  const executableCalls = toolCalls.filter((tc) => tc.name !== 'requestBoardState');
+  // 5b. Check for delegateToPlanner → call Sonnet, replace the call with its tool calls
+  const plannerCallIdx = toolCalls.findIndex((tc) => tc.name === 'delegateToPlanner');
+  if (plannerCallIdx !== -1) {
+    const plannerCall = toolCalls[plannerCallIdx]!;
+    const description = plannerCall.input.description as string;
+    const boardCtx    = plannerCall.input.board_context as string | undefined;
+
+    const plannerSystem   = buildPlannerPrompt(viewportCenter);
+    const plannerUserText = boardCtx
+      ? `${description}\n\nExisting board context:\n${boardCtx}`
+      : description;
+
+    const plannerMessages = [{ role: 'user' as const, content: plannerUserText }];
+
+    /** Attempt one planner call, optionally prepending a correction message. */
+    const callPlanner = async (extraUserMsg?: string) => {
+      const msgs = extraUserMsg
+        ? [...plannerMessages, { role: 'user' as const, content: extraUserMsg }]
+        : plannerMessages;
+      return callAnthropic(msgs, PLANNER_TOOL_DEFINITIONS, plannerSystem, {
+        model: 'claude-sonnet-4-6',
+      });
+    };
+
+    try {
+      const tP = performance.now();
+      let plannerResp = await callPlanner();
+      console.debug(`[Boardie] Planner call: ${Math.round(performance.now() - tP)}ms`);
+
+      let plannerCalls = parseResponse(plannerResp).toolCalls;
+
+      // Validate: at least one tool call returned; retry once if empty
+      if (plannerCalls.length === 0) {
+        plannerResp  = await callPlanner('No tool calls were returned. Please output concrete tool calls to create the diagram.');
+        plannerCalls = parseResponse(plannerResp).toolCalls;
+      }
+
+      // Replace the delegateToPlanner entry with the planner's tool calls
+      toolCalls = [
+        ...toolCalls.slice(0, plannerCallIdx),
+        ...plannerCalls,
+        ...toolCalls.slice(plannerCallIdx + 1),
+      ];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      messages.push({ id: makeId(), role: 'error', content: `Planner error: ${msg}`, timestamp: Date.now() });
+      return messages;
+    }
+  }
+
+  // Filter out any leftover meta calls (shouldn't be executed)
+  const executableCalls = toolCalls.filter(
+    (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner',
+  );
 
   // 6. Validate action count
   const actionCheck = validateActionCount(executableCalls.length);
