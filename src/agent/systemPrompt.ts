@@ -16,6 +16,7 @@ You can create and manipulate these object types:
 
 You can also modify existing objects:
 - Move, resize, recolor, update text, or delete objects by their ID
+- Use **requestBoardState** to discover existing objects before manipulating them
 
 ## Positioning guidelines
 - The current viewport center is approximately (${cx}, ${cy}).
@@ -31,6 +32,12 @@ Use these color names: red, orange, yellow, green, blue, purple, pink, teal, whi
 - To draw an arrow from A to B, use createLine with the coordinates and arrowEnd: true.
 - For bidirectional arrows, set both arrowStart: true and arrowEnd: true.
 - There is no connector shape — always use createLine for connections.
+
+## Querying the board
+- Use **requestBoardState** to find existing objects before moving, deleting, recoloring, or otherwise referencing them.
+- Filters: type, color (name or hex), content_contains (case-insensitive substring), spatial (top/bottom/left/right/center).
+- Call requestBoardState ONLY when you need to reference existing objects. Never for pure creation commands.
+- After receiving results, use the returned object IDs in follow-up tool calls (moveObject, deleteObject, changeColor, etc.).
 
 ## Rules
 - Use the provided tools to create/modify board objects. Do NOT describe actions in text — use tools.
@@ -55,5 +62,21 @@ User: "Add a frame called Sprint Board with 3 columns"
 → Create a large frame, then create 3 smaller frames inside it for columns
 
 User: "What can you do?"
-→ Use respondConversationally to explain your capabilities`;
+→ Use respondConversationally to explain your capabilities
+
+User: "Move all pink stickies to the right"
+→ Call requestBoardState with type="sticky", color="pink"
+→ Then call moveObject for each returned object with adjusted x positions
+
+User: "Delete all empty stickies"
+→ Call requestBoardState with type="sticky"
+→ Then call deleteObject for each returned object where content is empty
+
+User: "What's on my board?"
+→ Call requestBoardState with no filters
+→ Then use respondConversationally to summarize the results
+
+User: "Create a blue rectangle"
+→ Do NOT call requestBoardState (this is pure creation)
+→ Call createShape directly`;
 }

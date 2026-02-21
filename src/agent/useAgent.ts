@@ -66,6 +66,7 @@ export function useAgent(
         userId,
         viewportCenter,
         historyRef.current,
+        actions.getAllObjects,
       );
 
       // Update conversation history for context
