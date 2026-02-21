@@ -83,6 +83,13 @@ export const requestBoardStateSchema = z.object({
   spatial_threshold: z.number().optional(),
 });
 
+export const applyTemplateSchema = z.object({
+  template_id: z.enum(['swot', 'retrospective', 'kanban', 'journey_map', 'pros_cons', 'matrix_2x2']),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
+});
+
 // ── Schema lookup by tool name ───────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
@@ -98,6 +105,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   deleteObject:            deleteObjectSchema,
   respondConversationally: respondConversationallySchema,
   requestBoardState:       requestBoardStateSchema,
+  applyTemplate:           applyTemplateSchema,
 };
 
 // ── Anthropic tool definitions (sent in API request) ─────────────────────────
@@ -263,6 +271,24 @@ export const TOOL_DEFINITIONS = [
         spatial: { type: 'string', enum: ['top', 'bottom', 'left', 'right', 'center'], description: 'Filter by spatial position on the board' },
         spatial_threshold: { type: 'number', description: 'Spatial filter threshold (0-1, default 0.25). Larger = more inclusive.' },
       },
+    },
+  },
+  {
+    name: 'applyTemplate',
+    description: 'Apply a known board template. ALWAYS use this for recognized templates (SWOT, retrospective, kanban, user journey map, pros/cons, 2×2 matrix). Do NOT use if the request deviates significantly from the template definition.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        template_id: {
+          type: 'string',
+          enum: ['swot', 'retrospective', 'kanban', 'journey_map', 'pros_cons', 'matrix_2x2'],
+          description: 'Which template to expand',
+        },
+        x: { type: 'number', description: 'Center X on canvas (defaults to viewport center)' },
+        y: { type: 'number', description: 'Center Y on canvas (defaults to viewport center)' },
+        options: { type: 'object', description: 'Template-specific overrides (columns, stages, labels, rows, title)' },
+      },
+      required: ['template_id'],
     },
   },
 ];

@@ -46,6 +46,17 @@ Use these color names: red, orange, yellow, green, blue, purple, pink, teal, whi
 - When asked to create multiple items, create them all in a single response using multiple tool calls.
 - When a user says "add" or "create" without specifying a type, default to sticky notes.
 
+## Templates
+For these recognized layouts, ALWAYS use applyTemplate — never create frames manually:
+- **swot** — SWOT Analysis (2×2 quadrants inside an outer frame)
+- **retrospective** — Retrospective board (3 columns: What Went Well / What Didn't / Action Items)
+- **kanban** — Kanban board (3 columns: To Do / In Progress / Done)
+- **journey_map** — User Journey Map (5 stage columns; pass \`options.stages\` to customise)
+- **pros_cons** — Pros & Cons comparison (2 columns; pass \`options.rows\` to seed blank stickies)
+- **matrix_2x2** — 2×2 prioritization matrix (Impact/Effort or custom axes via \`options.labels\`)
+
+If the request deviates significantly (e.g. "SWOT with 6 categories", "circular kanban"), use respondConversationally to explain limitations or create manually with createFrame calls.
+
 ## Examples
 
 User: "Add a yellow sticky note that says User Research"
@@ -78,5 +89,26 @@ User: "What's on my board?"
 
 User: "Create a blue rectangle"
 → Do NOT call requestBoardState (this is pure creation)
-→ Call createShape directly`;
+→ Call createShape directly
+
+User: "Create a SWOT analysis"
+→ applyTemplate({ template_id: "swot" })
+
+User: "Make a retro board"
+→ applyTemplate({ template_id: "retrospective" })
+
+User: "Build a kanban"
+→ applyTemplate({ template_id: "kanban" })
+
+User: "Set up a user journey map with 5 stages"
+→ applyTemplate({ template_id: "journey_map" })
+
+User: "Create a pros and cons board"
+→ applyTemplate({ template_id: "pros_cons" })
+
+User: "Make a 2×2 priority matrix"
+→ applyTemplate({ template_id: "matrix_2x2" })
+
+User: "SWOT but with 6 categories"
+→ respondConversationally (template supports only 4 standard SWOT quadrants)`;
 }

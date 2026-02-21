@@ -2,6 +2,7 @@ import type { AgentToolCall, ExecutionResult, ViewportCenter } from './types';
 import type { BoardObject, ShapeType } from '../types/board';
 import { TOOL_SCHEMAS } from './tools';
 import { resolveColor } from './capabilities';
+import { TEMPLATE_REGISTRY } from './templateRegistry';
 
 interface BoardActions {
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
@@ -32,6 +33,119 @@ function gridPositions(count: number, center: ViewportCenter, spacing = 220): Ar
 /** Small random offset so objects at center don't stack exactly. */
 function jitter(): number {
   return Math.round((Math.random() - 0.5) * 40);
+}
+
+/**
+ * Dispatch a single already-validated tool action with explicit positions.
+ * Template expansions call this directly so grid layout logic is bypassed —
+ * template actions always carry pre-computed coordinates.
+ */
+function dispatchSingleAction(
+  name: string,
+  input: Record<string, unknown>,
+  actions: BoardActions,
+): ExecutionResult {
+  // posX/posY must be provided by the caller for create-type tools.
+  const posX = (input.x as number | undefined) ?? 0;
+  const posY = (input.y as number | undefined) ?? 0;
+
+  switch (name) {
+    case 'createStickyNote': {
+      const color = input.color ? resolveColor(input.color as string) : undefined;
+      const id = actions.createObject('sticky', posX, posY, {
+        ...(input.content  ? { content:  input.content  as string } : {}),
+        ...(color          ? { color }                              : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'createShape': {
+      const shapeType = input.shape_type as 'rect' | 'circle';
+      const color = input.color ? resolveColor(input.color as string) : undefined;
+      const id = actions.createObject(shapeType, posX, posY, {
+        ...(input.width    ? { width:    input.width    as number } : {}),
+        ...(input.height   ? { height:   input.height   as number } : {}),
+        ...(color          ? { color }                              : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'createFrame': {
+      const id = actions.createObject('frame', posX, posY, {
+        ...(input.title    ? { content:  input.title    as string } : {}),
+        ...(input.width    ? { width:    input.width    as number } : {}),
+        ...(input.height   ? { height:   input.height   as number } : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'createText': {
+      const color = input.color ? resolveColor(input.color as string) : undefined;
+      const id = actions.createObject('text', posX, posY, {
+        content: input.content as string,
+        ...(color          ? { color }                              : {}),
+        ...(input.fontSize ? { fontSize: input.fontSize as number } : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'createLine': {
+      const x1 = input.x1 as number;
+      const y1 = input.y1 as number;
+      const x2 = input.x2 as number;
+      const y2 = input.y2 as number;
+      const color = input.color ? resolveColor(input.color as string) : undefined;
+      const id = actions.createObject('line', x1, y1, {
+        points: [x1, y1, x2, y2],
+        ...(input.arrowEnd    ? { arrowEnd:    true } : {}),
+        ...(input.arrowStart  ? { arrowStart:  true } : {}),
+        ...(input.strokeWidth ? { strokeWidth: input.strokeWidth as number } : {}),
+        ...(color ? { color } : {}),
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'moveObject': {
+      actions.updateObject(input.id as string, {
+        x: input.x as number,
+        y: input.y as number,
+      });
+      return { success: true, objectId: input.id as string };
+    }
+
+    case 'resizeObject': {
+      actions.updateObject(input.id as string, {
+        width:  input.width  as number,
+        height: input.height as number,
+      });
+      return { success: true, objectId: input.id as string };
+    }
+
+    case 'updateText': {
+      actions.updateObject(input.id as string, {
+        content: input.content as string,
+      });
+      return { success: true, objectId: input.id as string };
+    }
+
+    case 'changeColor': {
+      const color = resolveColor(input.color as string);
+      actions.updateObject(input.id as string, { color });
+      return { success: true, objectId: input.id as string };
+    }
+
+    case 'deleteObject': {
+      actions.deleteObject(input.id as string);
+      return { success: true, objectId: input.id as string };
+    }
+
+    default:
+      return { success: false, error: `Unhandled tool: ${name}` };
+  }
 }
 
 /**
@@ -72,7 +186,39 @@ export function executeToolCalls(
       }
       const input = parsed.data as Record<string, unknown>;
 
-      // Determine position for create tools
+      // ── Template expansion ────────────────────────────────────────────────
+      if (tc.name === 'applyTemplate') {
+        const tmpl = TEMPLATE_REGISTRY[input.template_id as string];
+        if (!tmpl) {
+          results.push({ success: false, error: `Unknown template: ${input.template_id}` });
+          continue;
+        }
+        const cx = (input.x as number | undefined) ?? viewportCenter.x;
+        const cy = (input.y as number | undefined) ?? viewportCenter.y;
+        const expansion = tmpl.expand(cx, cy, input.options as Record<string, unknown> | undefined);
+        // Track IDs in creation order so parentActionIndex can resolve to real IDs.
+        const createdIds: string[] = [];
+        for (const action of expansion.actions) {
+          const resolvedInput = { ...action.input };
+          if (action.parentActionIndex !== undefined) {
+            const parentId = createdIds[action.parentActionIndex];
+            if (parentId) resolvedInput.parentId = parentId;
+          }
+          const r = dispatchSingleAction(action.name, resolvedInput, actions);
+          createdIds.push(r.objectId ?? '');
+          results.push(r);
+        }
+        continue;
+      }
+
+      // ── respondConversationally ───────────────────────────────────────────
+      if (tc.name === 'respondConversationally') {
+        agentMessages.push(input.message as string);
+        results.push({ success: true });
+        continue;
+      }
+
+      // ── Determine position for create tools ───────────────────────────────
       let posX: number;
       let posY: number;
       if (createToolNames.has(tc.name)) {
@@ -92,115 +238,9 @@ export function executeToolCalls(
         posY = 0;
       }
 
-      switch (tc.name) {
-        case 'createStickyNote': {
-          const color = input.color ? resolveColor(input.color as string) : undefined;
-          const id = actions.createObject('sticky', posX, posY, {
-            ...(input.content ? { content: input.content as string } : {}),
-            ...(color ? { color } : {}),
-          });
-          results.push({ success: true, objectId: id });
-          break;
-        }
-
-        case 'createShape': {
-          const shapeType = input.shape_type as 'rect' | 'circle';
-          const color = input.color ? resolveColor(input.color as string) : undefined;
-          const id = actions.createObject(shapeType, posX, posY, {
-            ...(input.width ? { width: input.width as number } : {}),
-            ...(input.height ? { height: input.height as number } : {}),
-            ...(color ? { color } : {}),
-          });
-          results.push({ success: true, objectId: id });
-          break;
-        }
-
-        case 'createFrame': {
-          const id = actions.createObject('frame', posX, posY, {
-            ...(input.title ? { content: input.title as string } : {}),
-            ...(input.width ? { width: input.width as number } : {}),
-            ...(input.height ? { height: input.height as number } : {}),
-          });
-          results.push({ success: true, objectId: id });
-          break;
-        }
-
-        case 'createText': {
-          const color = input.color ? resolveColor(input.color as string) : undefined;
-          const id = actions.createObject('text', posX, posY, {
-            content: input.content as string,
-            ...(color ? { color } : {}),
-            ...(input.fontSize ? { fontSize: input.fontSize as number } : {}),
-          });
-          results.push({ success: true, objectId: id });
-          break;
-        }
-
-        case 'createLine': {
-          const x1 = input.x1 as number;
-          const y1 = input.y1 as number;
-          const x2 = input.x2 as number;
-          const y2 = input.y2 as number;
-          const color = input.color ? resolveColor(input.color as string) : undefined;
-          const id = actions.createObject('line', x1, y1, {
-            points: [x1, y1, x2, y2],
-            ...(input.arrowEnd ? { arrowEnd: true } : {}),
-            ...(input.arrowStart ? { arrowStart: true } : {}),
-            ...(input.strokeWidth ? { strokeWidth: input.strokeWidth as number } : {}),
-            ...(color ? { color } : {}),
-          });
-          results.push({ success: true, objectId: id });
-          break;
-        }
-
-        case 'moveObject': {
-          actions.updateObject(input.id as string, {
-            x: input.x as number,
-            y: input.y as number,
-          });
-          results.push({ success: true, objectId: input.id as string });
-          break;
-        }
-
-        case 'resizeObject': {
-          actions.updateObject(input.id as string, {
-            width: input.width as number,
-            height: input.height as number,
-          });
-          results.push({ success: true, objectId: input.id as string });
-          break;
-        }
-
-        case 'updateText': {
-          actions.updateObject(input.id as string, {
-            content: input.content as string,
-          });
-          results.push({ success: true, objectId: input.id as string });
-          break;
-        }
-
-        case 'changeColor': {
-          const color = resolveColor(input.color as string);
-          actions.updateObject(input.id as string, { color });
-          results.push({ success: true, objectId: input.id as string });
-          break;
-        }
-
-        case 'deleteObject': {
-          actions.deleteObject(input.id as string);
-          results.push({ success: true, objectId: input.id as string });
-          break;
-        }
-
-        case 'respondConversationally': {
-          agentMessages.push(input.message as string);
-          results.push({ success: true });
-          break;
-        }
-
-        default:
-          results.push({ success: false, error: `Unhandled tool: ${tc.name}` });
-      }
+      // Inject resolved position before dispatching
+      const inputWithPos = { ...input, x: posX, y: posY };
+      results.push(dispatchSingleAction(tc.name, inputWithPos, actions));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Boardie] Tool execution failed for ${tc.name}:`, msg);
