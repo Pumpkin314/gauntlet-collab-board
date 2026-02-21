@@ -4,13 +4,27 @@
  * Points stored as absolute canvas coords: [x1, y1, x2, y2].
  */
 
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Group, Line, Circle } from 'react-konva';
+import Konva from 'konva';
 import type { ShapeProps } from '../../types/board';
 
 export default memo(function LineShape({ id, data, isSelected, onSelect, onUpdate, onDelete }: ShapeProps) {
+  const groupRef = useRef<Konva.Group>(null);
   const pts = data.points ?? [data.x, data.y, data.x + 200, data.y];
   const [x1, y1, x2, y2] = pts;
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    if (isSelected) {
+      group.clearCache();
+    } else {
+      requestAnimationFrame(() => {
+        if (groupRef.current && !isSelected) groupRef.current.cache();
+      });
+    }
+  }, [isSelected, data.points, data.strokeColor, data.color]);
 
   const handleEndpointDrag = (index: 0 | 1, e: any) => {
     const newPts = [...pts];
@@ -23,6 +37,7 @@ export default memo(function LineShape({ id, data, isSelected, onSelect, onUpdat
     <Group
       id={id}
       name="object"
+      ref={groupRef}
       onClick={() => onSelect(data.id)}
       onTap={() => onSelect(data.id)}
     >
