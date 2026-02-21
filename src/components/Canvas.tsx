@@ -365,6 +365,7 @@ export default function Canvas() {
   const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target === e.target.getStage()) {
       isPanningRef.current = false;
+      layerRef.current?.listening(true);
       if (panSyncTimerRef.current) {
         clearTimeout(panSyncTimerRef.current);
         panSyncTimerRef.current = null;
@@ -556,8 +557,12 @@ export default function Canvas() {
   /** Fired when any drag begins on the Stage; distinguishes shape drags from
    *  canvas pans so the selection action menu is hidden during shape movement. */
   const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    if (e.target !== e.target.getStage()) setIsDraggingShape(true);
-    else isPanningRef.current = true;
+    if (e.target !== e.target.getStage()) {
+      setIsDraggingShape(true);
+    } else {
+      isPanningRef.current = true;
+      layerRef.current?.listening(false);
+    }
   }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
