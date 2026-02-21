@@ -8,7 +8,7 @@ import ObjectRenderer from './Canvas/ObjectRenderer';
 import Toolbar from './Canvas/Toolbar';
 import ColorPicker from './Canvas/ColorPicker';
 import SelectionRect from './Canvas/SelectionRect';
-import LinePreview from './Canvas/LinePreview';
+import LinePreview, { type LineVariant } from './Canvas/LinePreview';
 import InfoOverlay from './Canvas/InfoOverlay';
 import DebugOverlay from './Canvas/DebugOverlay';
 import DotGrid, { type DotGridHandle } from './Canvas/DotGrid';
@@ -153,6 +153,7 @@ export default function Canvas() {
   const [spaceHeld,       setSpaceHeld]       = useState(false);
   const [inlineEdit,      setInlineEdit]      = useState<InlineEdit | null>(null);
   const [isDraggingShape, setIsDraggingShape] = useState(false);
+  const [lineVariant,     setLineVariant]     = useState<LineVariant>('line');
 
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -543,8 +544,12 @@ export default function Canvas() {
       if (!pendingLineStart) {
         setPendingLineStart({ x, y });
       } else {
+        const arrowOverrides: Partial<import('../types/board').BoardObject> = {};
+        if (lineVariant === 'arrow') arrowOverrides.arrowEnd = true;
+        if (lineVariant === 'double-arrow') { arrowOverrides.arrowStart = true; arrowOverrides.arrowEnd = true; }
         createObject('line', pendingLineStart.x, pendingLineStart.y, {
           points: [pendingLineStart.x, pendingLineStart.y, x, y],
+          ...arrowOverrides,
         });
         setPendingLineStart(null);
         if (toolMode === 'single') {
@@ -560,7 +565,7 @@ export default function Canvas() {
       setActiveTool('cursor');
       setToolMode('infinite');
     }
-  }, [activeTool, pendingLineStart, toolMode, createObject]);
+  }, [activeTool, pendingLineStart, toolMode, createObject, lineVariant]);
 
   // ── Cursor position + box-select rect update ─────────────────────────────
   const handleMouseMove = useCallback(() => {
@@ -780,6 +785,7 @@ export default function Canvas() {
             <LinePreview
               x1={pendingLineStart.x} y1={pendingLineStart.y}
               x2={lineCursorPos.x}    y2={lineCursorPos.y}
+              lineVariant={lineVariant}
             />
           )}
           <Transformer
@@ -829,8 +835,10 @@ export default function Canvas() {
       <Toolbar
         activeTool={activeTool}
         toolMode={toolMode}
+        lineVariant={lineVariant}
         onToolChange={handleToolChange}
         onModeToggle={handleModeToggle}
+        onLineVariantChange={setLineVariant}
       />
 
       <InfoOverlay
