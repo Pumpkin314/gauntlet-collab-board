@@ -136,6 +136,17 @@ This is a verification step, not new work. With the React Profiler open, simulat
 
 ---
 
+## Known Issues — Future Work
+
+### Multi-select performance (5–10+ selected objects)
+Selecting 3–4 objects is fine, but at 5–10 selected objects, FPS drops noticeably during pan, drag, and other interactions. The likely cause is the Konva `Transformer` — it attaches to all selected nodes and recalculates on every frame, and bitmap caching is cleared for selected shapes (they need live transforms). Potential approaches:
+- Temporarily detach Transformer during pan (re-attach on pan end)
+- Group-cache multi-selected shapes as a single bitmap during move
+- Throttle Transformer bbox recalculation during drag
+- Investigate if `listening(false)` on unselected shapes during multi-drag helps
+
+---
+
 ## General Reminders (every phase)
 
 - **Profile before and after each phase commit.** The Playwright specs replace manual Chrome DevTools sessions — but they only work if the instrumentation is correct. If a spec passes but FPS didn't actually improve, the measurement is wrong.
