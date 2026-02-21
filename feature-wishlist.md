@@ -134,7 +134,8 @@ Each user should have a boards page listing all boards they own or have access t
 - Group/ungroup objects
 - Move groups as a unit
 
-### Layers/Z-Index
+### Layers/Z-Index via Selection Menu
+- The three-dots (⋮) button on selected objects should expand into a menu with "Send to Front" / "Send to Back" options alongside the existing color picker
 - Bring to front / Send to back
 - Z-index management
 - Layer panel showing object order
