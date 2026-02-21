@@ -10,6 +10,7 @@ interface ChatWidgetProps {
 export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetProps) {
   const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages } = useAgent(stagePosRef, stageScaleRef);
   const [inputValue, setInputValue] = useState('');
+  const [clickedOptionMsgIds, setClickedOptionMsgIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -28,6 +29,17 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
     void sendMessage(inputValue);
     setInputValue('');
   }, [inputValue, isLoading, sendMessage]);
+
+  const handleOptionClick = useCallback((option: string) => {
+    if (isLoading) return;
+    void sendMessage(option);
+    setClickedOptionMsgIds((prev) => {
+      const next = new Set(prev);
+      const lastOptMsg = [...messages].reverse().find((m) => m.options?.length);
+      if (lastOptMsg) next.add(lastOptMsg.id);
+      return next;
+    });
+  }, [isLoading, sendMessage, messages]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.stopPropagation();
@@ -172,7 +184,11 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            onOptionClick={msg.options && !clickedOptionMsgIds.has(msg.id) ? handleOptionClick : undefined}
+          />
         ))}
 
         {isLoading && (
@@ -246,7 +262,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
   );
 }
 
-function MessageBubble({ message }: { message: AgentMessage }) {
+function MessageBubble({ message, onOptionClick }: { message: AgentMessage; onOptionClick?: (option: string) => void }) {
   const isUser = message.role === 'user';
   const isError = message.role === 'error';
   const isStatus = message.role === 'status';
@@ -281,6 +297,35 @@ function MessageBubble({ message }: { message: AgentMessage }) {
       }}>
         {message.content}
       </div>
+      {message.options && message.options.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+          marginTop: 6,
+        }}>
+          {message.options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onOptionClick?.(opt)}
+              disabled={!onOptionClick}
+              style={{
+                background: 'white',
+                color: '#4ECDC4',
+                border: '1.5px solid #4ECDC4',
+                borderRadius: 16,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: onOptionClick ? 'pointer' : 'default',
+                opacity: onOptionClick ? 1 : 0.5,
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{
         fontSize: 10,
         color: '#aaa',

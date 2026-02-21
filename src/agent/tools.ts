@@ -90,6 +90,11 @@ export const applyTemplateSchema = z.object({
   options: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const askClarificationSchema = z.object({
+  question: z.string(),
+  options: z.array(z.string()).min(2).max(4),
+});
+
 export const delegateToPlannerSchema = z.object({
   description: z.string(),
   board_context: z.string().optional(),
@@ -111,6 +116,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   respondConversationally: respondConversationallySchema,
   requestBoardState:       requestBoardStateSchema,
   applyTemplate:           applyTemplateSchema,
+  askClarification:        askClarificationSchema,
   delegateToPlanner:       delegateToPlannerSchema,
 };
 
@@ -298,6 +304,24 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'askClarification',
+    description: 'Ask the user a clarifying question with 2-4 choice buttons before proceeding. Use when the request is ambiguous about layout, content, or style and would otherwise require delegation to the planner.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        question: { type: 'string', description: 'The clarifying question to ask the user' },
+        options: {
+          type: 'array' as const,
+          items: { type: 'string' },
+          description: 'Array of 2-4 choice labels. Last option should be an escape hatch like "Up to you" or "Just do it".',
+          minItems: 2,
+          maxItems: 4,
+        },
+      },
+      required: ['question', 'options'],
+    },
+  },
+  {
     name: 'delegateToPlanner',
     description: 'Delegate complex layout or world-knowledge tasks to a more capable planner model. Use for requests requiring world knowledge (water cycle, solar system, OSI model, etc.) or creative layout with 5+ positioned objects where no template matches exactly. Describe the diagram fully in `description`. Include relevant board context in `board_context` if existing objects must be considered.',
     input_schema: {
@@ -315,6 +339,7 @@ export const TOOL_DEFINITIONS = [
 const META_TOOL_NAMES = new Set([
   'requestBoardState',
   'delegateToPlanner',
+  'askClarification',
   'applyTemplate',
   'respondConversationally',
 ]);
