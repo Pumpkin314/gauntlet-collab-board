@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   measureIdleFpsDiag, measurePanFpsDiag, measureDragFpsDiag,
-  measureCreateLatency, getRenderCount, resetRenderCount,
+  measureZoomFpsDiag, measureCreateLatency, getRenderCount, resetRenderCount,
 } from './helpers/metrics';
 import { launchApp, clearBoard, createObjects, formatReport } from './helpers/setup';
 import * as fs from 'fs';
@@ -19,6 +19,9 @@ function panTag(d: { rawFrames: number; rawElapsedMs: number; konvaNodeCount: nu
 }
 function dragTag(d: { rawFrames: number; rawElapsedMs: number; konvaNodeCount: number; objectCount: number; reactRendersDuringDrag: number; dragStartPx: {x:number;y:number} }) {
   return `[frames=${d.rawFrames} elapsed=${d.rawElapsedMs.toFixed(0)}ms konvaNodes=${d.konvaNodeCount} objects=${d.objectCount} dragStart=(${d.dragStartPx.x.toFixed(0)},${d.dragStartPx.y.toFixed(0)}) reactRenders=${d.reactRendersDuringDrag}]`;
+}
+function zoomTag(d: { rawFrames: number; rawElapsedMs: number; konvaNodeCount: number; objectCount: number; reactRendersDuringZoom: number; scaleBefore: number; scaleAfter: number }) {
+  return `[frames=${d.rawFrames} elapsed=${d.rawElapsedMs.toFixed(0)}ms konvaNodes=${d.konvaNodeCount} objects=${d.objectCount} scale=${d.scaleBefore.toFixed(2)}→${d.scaleAfter.toFixed(2)} reactRenders=${d.reactRendersDuringZoom}]`;
 }
 
 test.describe('Phase 0 — Baseline', () => {
@@ -123,6 +126,40 @@ test.describe('Phase 0 — Baseline', () => {
     results['dragFps_1000'] = d.fps;
     console.log(`Drag FPS (1000 objects): ${d.fps.toFixed(1)} ${dragTag(d)}`);
     expect(d.fps).toBeGreaterThanOrEqual(0);
+  });
+
+  // ── 500-object suite ─────────────────────────────────────────────────────
+
+  test('idle FPS with 500 objects', async ({ page }) => {
+    await createObjects(page, 500);
+    const d = await measureIdleFpsDiag(page);
+    results['idleFps_500'] = d.fps;
+    console.log(`Idle FPS (500 objects): ${d.fps.toFixed(1)} ${idleTag(d)}`);
+    expect(d.fps).toBeGreaterThan(50);
+  });
+
+  test('pan FPS with 500 objects', async ({ page }) => {
+    await createObjects(page, 500);
+    const d = await measurePanFpsDiag(page);
+    results['panFps_500'] = d.fps;
+    console.log(`Pan FPS (500 objects): ${d.fps.toFixed(1)} ${panTag(d)}`);
+    expect(d.fps).toBeGreaterThan(40);
+  });
+
+  test('zoom FPS with 500 objects', async ({ page }) => {
+    await createObjects(page, 500);
+    const d = await measureZoomFpsDiag(page);
+    results['zoomFps_500'] = d.fps;
+    console.log(`Zoom FPS (500 objects): ${d.fps.toFixed(1)} ${zoomTag(d)}`);
+    expect(d.fps).toBeGreaterThan(40);
+  });
+
+  test('drag FPS with 500 objects', async ({ page }) => {
+    await createObjects(page, 500);
+    const d = await measureDragFpsDiag(page);
+    results['dragFps_500'] = d.fps;
+    console.log(`Drag FPS (500 objects): ${d.fps.toFixed(1)} ${dragTag(d)}`);
+    expect(d.fps).toBeGreaterThan(40);
   });
 
   // ── Create latency ────────────────────────────────────────────────────────

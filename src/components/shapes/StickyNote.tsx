@@ -14,7 +14,7 @@ interface StickyNoteProps extends ShapeProps {
 }
 
 export default memo(function StickyNote({ onStartEdit, isInlineEditing, ...props }: StickyNoteProps) {
-  const { data, isSelected } = props;
+  const { data, isSelected, disableShadows } = props;
 
   return (
     <BaseShape
@@ -32,7 +32,7 @@ export default memo(function StickyNote({ onStartEdit, isInlineEditing, ...props
             stroke={isSelected ? '#4ECDC4' : '#333'}
             strokeWidth={isSelected ? 3 : 2}
             cornerRadius={8}
-            shadowBlur={10}
+            shadowBlur={disableShadows ? 0 : 10}
             shadowColor="rgba(0,0,0,0.2)"
             shadowOffset={{ x: 2, y: 2 }}
           />

@@ -46,6 +46,8 @@ export default memo(function ObjectRenderer({
     }
   });
 
+  const disableShadows = objects.length > 20;
+
   return (
     <>
       {objects.map((obj) => {
@@ -65,6 +67,7 @@ export default memo(function ObjectRenderer({
           onTransformStart,
           onTransformEnd,
           onDimsChanged,
+          disableShadows,
         };
 
         const extraProps: Record<string, unknown> = {};

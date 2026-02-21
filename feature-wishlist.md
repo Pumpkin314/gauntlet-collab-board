@@ -57,6 +57,26 @@ Allow users to press ESC while dragging an object to cancel the drag operation a
 
 ---
 
+## ⚡ Multi-Select Performance (5–10+ objects)
+
+**Description:**
+When 5–10+ objects are selected simultaneously, FPS drops during pan, drag, and other interactions. Single-object and small selections (3–4) are fine.
+
+**Root Cause (suspected):**
+Konva Transformer recalculates bounding boxes for all attached nodes per frame. Bitmap caching is cleared for selected shapes (needed for live transforms), so each selected shape is fully redrawn every frame.
+
+**Potential Approaches:**
+- Detach Transformer during pan, re-attach on pan end
+- Group-cache multi-selected shapes as a single bitmap during move
+- Throttle Transformer bbox recalculation during drag
+- Set `listening(false)` on unselected shapes during multi-drag
+
+**Effort Estimate:** ~2-4 hours (investigation + implementation)
+
+**See also:** `PERFORMANCE_SIDENOTES.md` → "Known Issues — Future Work"
+
+---
+
 ## 📝 Other Ideas (Brainstorm)
 
 ### Undo/Redo
@@ -101,4 +121,13 @@ Allow users to press ESC while dragging an object to cancel the drag operation a
 
 ---
 
-**Last Updated:** February 16, 2026
+---
+
+## 🐛 Bugs
+
+### Duplicated objects share identity
+Duplicated objects (Ctrl+D, Ctrl+V) behave as linked copies — actions on one affect the other. They should be fully independent entities with unique IDs and no shared state.
+
+---
+
+**Last Updated:** February 20, 2026

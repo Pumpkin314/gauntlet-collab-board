@@ -235,6 +235,81 @@ export async function measureDragFpsDiag(
   };
 }
 
+export interface ZoomDiagnostics {
+  fps: number;
+  rawFrames: number;
+  rawElapsedMs: number;
+  konvaNodeCount: number;
+  objectCount: number;
+  reactRendersDuringZoom: number;
+  scaleBefore: number;
+  scaleAfter: number;
+}
+
+/** Simulates mouse wheel zoom and measures FPS during the interaction. */
+export async function measureZoomFpsDiag(
+  page: Page, steps = 30, durationMs = 2000
+): Promise<ZoomDiagnostics> {
+  const canvas = page.locator('canvas').first();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Canvas not found');
+
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+
+  const before = await page.evaluate(() => {
+    const stage = (window as any).Konva?.stages?.[0];
+    return {
+      scale: stage?.scaleX() ?? 1,
+      renderCount: window.__perfBridge?.renderCount ?? 0,
+      konvaNodeCount: window.__perfBridge?.getKonvaNodeCount() ?? 0,
+      objectCount: window.__perfBridge?.getObjects().length ?? 0,
+    };
+  });
+
+  await page.mouse.move(cx, cy);
+
+  const fpsPromise = page.evaluate((duration) => new Promise<{ frames: number; elapsedMs: number }>(resolve => {
+    const t0 = performance.now();
+    let frames = 0;
+    const tick = (now: number) => {
+      frames++;
+      if (now - t0 < duration) requestAnimationFrame(tick);
+      else resolve({ frames, elapsedMs: now - t0 });
+    };
+    requestAnimationFrame(tick);
+  }), durationMs);
+
+  const stepMs = durationMs / steps;
+  for (let i = 0; i < steps; i++) {
+    // Alternate zoom in/out to stay in a reasonable range
+    const deltaY = i % 2 === 0 ? -100 : 100;
+    await page.mouse.wheel(0, deltaY);
+    await page.waitForTimeout(stepMs);
+  }
+
+  const raw = await fpsPromise;
+
+  const after = await page.evaluate(() => {
+    const stage = (window as any).Konva?.stages?.[0];
+    return {
+      scale: stage?.scaleX() ?? 1,
+      renderCount: window.__perfBridge?.renderCount ?? 0,
+    };
+  });
+
+  return {
+    fps: raw.frames / (raw.elapsedMs / 1000),
+    rawFrames: raw.frames,
+    rawElapsedMs: raw.elapsedMs,
+    konvaNodeCount: before.konvaNodeCount,
+    objectCount: before.objectCount,
+    reactRendersDuringZoom: after.renderCount - before.renderCount,
+    scaleBefore: before.scale,
+    scaleAfter: after.scale,
+  };
+}
+
 /** Returns the current render count from the perf bridge. */
 export async function getRenderCount(page: Page): Promise<number> {
   return page.evaluate(() => window.__perfBridge?.renderCount ?? 0);

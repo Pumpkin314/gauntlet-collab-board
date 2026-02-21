@@ -62,6 +62,20 @@ export default memo(function BaseShape({
     }
   }, [localWidth, localHeight]);
 
+  // Bitmap-cache unselected shapes — Konva draws a single drawImage() instead
+  // of re-executing all draw commands (shadows, rounded corners, text, etc.)
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    if (isSelected) {
+      group.clearCache();
+    } else {
+      requestAnimationFrame(() => {
+        if (groupRef.current && !isSelected) groupRef.current.cache();
+      });
+    }
+  }, [isSelected, localWidth, localHeight, data.color, data.content]);
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
     onUpdate(data.id, { x: node.x(), y: node.y() });
