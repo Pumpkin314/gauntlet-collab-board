@@ -163,6 +163,34 @@ Each user should have a boards page listing all boards they own or have access t
 
 ---
 
+## 🤖 Epic 4 — Structured Agent Dialogue (Interview Loop)
+
+**Description:**
+For complex or ambiguous requests, Boardie enters an interview mode instead of immediately delegating to the planner. It asks one targeted clarifying question at a time, offering structured choice buttons alongside free text. Once enough context is gathered (or the user says "just do it"), the planner fires with a much more specific description, reducing generation time and improving layout accuracy.
+
+**User Experience:**
+1. User: "I want a solar system diagram"
+2. Boardie: "How should I arrange the planets?" → [Up to you] [Flat line] [Circular orbits]
+3. User picks "Circular orbits"
+4. Boardie: "Should I include orbital rings?" → [Yes] [No] [Just do it with what you have]
+5. On "Just do it" or after N rounds → planner fires with full spec
+
+**Implementation sketch:**
+- New agent state: `idle | interviewing | executing`
+- Haiku gets a new tool: `askClarification(question, options[])` — emits UI choice buttons
+- UI renders choice buttons inline in the chat panel (multi-select where appropriate)
+- Pipeline accumulates clarification answers and appends them to the planner description
+- Haiku decides when enough context exists to call `delegateToPlanner`
+
+**Relationship to existing work:**
+- Reduces planner prompt ambiguity → faster Sonnet responses, better layouts
+- `timeoutMs: 30_000` on planner calls becomes more comfortable once layout style is pre-specified
+- Multi-select button UI can also serve as a general command palette
+
+**Effort Estimate:** ~1 day (agent state machine + UI choice buttons)
+
+---
+
 ## 🐛 Bugs
 
 ### Frame z-index edge case with intersecting nested stacks
