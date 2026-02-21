@@ -77,6 +77,45 @@ Konva Transformer recalculates bounding boxes for all attached nodes per frame. 
 
 ---
 
+## 🔗 Line / Arrow Improvements
+
+### Segment drag (move entire line)
+Dragging the middle segment of a line/arrow should translate both endpoints in tandem, preserving relative positioning. Currently only endpoint handles are draggable.
+
+### Magnetic endpoint snapping
+When dragging a line endpoint near another object's boundary, it should magnetize/snap to the nearest edge point within a zoom-dependent threshold. Holding Shift bypasses snapping and uses exact cursor position. This lets lines act as visual connectors between objects.
+
+### Lines in group selection should move with the group
+Lines that belong to a multi-select group (or frame children) currently stay put when the rest of the group is moved. They should translate their points along with the group delta.
+
+---
+
+## 🗺️ Navigation & Onboarding
+
+### Minimap
+A small minimap in the bottom corner of the board showing a simplified bird's-eye view of all objects (rendered as dots or simple rectangles, ignoring rotation). Clicking/dragging within the minimap navigates the viewport.
+
+### New-user tutorial
+A skippable onboarding flow for new users (or new boards) that highlights core functionality in a few quick steps — tool usage, panning/zooming, collaboration, etc.
+
+---
+
+## 📋 Multi-Board Support
+
+### Per-user board dashboard
+Each user should have a boards page listing all boards they own or have access to. Features:
+- Create and delete boards from the dashboard
+- Boards auto-save updates (already the case per-board)
+- Click into/out of a board seamlessly
+
+### Sharing & permissions
+- Share button inside a board that manages permissions (view/edit)
+- Generates a shareable link (one-click copy)
+- Users can join a board via shared link if they have the right perms
+- Only authorized users can access a board
+
+---
+
 ## 📝 Other Ideas (Brainstorm)
 
 ### Undo/Redo
@@ -145,9 +184,14 @@ After a child is removed from a frame (e.g. dragged out), remaining children vis
 
 ---
 
+### Frame children jump/glitch after repositioning within frame
+After objects are manually repositioned inside a frame, subsequent frame movement causes the children to jump or glitch before settling. Likely a stale-origin or delta-accumulation issue in the imperative frame-drag child movement logic.
+
+---
+
 ### Duplicated objects share identity
 Duplicated objects (Ctrl+D, Ctrl+V) behave as linked copies — actions on one affect the other. They should be fully independent entities with unique IDs and no shared state.
 
 ---
 
-**Last Updated:** February 20, 2026
+**Last Updated:** February 21, 2026
