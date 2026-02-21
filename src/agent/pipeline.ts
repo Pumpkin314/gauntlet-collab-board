@@ -138,7 +138,10 @@ export async function runAgentCommand(
     }
   }
 
-  // 5b. Check for delegateToPlanner → call Sonnet, replace the call with its tool calls
+  // 5b. Check for delegateToPlanner → loop Sonnet until end_turn, bounded by token budget
+  const PLANNER_TOKEN_BUDGET      = 20_000; // total tokens across all loop iterations
+  const PLANNER_MAX_TOKENS_PER_CALL = 8_192; // per-call ceiling (secondary guardrail)
+
   const plannerCallIdx = toolCalls.findIndex((tc) => tc.name === 'delegateToPlanner');
   if (plannerCallIdx !== -1) {
     const plannerCall = toolCalls[plannerCallIdx]!;
@@ -150,35 +153,63 @@ export async function runAgentCommand(
       ? `${description}\n\nExisting board context:\n${boardCtx}`
       : description;
 
-    const plannerMessages = [{ role: 'user' as const, content: plannerUserText }];
-
-    /** Attempt one planner call, optionally prepending a correction message. */
-    const callPlanner = async (extraUserMsg?: string) => {
-      const msgs = extraUserMsg
-        ? [...plannerMessages, { role: 'user' as const, content: extraUserMsg }]
-        : plannerMessages;
-      return callAnthropic(msgs, PLANNER_TOOL_DEFINITIONS, plannerSystem, {
-        model: 'claude-sonnet-4-6',
-      });
-    };
-
     try {
       const tP = performance.now();
-      let plannerResp = await callPlanner();
-      console.debug(`[Boardie] Planner call: ${Math.round(performance.now() - tP)}ms`);
+      const allPlannerCalls: AgentToolCall[] = [];
+      let tokensUsed = 0;
 
-      let plannerCalls = parseResponse(plannerResp).toolCalls;
+      // Conversation grows as we feed tool_results back to continue generation
+      type PlannerMsg = { role: 'user' | 'assistant'; content: string | Array<{ type: string; [key: string]: unknown }> };
+      const conv: PlannerMsg[] = [{ role: 'user', content: plannerUserText }];
 
-      // Validate: at least one tool call returned; retry once if empty
-      if (plannerCalls.length === 0) {
-        plannerResp  = await callPlanner('No tool calls were returned. Please output concrete tool calls to create the diagram.');
-        plannerCalls = parseResponse(plannerResp).toolCalls;
+      let iteration = 0;
+      while (tokensUsed < PLANNER_TOKEN_BUDGET) {
+        const remaining = Math.min(PLANNER_MAX_TOKENS_PER_CALL, PLANNER_TOKEN_BUDGET - tokensUsed);
+        const resp = await callAnthropic(conv, PLANNER_TOOL_DEFINITIONS, plannerSystem, {
+          model: 'claude-sonnet-4-6',
+          maxTokens: remaining,
+        });
+
+        tokensUsed += (resp.usage.input_tokens + resp.usage.output_tokens);
+        const { toolCalls: batch } = parseResponse(resp);
+        allPlannerCalls.push(...batch);
+
+        console.debug(
+          `[Boardie] Planner loop #${++iteration}: stop_reason=${resp.stop_reason} ` +
+          `tools=${batch.length} tokens=${tokensUsed}/${PLANNER_TOKEN_BUDGET}`,
+        );
+
+        if (resp.stop_reason !== 'tool_use') break; // end_turn or max_tokens with nothing pending
+
+        // Feed dummy tool_results back so Sonnet can continue planning
+        conv.push({ role: 'assistant', content: resp.content });
+        conv.push({
+          role: 'user',
+          content: batch.map((tc) => ({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            content: 'ok',
+          })),
+        });
       }
 
-      // Replace the delegateToPlanner entry with the planner's tool calls
+      console.debug(`[Boardie] Planner total: ${Math.round(performance.now() - tP)}ms, ${tokensUsed} tokens`);
+
+      // Retry once if the entire loop produced nothing
+      if (allPlannerCalls.length === 0) {
+        const resp = await callAnthropic(
+          [{ role: 'user', content: `${plannerUserText}\n\nYou must output tool calls to create the diagram. Do not produce text.` }],
+          PLANNER_TOOL_DEFINITIONS,
+          plannerSystem,
+          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS_PER_CALL },
+        );
+        allPlannerCalls.push(...parseResponse(resp).toolCalls);
+      }
+
+      // Replace the delegateToPlanner entry with everything Sonnet planned
       toolCalls = [
         ...toolCalls.slice(0, plannerCallIdx),
-        ...plannerCalls,
+        ...allPlannerCalls,
         ...toolCalls.slice(plannerCallIdx + 1),
       ];
     } catch (err) {
