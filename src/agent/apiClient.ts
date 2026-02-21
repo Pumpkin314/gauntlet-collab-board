@@ -20,7 +20,7 @@ export async function callAnthropic(
   messages: AnthropicMessage[],
   tools: unknown[],
   systemPrompt: string,
-  options: { model?: string } = {},
+  options: { model?: string; maxTokens?: number } = {},
 ): Promise<AnthropicResponse> {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -34,10 +34,11 @@ export async function callAnthropic(
   }
 
   const model = options.model ?? 'claude-haiku-4-5-20251001';
+  const maxTokens = options.maxTokens ?? 4096;
 
   const body = {
     model,
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages,
     tools,
