@@ -2,6 +2,12 @@
 interface TemplateAction {
   name: string;
   input: Record<string, unknown>;
+  /**
+   * If set, the executor resolves the created object ID at this index and
+   * injects it as `parentId` on this action before dispatching.
+   * Enables frame containment without knowing real IDs at expansion time.
+   */
+  parentActionIndex?: number;
 }
 
 /**
@@ -54,7 +60,8 @@ function columnTemplate(
   const colY = outerY + TITLE_BAR + PADDING;
   for (let i = 0; i < n; i++) {
     const colX = outerX + PADDING + i * (COL_WIDTH + GAP);
-    actions.push({ name: 'createFrame', input: { title: columns[i], x: colX, y: colY, width: COL_WIDTH, height: COL_HEIGHT } });
+    // parentActionIndex: 0 = outer frame (created first)
+    actions.push({ name: 'createFrame', input: { title: columns[i], x: colX, y: colY, width: COL_WIDTH, height: COL_HEIGHT }, parentActionIndex: 0 });
     outputs[`frame_${i}`] = i + 1;
   }
 
@@ -80,12 +87,12 @@ const swot: TemplateDefinition = {
 
     const actions: TemplateAction[] = [
       { name: 'createFrame', input: { title: 'SWOT Analysis', x: outerX, y: outerY, width: outerW, height: outerH } },
-      // Row 0
-      { name: 'createFrame', input: { title: 'Strengths',     x: innerLeft,            y: innerTop,           width: innerW, height: innerH } },
-      { name: 'createFrame', input: { title: 'Weaknesses',    x: innerLeft + innerW + GAP, y: innerTop,       width: innerW, height: innerH } },
+      // Row 0 — parentActionIndex: 0 = outer frame
+      { name: 'createFrame', input: { title: 'Strengths',     x: innerLeft,                y: innerTop,                width: innerW, height: innerH }, parentActionIndex: 0 },
+      { name: 'createFrame', input: { title: 'Weaknesses',    x: innerLeft + innerW + GAP, y: innerTop,                width: innerW, height: innerH }, parentActionIndex: 0 },
       // Row 1
-      { name: 'createFrame', input: { title: 'Opportunities', x: innerLeft,            y: innerTop + innerH + GAP, width: innerW, height: innerH } },
-      { name: 'createFrame', input: { title: 'Threats',       x: innerLeft + innerW + GAP, y: innerTop + innerH + GAP, width: innerW, height: innerH } },
+      { name: 'createFrame', input: { title: 'Opportunities', x: innerLeft,                y: innerTop + innerH + GAP, width: innerW, height: innerH }, parentActionIndex: 0 },
+      { name: 'createFrame', input: { title: 'Threats',       x: innerLeft + innerW + GAP, y: innerTop + innerH + GAP, width: innerW, height: innerH }, parentActionIndex: 0 },
     ];
 
     return {
@@ -155,10 +162,13 @@ const pros_cons: TemplateDefinition = {
 
       for (let col = 0; col < 2; col++) {
         const colX = outerX + PADDING + col * (COL_WIDTH + GAP);
+        // Column frames are at actions indices 1 (Pros) and 2 (Cons)
+        const colFrameIndex = col + 1;
         for (let row = 0; row < rows; row++) {
           actions.push({
             name: 'createStickyNote',
             input: { content: '', x: colX + 10, y: colY + 10 + row * 90 },
+            parentActionIndex: colFrameIndex,
           });
         }
       }

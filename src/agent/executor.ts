@@ -53,8 +53,9 @@ function dispatchSingleAction(
     case 'createStickyNote': {
       const color = input.color ? resolveColor(input.color as string) : undefined;
       const id = actions.createObject('sticky', posX, posY, {
-        ...(input.content ? { content: input.content as string } : {}),
-        ...(color ? { color } : {}),
+        ...(input.content  ? { content:  input.content  as string } : {}),
+        ...(color          ? { color }                              : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
       });
       return { success: true, objectId: id };
     }
@@ -63,18 +64,20 @@ function dispatchSingleAction(
       const shapeType = input.shape_type as 'rect' | 'circle';
       const color = input.color ? resolveColor(input.color as string) : undefined;
       const id = actions.createObject(shapeType, posX, posY, {
-        ...(input.width  ? { width:  input.width  as number } : {}),
-        ...(input.height ? { height: input.height as number } : {}),
-        ...(color ? { color } : {}),
+        ...(input.width    ? { width:    input.width    as number } : {}),
+        ...(input.height   ? { height:   input.height   as number } : {}),
+        ...(color          ? { color }                              : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
       });
       return { success: true, objectId: id };
     }
 
     case 'createFrame': {
       const id = actions.createObject('frame', posX, posY, {
-        ...(input.title  ? { content: input.title  as string } : {}),
-        ...(input.width  ? { width:   input.width  as number } : {}),
-        ...(input.height ? { height:  input.height as number } : {}),
+        ...(input.title    ? { content:  input.title    as string } : {}),
+        ...(input.width    ? { width:    input.width    as number } : {}),
+        ...(input.height   ? { height:   input.height   as number } : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
       });
       return { success: true, objectId: id };
     }
@@ -83,8 +86,9 @@ function dispatchSingleAction(
       const color = input.color ? resolveColor(input.color as string) : undefined;
       const id = actions.createObject('text', posX, posY, {
         content: input.content as string,
-        ...(color ? { color } : {}),
+        ...(color          ? { color }                              : {}),
         ...(input.fontSize ? { fontSize: input.fontSize as number } : {}),
+        ...(input.parentId ? { parentId: input.parentId as string } : {}),
       });
       return { success: true, objectId: id };
     }
@@ -192,8 +196,16 @@ export function executeToolCalls(
         const cx = (input.x as number | undefined) ?? viewportCenter.x;
         const cy = (input.y as number | undefined) ?? viewportCenter.y;
         const expansion = tmpl.expand(cx, cy, input.options as Record<string, unknown> | undefined);
+        // Track IDs in creation order so parentActionIndex can resolve to real IDs.
+        const createdIds: string[] = [];
         for (const action of expansion.actions) {
-          const r = dispatchSingleAction(action.name, action.input, actions);
+          const resolvedInput = { ...action.input };
+          if (action.parentActionIndex !== undefined) {
+            const parentId = createdIds[action.parentActionIndex];
+            if (parentId) resolvedInput.parentId = parentId;
+          }
+          const r = dispatchSingleAction(action.name, resolvedInput, actions);
+          createdIds.push(r.objectId ?? '');
           results.push(r);
         }
         continue;
