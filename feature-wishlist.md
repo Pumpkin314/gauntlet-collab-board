@@ -125,6 +125,26 @@ Konva Transformer recalculates bounding boxes for all attached nodes per frame. 
 
 ## 🐛 Bugs
 
+### Frame z-index edge case with intersecting nested stacks
+Two independent frame hierarchies (A→B→C and D→E→F) that partially overlap may produce ambiguous render order when objects from both stacks occupy the same screen region. The depth-based sort treats each chain independently, so cross-stack ordering relies solely on zIndex tiebreaking, which may not match user intent.
+
+---
+
+### Frame resize doesn't recompute child containment
+After resizing a frame, children that are no longer within the frame's bounds should be released (parentId cleared). Currently containment is only checked on object drag end, not on frame resize end.
+
+---
+
+### Frame rotation causes children to jump position
+Rotating a frame causes child objects to snap to incorrect x/y positions. The AABB-based containment and delta-based child movement don't account for the frame's rotation transform.
+
+---
+
+### Removing a child glitches sibling positions during frame drag
+After a child is removed from a frame (e.g. dragged out), remaining children visually glitch when the frame is subsequently dragged, then snap back to correct positions on drag end. Likely caused by stale cached node refs/origins from a previous drag session.
+
+---
+
 ### Duplicated objects share identity
 Duplicated objects (Ctrl+D, Ctrl+V) behave as linked copies — actions on one affect the other. They should be fully independent entities with unique IDs and no shared state.
 
