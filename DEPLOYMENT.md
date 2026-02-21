@@ -39,6 +39,15 @@
    VITE_SIGNALING_SERVERS=wss://g4-collab-board.fly.dev
    ```
 
+8. **Set your ICE (TURN) servers** for P2P connectivity through NAT/firewalls:
+   ```env
+   VITE_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:your-turn-server:443?transport=tcp","username":"user","credential":"pass"}]
+   VITE_ICE_TRANSPORT_POLICY=all
+   ```
+   > **Without TURN servers, WebRTC P2P sync will silently fail in production.**
+   > STUN alone only works when both users are on the same network (e.g. local dev).
+   > Users behind NAT or firewalls require a TURN relay. See `.env.example` for format details.
+
 ---
 
 ## Step 2: Test Locally (2 minutes)
@@ -81,6 +90,9 @@ vercel env add VITE_FIREBASE_PROJECT_ID production
 vercel env add VITE_FIREBASE_STORAGE_BUCKET production
 vercel env add VITE_FIREBASE_MESSAGING_SENDER_ID production
 vercel env add VITE_FIREBASE_APP_ID production
+vercel env add VITE_SIGNALING_SERVERS production   # wss://g4-collab-board.fly.dev
+vercel env add VITE_ICE_SERVERS production          # JSON array with TURN credentials
+vercel env add VITE_ICE_TRANSPORT_POLICY production # "all"
 
 # Redeploy with environment variables
 vercel --prod
@@ -106,6 +118,7 @@ vercel --prod
 3. **Add Environment Variables**:
    - In Vercel dashboard, go to **Settings → Environment Variables**
    - Add all 6 `VITE_FIREBASE_*` variables
+   - Add WebRTC vars: `VITE_SIGNALING_SERVERS`, `VITE_ICE_SERVERS`, `VITE_ICE_TRANSPORT_POLICY`
    - Set environment to: **Production, Preview, Development**
 
 4. **Deploy**:
@@ -148,6 +161,15 @@ vercel --prod
 1. Check that variables are set for "Production" environment
 2. Ensure variable names have `VITE_` prefix
 3. Redeploy after adding variables (Vercel → Deployments → three dots → Redeploy)
+
+### P2P cursors/shapes don't sync in production (WebRTC)
+**Symptoms**: Debug panel shows 0 WebRTC peers, P2P gate RED, cursors only sync via Firestore fallback.
+**Fix**:
+1. Ensure `VITE_ICE_SERVERS` is set in Vercel with TURN server credentials (STUN alone doesn't work through NAT)
+2. Ensure `VITE_SIGNALING_SERVERS` is set to `wss://g4-collab-board.fly.dev`
+3. Set `VITE_ICE_TRANSPORT_POLICY=all`
+4. **Redeploy** after adding env vars (Vercel → Deployments → Redeploy)
+5. Check browser console for `[webrtcProvider] VITE_ICE_SERVERS not set` warning — if present, the env var isn't reaching the build
 
 ### Build fails on Vercel
 **Fix**:

@@ -17,7 +17,13 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
 
 function resolveIceServers(): RTCIceServer[] {
   const raw = import.meta.env.VITE_ICE_SERVERS as string | undefined;
-  if (!raw) return DEFAULT_ICE_SERVERS;
+  if (!raw) {
+    console.warn(
+      '[webrtcProvider] VITE_ICE_SERVERS not set — using STUN-only defaults. ' +
+      'P2P will fail for users behind NAT/firewalls. Set VITE_ICE_SERVERS with TURN credentials for production.',
+    );
+    return DEFAULT_ICE_SERVERS;
+  }
 
   try {
     const parsed = JSON.parse(raw) as unknown;
