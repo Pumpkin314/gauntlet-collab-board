@@ -28,6 +28,7 @@ const TOOLS: ToolDef[] = [
   { tool: 'circle',     label: '⭕',  title: 'Circle' },
   { tool: 'text',       label: '🔤',  title: 'Text' },
   { tool: 'line',       label: '╱',   title: 'Line' },
+  { tool: 'frame',      label: '⬒',   title: 'Frame' },
 ];
 
 interface ToolbarProps {

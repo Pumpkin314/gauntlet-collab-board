@@ -71,7 +71,7 @@ export default memo(function ObjectRenderer({
         };
 
         const extraProps: Record<string, unknown> = {};
-        if (obj.type === 'sticky' || obj.type === 'text') {
+        if (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'frame') {
           extraProps.onStartEdit     = onStartEdit;
           extraProps.isInlineEditing = inlineEditId === obj.id;
         }

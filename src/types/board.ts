@@ -2,9 +2,9 @@
 // This file is the single source of truth for the board data schema.
 // All components, contexts, and the AI agent use these types.
 
-export type ShapeType = 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector';
+export type ShapeType = 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector' | 'frame';
 
-export type ActiveTool = 'cursor' | 'box-select' | 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector';
+export type ActiveTool = 'cursor' | 'box-select' | 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector' | 'frame';
 
 export interface BoardObject {
   id: string;
@@ -34,6 +34,9 @@ export interface BoardObject {
   toId?: string;
   fromAnchor?: 'top' | 'right' | 'bottom' | 'left';
   toAnchor?: 'top' | 'right' | 'bottom' | 'left';
+
+  // Frame containment — ID of the parent frame this object belongs to
+  parentId?: string;
 
   // Ordering
   zIndex: number;
