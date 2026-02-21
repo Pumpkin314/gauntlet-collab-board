@@ -75,6 +75,14 @@ export const respondConversationallySchema = z.object({
   message: z.string(),
 });
 
+export const requestBoardStateSchema = z.object({
+  type: z.string().optional(),
+  color: z.string().optional(),
+  content_contains: z.string().optional(),
+  spatial: z.enum(['top', 'bottom', 'left', 'right', 'center']).optional(),
+  spatial_threshold: z.number().optional(),
+});
+
 // ── Schema lookup by tool name ───────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
@@ -89,6 +97,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   changeColor:             changeColorSchema,
   deleteObject:            deleteObjectSchema,
   respondConversationally: respondConversationallySchema,
+  requestBoardState:       requestBoardStateSchema,
 };
 
 // ── Anthropic tool definitions (sent in API request) ─────────────────────────
@@ -240,6 +249,20 @@ export const TOOL_DEFINITIONS = [
         message: { type: 'string', description: 'Response message to the user' },
       },
       required: ['message'],
+    },
+  },
+  {
+    name: 'requestBoardState',
+    description: 'Query existing objects on the board. Returns a filtered list of objects with their IDs, positions, and properties. Use this ONLY when you need to reference existing objects (e.g. move, delete, recolor). Never use for pure creation commands.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        type: { type: 'string', description: 'Filter by object type: sticky, rect, circle, text, line, frame' },
+        color: { type: 'string', description: 'Filter by color name (pink, blue, etc.) or hex code' },
+        content_contains: { type: 'string', description: 'Filter by text content (case-insensitive substring match)' },
+        spatial: { type: 'string', enum: ['top', 'bottom', 'left', 'right', 'center'], description: 'Filter by spatial position on the board' },
+        spatial_threshold: { type: 'number', description: 'Spatial filter threshold (0-1, default 0.25). Larger = more inclusive.' },
+      },
     },
   },
 ];
