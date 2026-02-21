@@ -1261,11 +1261,51 @@ Tracks actual implementation status against the plan. Updated after each merged 
 - `/` keyboard shortcut toggle ✅
 - Message timestamps in chat UI ✅
 
-### Epic 1: Board State Access (Phase 1) — NOT STARTED
+### Epic 1: Board State Access (Phase 1) — COMPLETE
 
-Next up: `objectResolver.ts`, `requestBoardState` tool, multi-turn pipeline.
+**PR #22** `feature/epic1-board-state-access` → merged to `main` (2026-02-21)
 
-### Epic 2: Templates (Phase 2) — NOT STARTED
+| Commit | Scope | Files |
+|--------|-------|-------|
+| `110e4f6` | Board state filter logic + types | objectResolver.ts |
+| `0826088` | requestBoardState Zod schema + Anthropic tool definition | tools.ts |
+| `22d4c51` | Multi-turn pipeline (2 LLM round-trips) | pipeline.ts |
+| `5cf5c4d` | System prompt docs + getAllObjects wiring | systemPrompt.ts, useAgent.ts |
+
+**Deviations from plan:**
+- No separate `types.ts` additions — `BoardStateFilter` and `ResolvedObject` kept in `objectResolver.ts` (cleaner, no cross-file dependency).
+- `getAllObjects` passed as optional parameter to `runAgentCommand` (not a required breaking change), allowing backward compat.
+
+**Verified:**
+- `npx tsc --noEmit` clean ✅
+- `npm run build` succeeds ✅
+- Multi-turn pipeline triggers only when `requestBoardState` is called ✅
+- Pure creation commands make a single LLM call ✅ (verify via console: only `LLM call #1`)
+
+### Epic 2: Templates (Phase 2) — COMPLETE
+
+**Commits on `main`** (2026-02-21)
+
+| Commit | Scope | Files |
+|--------|-------|-------|
+| `dca9365` | Template registry with 6 expansion functions | templateRegistry.ts |
+| `92e131b` | applyTemplate Zod schema + Anthropic tool definition | tools.ts |
+| `e7e15e9` | applyTemplate dispatch + dispatchSingleAction helper | executor.ts |
+| `cc998d8` | Templates section + examples in system prompt | systemPrompt.ts |
+| `1fc4e47` | parentId injection for template-created child frames | templateRegistry.ts, executor.ts |
+
+**Templates implemented:** `swot`, `retrospective`, `kanban`, `journey_map`, `pros_cons`, `matrix_2x2`
+
+**Deviations from plan:**
+- **Frame containment added post-plan**: `parentActionIndex` field on `TemplateAction` lets child frames declare their parent at expansion time. Executor resolves it to a real ID and injects `parentId` before dispatch, since agent-created objects bypass the drag-end containment check in Canvas.
+- **No separate PR** — all commits landed directly on `main` (no feature branch; changes were self-contained and non-breaking).
+
+**Verified:**
+- `npx tsc --noEmit` clean ✅
+- `npm run build` succeeds ✅
+- Each template routes correctly via `applyTemplate` ✅
+- Inner frames carry correct `parentId` → dragging outer frame moves children ✅
+
 ### Epic 3: Planner LLM (Phase 3) — NOT STARTED
 ### Epic 4: UX Polish (Phase 4) — NOT STARTED
 ### Epic 5: Observability (Phase 5) — NOT STARTED
