@@ -19,6 +19,7 @@ import CircleShape from './shapes/CircleShape';
 import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
+import ChatWidget from './ChatWidget';
 import type { ActiveTool, BoardObject } from '../types/board';
 
 // ── Register all shape types ───────────────────────────────────────────────────
@@ -308,6 +309,13 @@ export default function Canvas() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('input, textarea')) return;
+
+      // `/` toggles the Boardie chat panel
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        document.querySelector<HTMLButtonElement>('[data-testid="boardie-toggle"], [data-testid="boardie-close"]')?.click();
+        return;
+      }
 
       const selected = [...selectedIds];
 
@@ -874,6 +882,8 @@ export default function Canvas() {
       )}
 
       <DebugOverlay stageScaleRef={stageScaleRef} stagePosRef={stagePosRef} />
+
+      <ChatWidget stagePosRef={stagePosRef} stageScaleRef={stageScaleRef} />
 
       <ColorPicker
         noteId={colorPickerNote}
