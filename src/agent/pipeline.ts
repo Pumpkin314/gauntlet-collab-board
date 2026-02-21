@@ -4,7 +4,7 @@ import { sanitizeInput, checkRateLimit, validateActionCount } from './guardrails
 import { buildSystemPrompt } from './systemPrompt';
 import { buildPlannerPrompt } from './plannerPrompt';
 import { callAnthropic } from './apiClient';
-import { TOOL_DEFINITIONS, PLANNER_TOOL_DEFINITIONS } from './tools';
+import { TOOL_DEFINITIONS, TOOL_SCHEMAS } from './tools';
 import { executeToolCalls } from './executor';
 import { resolveObjects } from './objectResolver';
 import type { BoardStateFilter } from './objectResolver';
@@ -138,9 +138,8 @@ export async function runAgentCommand(
     }
   }
 
-  // 5b. Check for delegateToPlanner → loop Sonnet until end_turn, bounded by token budget
-  const PLANNER_TOKEN_BUDGET      = 20_000; // total tokens across all loop iterations
-  const PLANNER_MAX_TOKENS_PER_CALL = 8_192; // per-call ceiling (secondary guardrail)
+  // 5b. Check for delegateToPlanner → single Sonnet call returning JSON plan
+  const PLANNER_MAX_TOKENS = 16_000; // token ceiling for the planner response
 
   const plannerCallIdx = toolCalls.findIndex((tc) => tc.name === 'delegateToPlanner');
   if (plannerCallIdx !== -1) {
@@ -153,63 +152,86 @@ export async function runAgentCommand(
       ? `${description}\n\nExisting board context:\n${boardCtx}`
       : description;
 
-    try {
-      const tP = performance.now();
-      const allPlannerCalls: AgentToolCall[] = [];
-      let tokensUsed = 0;
+    /** Parse Sonnet's text response into AgentToolCalls, validating each with TOOL_SCHEMAS. */
+    const parsePlannerJSON = (text: string): { calls: AgentToolCall[]; errors: string[] } => {
+      const calls: AgentToolCall[] = [];
+      const errors: string[] = [];
 
-      // Conversation grows as we feed tool_results back to continue generation
-      type PlannerMsg = { role: 'user' | 'assistant'; content: string | Array<{ type: string; [key: string]: unknown }> };
-      const conv: PlannerMsg[] = [{ role: 'user', content: plannerUserText }];
-
-      let iteration = 0;
-      while (tokensUsed < PLANNER_TOKEN_BUDGET) {
-        const remaining = Math.min(PLANNER_MAX_TOKENS_PER_CALL, PLANNER_TOKEN_BUDGET - tokensUsed);
-        const resp = await callAnthropic(conv, PLANNER_TOOL_DEFINITIONS, plannerSystem, {
-          model: 'claude-sonnet-4-6',
-          maxTokens: remaining,
-        });
-
-        tokensUsed += (resp.usage.input_tokens + resp.usage.output_tokens);
-        const { toolCalls: batch } = parseResponse(resp);
-        allPlannerCalls.push(...batch);
-
-        console.debug(
-          `[Boardie] Planner loop #${++iteration}: stop_reason=${resp.stop_reason} ` +
-          `tools=${batch.length} tokens=${tokensUsed}/${PLANNER_TOKEN_BUDGET}`,
-        );
-
-        if (resp.stop_reason !== 'tool_use') break; // end_turn or max_tokens with nothing pending
-
-        // Feed dummy tool_results back so Sonnet can continue planning
-        conv.push({ role: 'assistant', content: resp.content });
-        conv.push({
-          role: 'user',
-          content: batch.map((tc) => ({
-            type: 'tool_result',
-            tool_use_id: tc.id,
-            content: 'ok',
-          })),
-        });
+      let parsed: unknown;
+      try {
+        // Strip accidental markdown fences if Sonnet adds them despite instructions
+        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        parsed = JSON.parse(cleaned);
+      } catch {
+        errors.push(`JSON parse failed: ${text.slice(0, 200)}`);
+        return { calls, errors };
       }
 
-      console.debug(`[Boardie] Planner total: ${Math.round(performance.now() - tP)}ms, ${tokensUsed} tokens`);
+      if (!Array.isArray(parsed)) {
+        errors.push('Planner response was not a JSON array');
+        return { calls, errors };
+      }
 
-      // Retry once if the entire loop produced nothing
-      if (allPlannerCalls.length === 0) {
-        const resp = await callAnthropic(
-          [{ role: 'user', content: `${plannerUserText}\n\nYou must output tool calls to create the diagram. Do not produce text.` }],
-          PLANNER_TOOL_DEFINITIONS,
+      for (const item of parsed) {
+        if (typeof item !== 'object' || item === null || typeof (item as Record<string, unknown>).name !== 'string') {
+          errors.push(`Skipped invalid item: ${JSON.stringify(item).slice(0, 80)}`);
+          continue;
+        }
+        const { name, input } = item as { name: string; input: unknown };
+        const schema = TOOL_SCHEMAS[name];
+        if (!schema) {
+          errors.push(`Unknown tool: ${name}`);
+          continue;
+        }
+        const result = schema.safeParse(input ?? {});
+        if (!result.success) {
+          errors.push(`Validation failed for ${name}: ${result.error.message}`);
+          continue;
+        }
+        calls.push({ id: makeId(), name, input: result.data as Record<string, unknown> });
+      }
+
+      return { calls, errors };
+    };
+
+    try {
+      const tP = performance.now();
+      const resp = await callAnthropic(
+        [{ role: 'user', content: plannerUserText }],
+        [], // no tools — Sonnet outputs JSON text, not tool_use blocks
+        plannerSystem,
+        { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS },
+      );
+
+      const rawText = resp.content.find((b) => b.type === 'text')?.text ?? '';
+      console.debug(`[Boardie] Planner call: ${Math.round(performance.now() - tP)}ms, ${resp.usage.input_tokens + resp.usage.output_tokens} tokens`);
+
+      let { calls: plannerCalls, errors: parseErrors } = parsePlannerJSON(rawText);
+
+      // Retry once if parsing failed or nothing came back
+      if (plannerCalls.length === 0) {
+        const retryResp = await callAnthropic(
+          [
+            { role: 'user', content: plannerUserText },
+            { role: 'assistant', content: rawText || '[]' },
+            { role: 'user', content: 'Your response was not a valid JSON array of tool calls. Output ONLY the raw JSON array, no explanation.' },
+          ],
+          [],
           plannerSystem,
-          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS_PER_CALL },
+          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS },
         );
-        allPlannerCalls.push(...parseResponse(resp).toolCalls);
+        const retryText = retryResp.content.find((b) => b.type === 'text')?.text ?? '';
+        ({ calls: plannerCalls, errors: parseErrors } = parsePlannerJSON(retryText));
+      }
+
+      if (parseErrors.length > 0) {
+        console.warn('[Boardie] Planner parse warnings:', parseErrors);
       }
 
       // Replace the delegateToPlanner entry with everything Sonnet planned
       toolCalls = [
         ...toolCalls.slice(0, plannerCallIdx),
-        ...allPlannerCalls,
+        ...plannerCalls,
         ...toolCalls.slice(plannerCallIdx + 1),
       ];
     } catch (err) {
