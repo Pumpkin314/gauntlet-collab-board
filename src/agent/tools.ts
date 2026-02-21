@@ -90,6 +90,11 @@ export const applyTemplateSchema = z.object({
   options: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const delegateToPlannerSchema = z.object({
+  description: z.string(),
+  board_context: z.string().optional(),
+});
+
 // ── Schema lookup by tool name ───────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
@@ -106,6 +111,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   respondConversationally: respondConversationallySchema,
   requestBoardState:       requestBoardStateSchema,
   applyTemplate:           applyTemplateSchema,
+  delegateToPlanner:       delegateToPlannerSchema,
 };
 
 // ── Anthropic tool definitions (sent in API request) ─────────────────────────
@@ -291,4 +297,29 @@ export const TOOL_DEFINITIONS = [
       required: ['template_id'],
     },
   },
+  {
+    name: 'delegateToPlanner',
+    description: 'Delegate complex layout or world-knowledge tasks to a more capable planner model. Use for requests requiring world knowledge (water cycle, solar system, OSI model, etc.) or creative layout with 5+ positioned objects where no template matches exactly. Describe the diagram fully in `description`. Include relevant board context in `board_context` if existing objects must be considered.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        description: { type: 'string', description: 'Full description of the diagram to create, including all desired objects, labels, connections, and layout style' },
+        board_context: { type: 'string', description: 'Optional summary of relevant existing board objects (IDs, positions) needed for placement decisions' },
+      },
+      required: ['description'],
+    },
+  },
 ];
+
+/** Tool names that the planner may NOT use (meta/routing tools). */
+const META_TOOL_NAMES = new Set([
+  'requestBoardState',
+  'delegateToPlanner',
+  'applyTemplate',
+  'respondConversationally',
+]);
+
+/** Subset of TOOL_DEFINITIONS sent to the Sonnet planner — mutation tools only. */
+export const PLANNER_TOOL_DEFINITIONS = TOOL_DEFINITIONS.filter(
+  (t) => !META_TOOL_NAMES.has(t.name),
+);

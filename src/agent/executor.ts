@@ -3,31 +3,13 @@ import type { BoardObject, ShapeType } from '../types/board';
 import { TOOL_SCHEMAS } from './tools';
 import { resolveColor } from './capabilities';
 import { TEMPLATE_REGISTRY } from './templateRegistry';
+import { gridPositions } from './geometryHelpers';
 
 interface BoardActions {
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
   updateObject(id: string, updates: Partial<BoardObject>): void;
   deleteObject(id: string): void;
   batchCreate(items: Array<{ type: ShapeType; x: number; y: number } & Partial<BoardObject>>): string[];
-}
-
-/** Compute grid positions for batch creates around a center point. */
-function gridPositions(count: number, center: ViewportCenter, spacing = 220): Array<{ x: number; y: number }> {
-  const cols = Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / cols);
-  const startX = center.x - ((cols - 1) * spacing) / 2;
-  const startY = center.y - ((rows - 1) * spacing) / 2;
-
-  const positions: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < count; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    positions.push({
-      x: startX + col * spacing,
-      y: startY + row * spacing,
-    });
-  }
-  return positions;
 }
 
 /** Small random offset so objects at center don't stack exactly. */

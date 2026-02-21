@@ -2,8 +2,9 @@ import type { AgentMessage, AgentToolCall, ViewportCenter } from './types';
 import type { BoardObject, ShapeType } from '../types/board';
 import { sanitizeInput, checkRateLimit, validateActionCount } from './guardrails';
 import { buildSystemPrompt } from './systemPrompt';
+import { buildPlannerPrompt } from './plannerPrompt';
 import { callAnthropic } from './apiClient';
-import { TOOL_DEFINITIONS } from './tools';
+import { TOOL_DEFINITIONS, TOOL_SCHEMAS } from './tools';
 import { executeToolCalls } from './executor';
 import { resolveObjects } from './objectResolver';
 import type { BoardStateFilter } from './objectResolver';
@@ -137,8 +138,113 @@ export async function runAgentCommand(
     }
   }
 
-  // Filter out any leftover requestBoardState calls (shouldn't be executed)
-  const executableCalls = toolCalls.filter((tc) => tc.name !== 'requestBoardState');
+  // 5b. Check for delegateToPlanner → single Sonnet call returning JSON plan
+  const PLANNER_MAX_TOKENS = 16_000; // token ceiling for the planner response
+
+  const plannerCallIdx = toolCalls.findIndex((tc) => tc.name === 'delegateToPlanner');
+  if (plannerCallIdx !== -1) {
+    const plannerCall = toolCalls[plannerCallIdx]!;
+    const description = plannerCall.input.description as string;
+    const boardCtx    = plannerCall.input.board_context as string | undefined;
+
+    const plannerSystem   = buildPlannerPrompt(viewportCenter);
+    const plannerUserText = boardCtx
+      ? `${description}\n\nExisting board context:\n${boardCtx}`
+      : description;
+
+    /** Parse Sonnet's text response into AgentToolCalls, validating each with TOOL_SCHEMAS. */
+    const parsePlannerJSON = (text: string): { calls: AgentToolCall[]; errors: string[] } => {
+      const calls: AgentToolCall[] = [];
+      const errors: string[] = [];
+
+      let parsed: unknown;
+      try {
+        // Strip accidental markdown fences if Sonnet adds them despite instructions
+        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        parsed = JSON.parse(cleaned);
+      } catch {
+        errors.push(`JSON parse failed: ${text.slice(0, 200)}`);
+        return { calls, errors };
+      }
+
+      if (!Array.isArray(parsed)) {
+        errors.push('Planner response was not a JSON array');
+        return { calls, errors };
+      }
+
+      for (const item of parsed) {
+        if (typeof item !== 'object' || item === null || typeof (item as Record<string, unknown>).name !== 'string') {
+          errors.push(`Skipped invalid item: ${JSON.stringify(item).slice(0, 80)}`);
+          continue;
+        }
+        const { name, input } = item as { name: string; input: unknown };
+        const schema = TOOL_SCHEMAS[name];
+        if (!schema) {
+          errors.push(`Unknown tool: ${name}`);
+          continue;
+        }
+        const result = schema.safeParse(input ?? {});
+        if (!result.success) {
+          errors.push(`Validation failed for ${name}: ${result.error.message}`);
+          continue;
+        }
+        calls.push({ id: makeId(), name, input: result.data as Record<string, unknown> });
+      }
+
+      return { calls, errors };
+    };
+
+    try {
+      const tP = performance.now();
+      const resp = await callAnthropic(
+        [{ role: 'user', content: plannerUserText }],
+        [], // no tools — Sonnet outputs JSON text, not tool_use blocks
+        plannerSystem,
+        { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000 },
+      );
+
+      const rawText = resp.content.find((b) => b.type === 'text')?.text ?? '';
+      console.debug(`[Boardie] Planner call: ${Math.round(performance.now() - tP)}ms, ${resp.usage.input_tokens + resp.usage.output_tokens} tokens`);
+
+      let { calls: plannerCalls, errors: parseErrors } = parsePlannerJSON(rawText);
+
+      // Retry once if parsing failed or nothing came back
+      if (plannerCalls.length === 0) {
+        const retryResp = await callAnthropic(
+          [
+            { role: 'user', content: plannerUserText },
+            { role: 'assistant', content: rawText || '[]' },
+            { role: 'user', content: 'Your response was not a valid JSON array of tool calls. Output ONLY the raw JSON array, no explanation.' },
+          ],
+          [],
+          plannerSystem,
+          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000 },
+        );
+        const retryText = retryResp.content.find((b) => b.type === 'text')?.text ?? '';
+        ({ calls: plannerCalls, errors: parseErrors } = parsePlannerJSON(retryText));
+      }
+
+      if (parseErrors.length > 0) {
+        console.warn('[Boardie] Planner parse warnings:', parseErrors);
+      }
+
+      // Replace the delegateToPlanner entry with everything Sonnet planned
+      toolCalls = [
+        ...toolCalls.slice(0, plannerCallIdx),
+        ...plannerCalls,
+        ...toolCalls.slice(plannerCallIdx + 1),
+      ];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      messages.push({ id: makeId(), role: 'error', content: `Planner error: ${msg}`, timestamp: Date.now() });
+      return messages;
+    }
+  }
+
+  // Filter out any leftover meta calls (shouldn't be executed)
+  const executableCalls = toolCalls.filter(
+    (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner',
+  );
 
   // 6. Validate action count
   const actionCheck = validateActionCount(executableCalls.length);

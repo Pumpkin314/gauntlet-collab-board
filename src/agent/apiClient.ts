@@ -20,6 +20,7 @@ export async function callAnthropic(
   messages: AnthropicMessage[],
   tools: unknown[],
   systemPrompt: string,
+  options: { model?: string; maxTokens?: number; timeoutMs?: number } = {},
 ): Promise<AnthropicResponse> {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -32,9 +33,13 @@ export async function callAnthropic(
     console.warn('[Boardie] API key detected in production build — this is insecure.');
   }
 
+  const model = options.model ?? 'claude-haiku-4-5-20251001';
+  const maxTokens = options.maxTokens ?? 4096;
+  const timeoutMs = options.timeoutMs ?? 15_000;
+
   const body = {
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 4096,
+    model,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages,
     tools,
@@ -42,7 +47,7 @@ export async function callAnthropic(
 
   const doFetch = async (): Promise<Response> => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
