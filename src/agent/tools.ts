@@ -43,6 +43,17 @@ export const createLineSchema = z.object({
   arrowStart: z.boolean().optional().default(false),
   strokeWidth: z.number().optional(),
   color: z.string().optional(),
+  fromId: z.string().optional(),
+  toId: z.string().optional(),
+});
+
+export const createConnectorSchema = z.object({
+  fromId: z.string(),
+  toId: z.string(),
+  arrowEnd: z.boolean().optional().default(true),
+  arrowStart: z.boolean().optional().default(false),
+  strokeWidth: z.number().optional(),
+  color: z.string().optional(),
 });
 
 export const moveObjectSchema = z.object({
@@ -108,6 +119,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   createFrame:             createFrameSchema,
   createText:              createTextSchema,
   createLine:              createLineSchema,
+  createConnector:         createConnectorSchema,
   moveObject:              moveObjectSchema,
   resizeObject:            resizeObjectSchema,
   updateText:              updateTextSchema,
@@ -197,6 +209,22 @@ export const TOOL_DEFINITIONS = [
         color: { type: 'string', description: 'Line color name or hex code' },
       },
       required: ['x1', 'y1', 'x2', 'y2'],
+    },
+  },
+  {
+    name: 'createConnector',
+    description: 'Create a smart connector line between two existing objects by ID. The line automatically attaches to the nearest boundary points and follows the objects when they move.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        fromId: { type: 'string', description: 'ID of the source object' },
+        toId: { type: 'string', description: 'ID of the target object' },
+        arrowEnd: { type: 'boolean', description: 'Show arrowhead at target (default true)' },
+        arrowStart: { type: 'boolean', description: 'Show arrowhead at source' },
+        strokeWidth: { type: 'number', description: 'Line thickness in pixels' },
+        color: { type: 'string', description: 'Line color name or hex code' },
+      },
+      required: ['fromId', 'toId'],
     },
   },
   {

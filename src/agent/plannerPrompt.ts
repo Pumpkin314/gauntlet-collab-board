@@ -51,7 +51,8 @@ createStickyNote  — content(str), color(str), x(int), y(int)
 createShape       — shape_type("rect"|"circle"), width(int), height(int), color(str), x(int), y(int)
 createFrame       — title(str), width(int), height(int), x(int), y(int)
 createText        — content(str), color(str), fontSize(int), x(int), y(int)
-createLine        — x1(int), y1(int), x2(int), y2(int), arrowEnd(bool), arrowStart(bool), strokeWidth(int), color(str)
+createLine        — x1(int), y1(int), x2(int), y2(int), arrowEnd(bool), arrowStart(bool), strokeWidth(int), color(str), fromId(str, optional), toId(str, optional)
+createConnector   — fromId(str), toId(str), arrowEnd(bool, default true), arrowStart(bool), strokeWidth(int), color(str)  [smart connector that follows objects]
 moveObject        — id(str), x(int), y(int)
 resizeObject      — id(str), width(int), height(int)
 updateText        — id(str), content(str)
@@ -100,7 +101,7 @@ fitInside(container{x,y,w,h}, count, objW, objH, padding=20):
 2. Every x, y, x1, y1, x2, y2 must be a concrete integer.
 3. Remember: x/y is TOP-LEFT. Always subtract half the width/height to center a shape.
 4. Space shape centers at least 200px apart so objects do not overlap.
-5. Use createLine with arrowEnd=true for directed flow arrows.
+5. Use createLine with arrowEnd=true for directed flow arrows. When connecting objects created in the same batch, use createLine with absolute coordinates (object IDs are not yet known).
 6. For labelled shapes, place createText so the label center is just below the shape:
    text_x ≈ shapeCenterX - (estimatedTextWidth/2),  text_y = shapeCenterY + height/2 + 5
 7. Work through the geometry step by step, then write the JSON array.`;

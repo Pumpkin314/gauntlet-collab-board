@@ -4,6 +4,7 @@ import { TOOL_SCHEMAS } from './tools';
 import { resolveColor } from './capabilities';
 import { TEMPLATE_REGISTRY } from './templateRegistry';
 import { gridPositions } from './geometryHelpers';
+import { resolveEndpoint } from '../utils/anchorResolve';
 
 interface BoardActions {
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
@@ -26,6 +27,7 @@ function dispatchSingleAction(
   name: string,
   input: Record<string, unknown>,
   actions: BoardActions,
+  allObjects?: BoardObject[],
 ): ExecutionResult {
   // posX/posY must be provided by the caller for create-type tools.
   const posX = (input.x as number | undefined) ?? 0;
@@ -76,15 +78,63 @@ function dispatchSingleAction(
     }
 
     case 'createLine': {
-      const x1 = input.x1 as number;
-      const y1 = input.y1 as number;
-      const x2 = input.x2 as number;
-      const y2 = input.y2 as number;
+      let x1 = input.x1 as number;
+      let y1 = input.y1 as number;
+      let x2 = input.x2 as number;
+      let y2 = input.y2 as number;
       const color = input.color ? resolveColor(input.color as string) : undefined;
+      const overrides: Partial<BoardObject> = {};
+
+      // Resolve connected endpoints if fromId/toId provided
+      if (input.fromId && allObjects) {
+        const fromObj = allObjects.find(o => o.id === input.fromId);
+        if (fromObj) {
+          const pt = resolveEndpoint(fromObj, undefined, { x: x2, y: y2 });
+          x1 = pt.x; y1 = pt.y;
+          overrides.fromId = input.fromId as string;
+        }
+      }
+      if (input.toId && allObjects) {
+        const toObj = allObjects.find(o => o.id === input.toId);
+        if (toObj) {
+          const pt = resolveEndpoint(toObj, undefined, { x: x1, y: y1 });
+          x2 = pt.x; y2 = pt.y;
+          overrides.toId = input.toId as string;
+        }
+      }
+
       const id = actions.createObject('line', x1, y1, {
         points: [x1, y1, x2, y2],
         ...(input.arrowEnd    ? { arrowEnd:    true } : {}),
         ...(input.arrowStart  ? { arrowStart:  true } : {}),
+        ...(input.strokeWidth ? { strokeWidth: input.strokeWidth as number } : {}),
+        ...(color ? { color } : {}),
+        ...overrides,
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'createConnector': {
+      const fromId = input.fromId as string;
+      const toId = input.toId as string;
+      const color = input.color ? resolveColor(input.color as string) : undefined;
+
+      // Resolve coordinates from object positions
+      const fromObj = allObjects?.find(o => o.id === fromId);
+      const toObj = allObjects?.find(o => o.id === toId);
+      if (!fromObj || !toObj) {
+        return { success: false, error: `Cannot find objects: fromId=${fromId}, toId=${toId}` };
+      }
+
+      const toPt = resolveEndpoint(toObj, undefined, { x: fromObj.x + fromObj.width / 2, y: fromObj.y + fromObj.height / 2 });
+      const fromPt = resolveEndpoint(fromObj, undefined, toPt);
+
+      const id = actions.createObject('line', fromPt.x, fromPt.y, {
+        points: [fromPt.x, fromPt.y, toPt.x, toPt.y],
+        fromId,
+        toId,
+        arrowEnd: input.arrowEnd !== false ? true : undefined,
+        ...(input.arrowStart ? { arrowStart: true } : {}),
         ...(input.strokeWidth ? { strokeWidth: input.strokeWidth as number } : {}),
         ...(color ? { color } : {}),
       });
@@ -139,6 +189,7 @@ export function executeToolCalls(
   actions: BoardActions,
   viewportCenter: ViewportCenter,
   onProgress?: ProgressCallback,
+  allObjects?: BoardObject[],
 ): { results: ExecutionResult[]; agentMessages: string[] } {
   const results: ExecutionResult[] = [];
   const agentMessages: string[] = [];
@@ -153,6 +204,7 @@ export function executeToolCalls(
     createFrame: 'frame',
     createText: 'text',
     createLine: 'line',
+    createConnector: 'connector',
     applyTemplate: 'template',
   };
 
@@ -212,7 +264,7 @@ export function executeToolCalls(
             const parentId = createdIds[action.parentActionIndex];
             if (parentId) resolvedInput.parentId = parentId;
           }
-          const r = dispatchSingleAction(action.name, resolvedInput, actions);
+          const r = dispatchSingleAction(action.name, resolvedInput, actions, allObjects);
           createdIds.push(r.objectId ?? '');
           results.push(r);
           if (r.success) fireProgress(action.name);
@@ -249,7 +301,7 @@ export function executeToolCalls(
 
       // Inject resolved position before dispatching
       const inputWithPos = { ...input, x: posX, y: posY };
-      const result = dispatchSingleAction(tc.name, inputWithPos, actions);
+      const result = dispatchSingleAction(tc.name, inputWithPos, actions, allObjects);
       results.push(result);
       if (result.success) fireProgress(tc.name);
     } catch (err) {
