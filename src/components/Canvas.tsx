@@ -371,8 +371,8 @@ export default function Canvas() {
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
         e.preventDefault();
-        const items = clipboardRef.current.map(({ type, x, y, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({
-          type, x: x + 20, y: y + 20, ...rest,
+        const items = clipboardRef.current.map(({ type, x, y, id: _, createdBy: _1, createdByName: _2, zIndex: _3, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({
+          type, x: x + 20, y: y + 20, ...JSON.parse(JSON.stringify(rest)),
         }));
         const newIds = batchCreate(items);
         selectAll(newIds);
@@ -386,7 +386,7 @@ export default function Canvas() {
         e.preventDefault();
         const items = objects
           .filter((o) => selected.includes(o.id))
-          .map(({ type, x, y, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
+          .map(({ type, x, y, id: _, createdBy: _1, createdByName: _2, zIndex: _3, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({ type, x: x + 20, y: y + 20, ...JSON.parse(JSON.stringify(rest)) }));
         const newIds = batchCreate(items);
         selectAll(newIds);
         return;
