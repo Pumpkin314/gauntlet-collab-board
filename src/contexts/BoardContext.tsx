@@ -804,6 +804,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     if (!yObjects || !user) return '';
 
     const id = crypto.randomUUID();
+    const { id: _discardId, ...safeOverrides } = overrides;
     const obj: BoardObject = {
       id,
       type,
@@ -817,7 +818,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       createdBy:     user.uid,
       createdByName: user.displayName || 'Anonymous',
       ...SHAPE_DEFAULTS[type],
-      ...overrides,
+      ...safeOverrides,
     };
 
     const yObj = new Y.Map<unknown>();
