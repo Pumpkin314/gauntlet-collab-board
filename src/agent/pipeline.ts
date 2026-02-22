@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentToolCall, ViewportCenter } from './types';
+import type { AgentMessage, AgentToolCall, ViewportCenter, ProgressCallback } from './types';
 import type { BoardObject, ShapeType } from '../types/board';
 import { sanitizeInput, checkRateLimit, validateActionCount } from './guardrails';
 import { buildSystemPrompt } from './systemPrompt';
@@ -58,6 +58,7 @@ export async function runAgentCommand(
   viewportCenter: ViewportCenter,
   conversationHistory: ConversationMessage[] = [],
   getAllObjects?: () => BoardObject[],
+  onProgress?: ProgressCallback,
 ): Promise<AgentMessage[]> {
   const t0 = performance.now();
   const messages: AgentMessage[] = [];
@@ -89,6 +90,9 @@ export async function runAgentCommand(
   guardrailSpan?.end({ was_rejected: false, was_rate_limited: false });
 
   // 3. Build prompt + call API
+  const statusMsg = (content: string): AgentMessage => ({ id: 'streaming-status', role: 'status', content, timestamp: Date.now() });
+  onProgress?.(statusMsg('Planning...'));
+
   const systemPrompt = buildSystemPrompt(viewportCenter);
 
   const recentHistory = conversationHistory.slice(-20);
@@ -128,6 +132,7 @@ export async function runAgentCommand(
   // 5. Check for requestBoardState → multi-turn
   const boardStateCall = toolCalls.find((tc) => tc.name === 'requestBoardState');
   if (boardStateCall && getAllObjects) {
+    onProgress?.(statusMsg('Analyzing board...'));
     const boardStateSpan = trace?.span('board_state_fetch');
     const filter = boardStateCall.input as BoardStateFilter;
     const allObjects = getAllObjects();
@@ -256,6 +261,7 @@ export async function runAgentCommand(
       return { calls, errors };
     };
 
+    onProgress?.(statusMsg('Planning layout...'));
     // --- planner_llm span ---
     const plannerSpan = trace?.span('planner_llm', { description });
 
@@ -351,7 +357,7 @@ export async function runAgentCommand(
   if (executableCalls.length > 0) {
     const executionSpan = trace?.span('execution', { actions_count: executableCalls.length });
     const t3 = performance.now();
-    const { results, agentMessages } = executeToolCalls(executableCalls, actions, viewportCenter);
+    const { results, agentMessages } = executeToolCalls(executableCalls, actions, viewportCenter, onProgress);
     const execDuration = Math.round(performance.now() - t3);
     console.debug(`[Boardie] Execution: ${execDuration}ms`);
 
