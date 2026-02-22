@@ -324,9 +324,26 @@ export default function Canvas() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
         e.preventDefault();
         const deletingSet = new Set(selected);
-        const releaseUpdates = objectsRef.current
+        const allObjs = objectsRef.current;
+
+        // Release frame children
+        const releaseUpdates = allObjs
           .filter(o => o.parentId && deletingSet.has(o.parentId) && !deletingSet.has(o.id))
           .map(o => ({ id: o.id, changes: { parentId: '' as any } }));
+
+        // Detach connectors: clear fromId/toId on lines connected to deleted objects
+        for (const delId of deletingSet) {
+          for (const conn of getConnectedLines(delId, allObjs)) {
+            if (deletingSet.has(conn.line.id)) continue;
+            const clearField = conn.endpoint === 'from' ? 'fromId' : 'toId';
+            const clearAnchor = conn.endpoint === 'from' ? 'fromAnchor' : 'toAnchor';
+            releaseUpdates.push({
+              id: conn.line.id,
+              changes: { [clearField]: '', [clearAnchor]: '' } as any,
+            });
+          }
+        }
+
         if (releaseUpdates.length > 0) batchUpdate(releaseUpdates);
         batchDelete(selected);
         deselectAll();
@@ -353,7 +370,7 @@ export default function Canvas() {
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
         e.preventDefault();
-        const items = clipboardRef.current.map(({ type, x, y, ...rest }) => ({
+        const items = clipboardRef.current.map(({ type, x, y, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({
           type, x: x + 20, y: y + 20, ...rest,
         }));
         const newIds = batchCreate(items);
@@ -368,7 +385,7 @@ export default function Canvas() {
         e.preventDefault();
         const items = objects
           .filter((o) => selected.includes(o.id))
-          .map(({ type, x, y, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
+          .map(({ type, x, y, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
         const newIds = batchCreate(items);
         selectAll(newIds);
         return;
@@ -700,13 +717,23 @@ export default function Canvas() {
   }, [deselectAll, inlineEdit]);
 
   const handleDelete = useCallback((id: string) => {
-    const obj = objectsRef.current.find(o => o.id === id);
+    const allObjs = objectsRef.current;
+    const obj = allObjs.find(o => o.id === id);
+    const updates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+
     if (obj?.type === 'frame') {
-      const children = objectsRef.current.filter(o => o.parentId === id);
-      if (children.length > 0) {
-        batchUpdate(children.map(c => ({ id: c.id, changes: { parentId: '' as any } })));
-      }
+      const children = allObjs.filter(o => o.parentId === id);
+      for (const c of children) updates.push({ id: c.id, changes: { parentId: '' as any } });
     }
+
+    // Detach connectors
+    for (const conn of getConnectedLines(id, allObjs)) {
+      const clearField = conn.endpoint === 'from' ? 'fromId' : 'toId';
+      const clearAnchor = conn.endpoint === 'from' ? 'fromAnchor' : 'toAnchor';
+      updates.push({ id: conn.line.id, changes: { [clearField]: '', [clearAnchor]: '' } as any });
+    }
+
+    if (updates.length > 0) batchUpdate(updates);
     deleteObject(id);
     deselectAll();
   }, [deleteObject, deselectAll, batchUpdate]);
