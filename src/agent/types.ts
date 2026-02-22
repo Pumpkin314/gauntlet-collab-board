@@ -5,6 +5,7 @@ export interface AgentMessage {
   role: 'user' | 'agent' | 'status' | 'error';
   content: string;
   timestamp: number;
+  options?: string[];
 }
 
 export interface AgentToolCall {

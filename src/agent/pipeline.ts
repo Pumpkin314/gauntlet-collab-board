@@ -138,7 +138,23 @@ export async function runAgentCommand(
     }
   }
 
-  // 5b. Check for delegateToPlanner → single Sonnet call returning JSON plan
+  // 5b. Check for askClarification → return early with choice buttons
+  const clarificationCall = toolCalls.find((tc) => tc.name === 'askClarification');
+  if (clarificationCall) {
+    const question = clarificationCall.input.question as string;
+    const options = clarificationCall.input.options as string[];
+    messages.push({
+      id: makeId(),
+      role: 'agent',
+      content: question,
+      timestamp: Date.now(),
+      options,
+    });
+    console.debug(`[Boardie] Total pipeline (clarification): ${Math.round(performance.now() - t0)}ms`);
+    return messages;
+  }
+
+  // 5c. Check for delegateToPlanner → single Sonnet call returning JSON plan
   const PLANNER_MAX_TOKENS = 16_000; // token ceiling for the planner response
 
   const plannerCallIdx = toolCalls.findIndex((tc) => tc.name === 'delegateToPlanner');
@@ -243,7 +259,7 @@ export async function runAgentCommand(
 
   // Filter out any leftover meta calls (shouldn't be executed)
   const executableCalls = toolCalls.filter(
-    (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner',
+    (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner' && tc.name !== 'askClarification',
   );
 
   // 6. Validate action count

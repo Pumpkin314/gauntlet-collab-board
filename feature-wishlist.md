@@ -191,6 +191,37 @@ For complex or ambiguous requests, Boardie enters an interview mode instead of i
 
 ---
 
+## 🤖 Agent Pipeline Performance — Interview + Planner Latency
+
+**Description:**
+The full interview-then-planner flow (clarification → user answer → delegateToPlanner → Sonnet response) can take a long time for complex requests. The main bottleneck is the Sonnet planner call (up to 30s timeout). The interview loop adds an extra Haiku round-trip per question on top of that.
+
+**Potential Approaches:**
+- Sonnet prompt trimming: shorter planner system prompt, fewer examples, to reduce input tokens
+- Streaming the planner response and executing tool calls as they arrive (partial execution)
+- Cache common planner outputs (e.g. "solar system" is always roughly the same structure)
+- Pre-warm the planner call while the user is still answering clarification questions (speculative execution)
+- Reduce max_tokens on planner when the clarification narrows scope
+
+**Priority:** Medium — acceptable for now, revisit if user feedback highlights it
+
+---
+
+## 🤖 Planner Board Awareness (Avoid Occluding Existing Content)
+
+**Description:**
+When the planner generates a complex diagram, it has no knowledge of existing board objects. This means it can place new objects on top of existing content. The planner should receive a spatial summary of existing objects so it can avoid occupied regions.
+
+**Potential Approaches:**
+- Pass a bounding-box summary of existing objects to the planner via the `board_context` field in `delegateToPlanner`
+- Haiku could call `requestBoardState` before delegating to gather spatial context
+- Compute an "occupied regions" summary (e.g. "objects occupy x:100-800, y:200-600") and include in planner prompt
+- Add a system prompt instruction for Haiku to always include board_context when delegating
+
+**Priority:** High — directly impacts usability when board has existing content
+
+---
+
 ## 🐛 Bugs
 
 ### Frame z-index edge case with intersecting nested stacks
