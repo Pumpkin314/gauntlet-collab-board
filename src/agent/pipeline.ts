@@ -59,6 +59,7 @@ export async function runAgentCommand(
   conversationHistory: ConversationMessage[] = [],
   getAllObjects?: () => BoardObject[],
   onProgress?: ProgressCallback,
+  abortSignal?: AbortSignal,
 ): Promise<AgentMessage[]> {
   const t0 = performance.now();
   const messages: AgentMessage[] = [];
@@ -107,7 +108,7 @@ export async function runAgentCommand(
   let response;
   try {
     const t1 = performance.now();
-    response = await callAnthropic(apiMessages, TOOL_DEFINITIONS, systemPrompt);
+    response = await callAnthropic(apiMessages, TOOL_DEFINITIONS, systemPrompt, { abortSignal });
     const llm1Duration = Math.round(performance.now() - t1);
     console.debug(`[Boardie] LLM call #1: ${llm1Duration}ms`);
 
@@ -119,6 +120,7 @@ export async function runAgentCommand(
       metadata: { duration_ms: llm1Duration },
     });
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     const msg = err instanceof Error ? err.message : String(err);
     llmSpan?.end({ error: msg });
     trace?.update({ outcome: 'error', path: 'direct', total_duration_ms: Math.round(performance.now() - t0) });
@@ -158,7 +160,7 @@ export async function runAgentCommand(
     // Second LLM call
     try {
       const t2 = performance.now();
-      const response2 = await callAnthropic(multiTurnMessages, TOOL_DEFINITIONS, systemPrompt);
+      const response2 = await callAnthropic(multiTurnMessages, TOOL_DEFINITIONS, systemPrompt, { abortSignal });
       const llm2Duration = Math.round(performance.now() - t2);
       console.debug(`[Boardie] LLM call #2: ${llm2Duration}ms`);
 
@@ -175,6 +177,7 @@ export async function runAgentCommand(
       toolCalls = parsed2.toolCalls;
       textContent = parsed2.textContent;
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
       const msg = err instanceof Error ? err.message : String(err);
       llmSpan?.end({ error: msg });
       trace?.update({ outcome: 'error', path: 'direct', total_duration_ms: Math.round(performance.now() - t0) });
@@ -271,7 +274,7 @@ export async function runAgentCommand(
         [{ role: 'user', content: plannerUserText }],
         [], // no tools — Sonnet outputs JSON text, not tool_use blocks
         plannerSystem,
-        { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000 },
+        { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000, abortSignal },
       );
 
       const rawText = resp.content.find((b) => b.type === 'text')?.text ?? '';
@@ -298,7 +301,7 @@ export async function runAgentCommand(
           ],
           [],
           plannerSystem,
-          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000 },
+          { model: 'claude-sonnet-4-6', maxTokens: PLANNER_MAX_TOKENS, timeoutMs: 30_000, abortSignal },
         );
         const retryText = retryResp.content.find((b) => b.type === 'text')?.text ?? '';
 
@@ -325,6 +328,7 @@ export async function runAgentCommand(
         ...toolCalls.slice(plannerCallIdx + 1),
       ];
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
       const msg = err instanceof Error ? err.message : String(err);
       plannerSpan?.end({ error: msg });
       trace?.update({ outcome: 'error', path: routePath, total_duration_ms: Math.round(performance.now() - t0) });
