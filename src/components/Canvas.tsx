@@ -802,6 +802,129 @@ export default function Canvas() {
   const handleTransformStart = useCallback(() => setIsDraggingShape(true), []);
   const handleTransformEnd   = useCallback(() => setIsDraggingShape(false), []);
 
+  // ── Connector updates during Transformer rotate/resize ──────────────────
+  interface TransformConnectorEntry {
+    lineId: string;
+    lineNode: Konva.Group;
+    endpoint: 'from' | 'to';
+    connectedObjId: string;
+    origPoints: number[];
+  }
+  const transformConnectorCacheRef = useRef<TransformConnectorEntry[]>([]);
+
+  const handleTransformerTransformStart = useCallback(() => {
+    setIsDraggingShape(true);
+    // Cache connected lines for all nodes being transformed
+    const entries: TransformConnectorEntry[] = [];
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    const allObjs = objectsRef.current;
+    const checkedLineIds = new Set<string>();
+    for (const selId of selectedIds) {
+      for (const conn of getConnectedLines(selId, allObjs)) {
+        if (checkedLineIds.has(conn.line.id)) continue;
+        if (selectedIds.has(conn.line.id)) continue; // skip lines that are themselves selected
+        checkedLineIds.add(conn.line.id);
+        const lineNode = layer.findOne(`#note-${conn.line.id}`) as Konva.Group | null;
+        if (lineNode) {
+          entries.push({
+            lineId: conn.line.id,
+            lineNode,
+            endpoint: conn.endpoint,
+            connectedObjId: selId,
+            origPoints: [...(conn.line.points ?? [])],
+          });
+        }
+      }
+    }
+    transformConnectorCacheRef.current = entries;
+  }, [selectedIds]);
+
+  const handleTransformerTransform = useCallback(() => {
+    if (transformConnectorCacheRef.current.length === 0) return;
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    for (const entry of transformConnectorCacheRef.current) {
+      const objNode = layer.findOne(`#note-${entry.connectedObjId}`) as Konva.Group | null;
+      if (!objNode) continue;
+
+      // Read live transform state from the Konva node
+      const baseObj = objectsRef.current.find(o => o.id === entry.connectedObjId);
+      if (!baseObj) continue;
+      const liveObj: BoardObject = {
+        ...baseObj,
+        x: objNode.x(),
+        y: objNode.y(),
+        width: baseObj.width * objNode.scaleX(),
+        height: baseObj.height * objNode.scaleY(),
+        rotation: objNode.rotation(),
+      };
+
+      const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+      const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+      const resolved = resolveEndpoint(liveObj, undefined, otherPt);
+
+      entry.lineNode.clearCache();
+      const lineChild = entry.lineNode.findOne('Line') || entry.lineNode.findOne('Arrow');
+      const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+      if (lineChild) {
+        const pts = [...entry.origPoints];
+        pts[endpointIdx * 2] = resolved.x;
+        pts[endpointIdx * 2 + 1] = resolved.y;
+        (lineChild as any).points(pts);
+      }
+      const circles = entry.lineNode.find('Circle');
+      const targetCircle = circles[endpointIdx];
+      if (targetCircle) {
+        targetCircle.x(resolved.x);
+        targetCircle.y(resolved.y);
+      }
+    }
+    layerRef.current?.batchDraw();
+  }, []);
+
+  const handleTransformerTransformEnd = useCallback(() => {
+    setIsDraggingShape(false);
+
+    if (transformConnectorCacheRef.current.length === 0) return;
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    const connUpdates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+    for (const entry of transformConnectorCacheRef.current) {
+      const objNode = layer.findOne(`#note-${entry.connectedObjId}`) as Konva.Group | null;
+      if (!objNode) continue;
+
+      const baseObj = objectsRef.current.find(o => o.id === entry.connectedObjId);
+      if (!baseObj) continue;
+      const liveObj: BoardObject = {
+        ...baseObj,
+        x: objNode.x(),
+        y: objNode.y(),
+        width: baseObj.width * objNode.scaleX(),
+        height: baseObj.height * objNode.scaleY(),
+        rotation: objNode.rotation(),
+      };
+
+      const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+      const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+      const resolved = resolveEndpoint(liveObj, undefined, otherPt);
+
+      const pts = [...entry.origPoints];
+      const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+      pts[endpointIdx * 2] = resolved.x;
+      pts[endpointIdx * 2 + 1] = resolved.y;
+      connUpdates.push({ id: entry.lineId, changes: { points: pts, x: pts[0], y: pts[1] } });
+
+      // Re-cache
+      requestAnimationFrame(() => { entry.lineNode?.cache(); });
+    }
+    if (connUpdates.length > 0) batchUpdate(connUpdates);
+    transformConnectorCacheRef.current = [];
+  }, [batchUpdate]);
+
   /** Called by ObjectRenderer after a resize so Transformer bbox stays in sync. */
   const handleDimsChanged = useCallback(() => {
     transformerRef.current?.forceUpdate();
@@ -981,8 +1104,9 @@ export default function Canvas() {
           )}
           <Transformer
             ref={transformerRef}
-            onTransformStart={handleTransformStart}
-            onTransformEnd={handleTransformEnd}
+            onTransformStart={handleTransformerTransformStart}
+            onTransform={handleTransformerTransform}
+            onTransformEnd={handleTransformerTransformEnd}
             onDragStart={handleTransformerDragStart}
             onDragEnd={handleTransformerDragEnd}
             boundBoxFunc={boundBoxFunc}
