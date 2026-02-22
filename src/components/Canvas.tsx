@@ -805,6 +805,45 @@ export default function Canvas() {
     transformerRef.current?.forceUpdate();
   }, []);
 
+  // ── Transformer drag: move selected lines with group ────────────────────
+  const trDragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTransformerDragStart = useCallback(() => {
+    setIsDraggingShape(true);
+    const tr = transformerRef.current;
+    if (tr) trDragStartPosRef.current = { x: tr.x(), y: tr.y() };
+  }, []);
+
+  const handleTransformerDragEnd = useCallback(() => {
+    setIsDraggingShape(false);
+    const tr = transformerRef.current;
+    if (!tr || !trDragStartPosRef.current) return;
+    const dx = tr.x() - trDragStartPosRef.current.x;
+    const dy = tr.y() - trDragStartPosRef.current.y;
+    trDragStartPosRef.current = null;
+    if (dx === 0 && dy === 0) return;
+
+    // Find selected lines and translate their points
+    const lineUpdates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+    for (const selId of selectedIds) {
+      const obj = objectsRef.current.find(o => o.id === selId);
+      if (obj?.type === 'line' && obj.points && obj.points.length >= 4) {
+        const pts = obj.points;
+        const newPts = [pts[0]! + dx, pts[1]! + dy, pts[2]! + dx, pts[3]! + dy];
+        lineUpdates.push({
+          id: obj.id,
+          changes: { points: newPts, x: newPts[0], y: newPts[1], fromId: '', toId: '', fromAnchor: '' as any, toAnchor: '' as any },
+        });
+        // Also imperatively move the Konva node
+        const lineNode = layerRef.current?.findOne(`#note-${obj.id}`);
+        if (lineNode) {
+          lineNode.x(0);
+          lineNode.y(0);
+        }
+      }
+    }
+    if (lineUpdates.length > 0) batchUpdate(lineUpdates);
+  }, [selectedIds, batchUpdate]);
+
   // ── Frame drag: imperative child movement (local-only until dragEnd) ─────
   const frameDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const frameDragChildNodesRef = useRef<Map<string, Konva.Node>>(new Map());
@@ -942,6 +981,8 @@ export default function Canvas() {
             ref={transformerRef}
             onTransformStart={handleTransformStart}
             onTransformEnd={handleTransformEnd}
+            onDragStart={handleTransformerDragStart}
+            onDragEnd={handleTransformerDragEnd}
             boundBoxFunc={boundBoxFunc}
           />
         </Layer>
