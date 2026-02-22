@@ -8,7 +8,7 @@ interface ChatWidgetProps {
 }
 
 export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetProps) {
-  const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages } = useAgent(stagePosRef, stageScaleRef);
+  const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest } = useAgent(stagePosRef, stageScaleRef);
   const [inputValue, setInputValue] = useState('');
   const [clickedOptions, setClickedOptions] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -239,24 +239,44 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
             onFocus={(e) => { e.target.style.borderColor = '#4ECDC4'; }}
             onBlur={(e) => { e.target.style.borderColor = '#ddd'; }}
           />
-          <button
-            data-testid="boardie-send"
-            onClick={handleSend}
-            disabled={!inputValue.trim() || isLoading}
-            style={{
-              background: inputValue.trim() && !isLoading ? '#4ECDC4' : '#ccc',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              padding: '8px 14px',
-              cursor: inputValue.trim() && !isLoading ? 'pointer' : 'default',
-              fontSize: 14,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            Send
-          </button>
+          {isLoading ? (
+            <button
+              data-testid="boardie-cancel"
+              onClick={cancelRequest}
+              style={{
+                background: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 14px',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              data-testid="boardie-send"
+              onClick={handleSend}
+              disabled={!inputValue.trim()}
+              style={{
+                background: inputValue.trim() ? '#4ECDC4' : '#ccc',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 14px',
+                cursor: inputValue.trim() ? 'pointer' : 'default',
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </div>
