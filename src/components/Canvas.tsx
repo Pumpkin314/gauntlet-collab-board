@@ -787,6 +787,7 @@ export default function Canvas() {
             onTransformEnd={handleTransformEnd}
             onDimsChanged={handleDimsChanged}
             onStartEdit={handleStartInlineEdit}
+            stageScaleRef={stageScaleRef}
           />
           {boxSelectRect && <SelectionRect {...boxSelectRect} />}
           {pendingLineStart && (

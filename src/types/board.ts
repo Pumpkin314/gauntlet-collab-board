@@ -71,4 +71,6 @@ export interface ShapeProps {
   onTransformEnd?: () => void;
   onDimsChanged?: () => void;
   disableShadows?: boolean;
+  visibleObjects?: BoardObject[];
+  stageScaleRef?: React.RefObject<number>;
 }
