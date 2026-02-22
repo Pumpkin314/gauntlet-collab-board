@@ -190,6 +190,9 @@ export default function Canvas() {
   const objectsRef = useRef(objects);
   objectsRef.current = objects;
 
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+
   const handleFrameAwareUpdate = useCallback((id: string, updates: Partial<BoardObject>) => {
     updateObject(id, updates);
 
@@ -231,6 +234,12 @@ export default function Canvas() {
         }
       }
     }
+
+    // Skip containment recheck when this object's parent frame is also being
+    // dragged (multi-select). The parent hasn't committed its new position yet,
+    // so checking against its stale bounds would incorrectly release the child.
+    const currentParent = obj.parentId ?? '';
+    if (currentParent && selectedIdsRef.current.has(currentParent)) return;
 
     // Containment check: assign/release parentId based on frame containment
     const ownDescendants = obj.type === 'frame' ? getDescendantIds(id, allObjs) : new Set<string>();
@@ -1034,7 +1043,8 @@ export default function Canvas() {
 
       if (obj?.type === 'frame') {
         frameDragStartRef.current = { x: node.x(), y: node.y() };
-        const descendants = getDescendantIds(objId, objectsRef.current);
+        const allObjs = objectsRef.current;
+        const descendants = getDescendantIds(objId, allObjs);
         const layer = layerRef.current;
         const nodeMap = new Map<string, Konva.Node>();
         const originMap = new Map<string, { x: number; y: number }>();
@@ -1043,7 +1053,12 @@ export default function Canvas() {
             const childNode = layer.findOne(`#note-${childId}`);
             if (childNode) {
               nodeMap.set(childId, childNode);
-              originMap.set(childId, { x: childNode.x(), y: childNode.y() });
+              // Read origins from Yjs data (source of truth), not Konva nodes,
+              // which may retain stale imperative positions from a prior drag.
+              const childObj = allObjs.find(o => o.id === childId);
+              originMap.set(childId, childObj
+                ? { x: childObj.x, y: childObj.y }
+                : { x: childNode.x(), y: childNode.y() });
             }
           }
         }
