@@ -20,7 +20,7 @@ export async function callAnthropic(
   messages: AnthropicMessage[],
   tools: unknown[],
   systemPrompt: string,
-  options: { model?: string; maxTokens?: number; timeoutMs?: number } = {},
+  options: { model?: string; maxTokens?: number; timeoutMs?: number; abortSignal?: AbortSignal } = {},
 ): Promise<AnthropicResponse> {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -45,10 +45,17 @@ export async function callAnthropic(
     tools,
   };
 
+  const externalSignal = options.abortSignal;
+
   const doFetch = async (): Promise<Response> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', onExternalAbort);
+
     try {
+      if (externalSignal?.aborted) controller.abort();
       return await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -62,6 +69,7 @@ export async function callAnthropic(
       });
     } finally {
       clearTimeout(timeout);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   };
 
