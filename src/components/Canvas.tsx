@@ -21,6 +21,8 @@ import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
 import ChatWidget from './ChatWidget';
 import type { ActiveTool, BoardObject } from '../types/board';
+import { getConnectedLines } from '../utils/connectorIndex';
+import { resolveEndpoint } from '../utils/anchorResolve';
 
 // ── Register all shape types ───────────────────────────────────────────────────
 registerShape('sticky', {
@@ -495,11 +497,43 @@ export default function Canvas() {
       dotGridRef.current?.update(pos, stageScaleRef.current);
     } else {
       setIsDraggingShape(false);
+
+      // Persist connector updates
+      if (connectorDragCacheRef.current.length > 0) {
+        const node = e.target;
+        const konvaId = node.id();
+        const objId = konvaId.replace('note-', '');
+        const draggedObj = objectsRef.current.find(o => o.id === objId);
+        if (draggedObj) {
+          const currentObj = { ...draggedObj, x: node.x(), y: node.y() };
+          const connUpdates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+          for (const entry of connectorDragCacheRef.current) {
+            const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+            const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+            const resolved = resolveEndpoint(currentObj, undefined, otherPt);
+            const pts = [...entry.origPoints];
+            const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+            pts[endpointIdx * 2] = resolved.x;
+            pts[endpointIdx * 2 + 1] = resolved.y;
+            connUpdates.push({ id: entry.lineId, changes: { points: pts, x: pts[0], y: pts[1] } });
+          }
+          if (connUpdates.length > 0) batchUpdate(connUpdates);
+        }
+        // Re-cache line groups via RAF
+        for (const entry of connectorDragCacheRef.current) {
+          requestAnimationFrame(() => {
+            const group = entry.konvaNode as Konva.Group;
+            if (group && !group.isClientRectOnScreen?.()) group.cache();
+          });
+        }
+        connectorDragCacheRef.current = [];
+      }
+
       frameDragStartRef.current = null;
       frameDragChildNodesRef.current.clear();
       frameDragChildOriginsRef.current.clear();
     }
-  }, []);
+  }, [batchUpdate]);
 
   /** Ref-first pan: update ref + imperative DotGrid every frame,
    *  throttle state sync to ~150ms for viewport culling. */
@@ -515,6 +549,44 @@ export default function Canvas() {
           if (origin) {
             childNode.x(origin.x + dx);
             childNode.y(origin.y + dy);
+          }
+        }
+      }
+
+      // Imperatively update connected lines
+      if (connectorDragCacheRef.current.length > 0) {
+        const node = e.target;
+        const konvaId = node.id();
+        const objId = konvaId.replace('note-', '');
+        const draggedObj = objectsRef.current.find(o => o.id === objId);
+        if (draggedObj) {
+          const currentObj = {
+            ...draggedObj,
+            x: node.x(),
+            y: node.y(),
+          };
+          for (const entry of connectorDragCacheRef.current) {
+            const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+            const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+            const resolved = resolveEndpoint(currentObj, undefined, otherPt);
+            const lineGroup = entry.konvaNode as Konva.Group;
+            lineGroup.clearCache();
+            // Find the Line/Arrow child and update its points
+            const lineChild = lineGroup.findOne('Line') || lineGroup.findOne('Arrow');
+            const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+            if (lineChild) {
+              const pts = [...entry.origPoints];
+              pts[endpointIdx * 2] = resolved.x;
+              pts[endpointIdx * 2 + 1] = resolved.y;
+              (lineChild as any).points(pts);
+            }
+            // Update endpoint circle position
+            const circles = (lineGroup as Konva.Group).find('Circle');
+            const targetCircle = circles[endpointIdx];
+            if (targetCircle) {
+              targetCircle.x(resolved.x);
+              targetCircle.y(resolved.y);
+            }
           }
         }
       }
@@ -711,6 +783,15 @@ export default function Canvas() {
   const frameDragChildNodesRef = useRef<Map<string, Konva.Node>>(new Map());
   const frameDragChildOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
+  // ── Connector drag cache: imperatively update connected lines during drag ──
+  interface ConnectorDragEntry {
+    lineId: string;
+    konvaNode: Konva.Node;
+    endpoint: 'from' | 'to';
+    origPoints: number[];
+  }
+  const connectorDragCacheRef = useRef<ConnectorDragEntry[]>([]);
+
   /** Fired when any drag begins on the Stage; distinguishes shape drags from
    *  canvas pans so the selection action menu is hidden during shape movement. */
   const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
@@ -722,6 +803,39 @@ export default function Canvas() {
       const konvaId = node.id();
       const objId = konvaId.replace('note-', '');
       const obj = objectsRef.current.find(o => o.id === objId);
+
+      // Cache connected lines for imperative movement during drag
+      const connEntries: ConnectorDragEntry[] = [];
+      const allObjs = objectsRef.current;
+      const idsToCheck = [objId];
+
+      // If frame, also check descendants for external connectors
+      if (obj?.type === 'frame') {
+        const descendants = getDescendantIds(objId, allObjs);
+        idsToCheck.push(...descendants);
+      }
+
+      const layer = layerRef.current;
+      if (layer) {
+        const checkedLineIds = new Set<string>();
+        for (const checkId of idsToCheck) {
+          for (const conn of getConnectedLines(checkId, allObjs)) {
+            if (checkedLineIds.has(conn.line.id)) continue;
+            checkedLineIds.add(conn.line.id);
+            const lineNode = layer.findOne(`#note-${conn.line.id}`);
+            if (lineNode) {
+              connEntries.push({
+                lineId: conn.line.id,
+                konvaNode: lineNode,
+                endpoint: conn.endpoint,
+                origPoints: [...(conn.line.points ?? [])],
+              });
+            }
+          }
+        }
+      }
+      connectorDragCacheRef.current = connEntries;
+
       if (obj?.type === 'frame') {
         frameDragStartRef.current = { x: node.x(), y: node.y() };
         const descendants = getDescendantIds(objId, objectsRef.current);
