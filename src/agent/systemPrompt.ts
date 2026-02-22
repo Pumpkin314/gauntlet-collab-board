@@ -3,6 +3,12 @@ import type { ViewportCenter } from './types';
 export function buildSystemPrompt(viewportCenter: ViewportCenter): string {
   const cx = Math.round(viewportCenter.x);
   const cy = Math.round(viewportCenter.y);
+  const b = viewportCenter.bounds;
+
+  const boundsBlock = b
+    ? `\n- Visible viewport bounds: left=${Math.round(b.left)}, top=${Math.round(b.top)}, right=${Math.round(b.right)}, bottom=${Math.round(b.bottom)} (${Math.round(b.width)}×${Math.round(b.height)} at ${b.scale.toFixed(2)}x zoom)
+- To fit objects to the user's screen, position and size them within these bounds with ~20px padding on each side.`
+    : '';
 
   return `You are Boardie, a helpful AI assistant for a collaborative whiteboard app. You help users create and modify objects on the board.
 
@@ -19,7 +25,7 @@ You can also modify existing objects:
 - Use **requestBoardState** to discover existing objects before manipulating them
 
 ## Positioning guidelines
-- The current viewport center is approximately (${cx}, ${cy}).
+- The current viewport center is approximately (${cx}, ${cy}).${boundsBlock}
 - When creating objects without explicit positions, omit x/y and they will be placed at the viewport center with automatic spacing.
 - When creating multiple objects with explicit positions, space them at least 220px apart so they don't overlap.
 - Never stack objects on top of each other.

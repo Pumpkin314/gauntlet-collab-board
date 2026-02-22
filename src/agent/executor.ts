@@ -1,4 +1,4 @@
-import type { AgentToolCall, ExecutionResult, ViewportCenter } from './types';
+import type { AgentToolCall, AgentMessage, ExecutionResult, ViewportCenter, ProgressCallback } from './types';
 import type { BoardObject, ShapeType } from '../types/board';
 import { TOOL_SCHEMAS } from './tools';
 import { resolveColor } from './capabilities';
@@ -138,9 +138,35 @@ export function executeToolCalls(
   toolCalls: AgentToolCall[],
   actions: BoardActions,
   viewportCenter: ViewportCenter,
+  onProgress?: ProgressCallback,
 ): { results: ExecutionResult[]; agentMessages: string[] } {
   const results: ExecutionResult[] = [];
   const agentMessages: string[] = [];
+  const total = toolCalls.length;
+  let completed = 0;
+
+  const mutationOps = new Set(['deleteObject', 'moveObject', 'resizeObject', 'updateText', 'changeColor']);
+
+  const toolLabel: Record<string, string> = {
+    createStickyNote: 'sticky note',
+    createShape: 'shape',
+    createFrame: 'frame',
+    createText: 'text',
+    createLine: 'line',
+    applyTemplate: 'template',
+  };
+
+  const fireProgress = (name: string) => {
+    if (!onProgress || mutationOps.has(name)) return;
+    completed++;
+    const label = toolLabel[name] ?? name;
+    onProgress({
+      id: 'streaming-status',
+      role: 'status',
+      content: `✓ Created ${label} (${completed}/${total})`,
+      timestamp: Date.now(),
+    });
+  };
 
   // Identify create-type calls without explicit positions for grid layout
   const createToolNames = new Set([
@@ -189,6 +215,7 @@ export function executeToolCalls(
           const r = dispatchSingleAction(action.name, resolvedInput, actions);
           createdIds.push(r.objectId ?? '');
           results.push(r);
+          if (r.success) fireProgress(action.name);
         }
         continue;
       }
@@ -222,7 +249,9 @@ export function executeToolCalls(
 
       // Inject resolved position before dispatching
       const inputWithPos = { ...input, x: posX, y: posY };
-      results.push(dispatchSingleAction(tc.name, inputWithPos, actions));
+      const result = dispatchSingleAction(tc.name, inputWithPos, actions);
+      results.push(result);
+      if (result.success) fireProgress(tc.name);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Boardie] Tool execution failed for ${tc.name}:`, msg);

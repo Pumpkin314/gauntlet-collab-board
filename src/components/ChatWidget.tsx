@@ -8,9 +8,9 @@ interface ChatWidgetProps {
 }
 
 export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetProps) {
-  const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages } = useAgent(stagePosRef, stageScaleRef);
+  const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest } = useAgent(stagePosRef, stageScaleRef);
   const [inputValue, setInputValue] = useState('');
-  const [clickedOptionMsgIds, setClickedOptionMsgIds] = useState<Set<string>>(new Set());
+  const [clickedOptions, setClickedOptions] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -33,10 +33,10 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
   const handleOptionClick = useCallback((option: string) => {
     if (isLoading) return;
     void sendMessage(option);
-    setClickedOptionMsgIds((prev) => {
-      const next = new Set(prev);
+    setClickedOptions((prev) => {
+      const next = new Map(prev);
       const lastOptMsg = [...messages].reverse().find((m) => m.options?.length);
-      if (lastOptMsg) next.add(lastOptMsg.id);
+      if (lastOptMsg) next.set(lastOptMsg.id, option);
       return next;
     });
   }, [isLoading, sendMessage, messages]);
@@ -187,11 +187,12 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
           <MessageBubble
             key={msg.id}
             message={msg}
-            onOptionClick={msg.options && !clickedOptionMsgIds.has(msg.id) ? handleOptionClick : undefined}
+            onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
+            selectedOption={clickedOptions.get(msg.id)}
           />
         ))}
 
-        {isLoading && (
+        {isLoading && !messages.some((m) => m.id.startsWith('streaming-')) && (
           <div style={{
             alignSelf: 'flex-start',
             background: '#f0f0f0',
@@ -238,31 +239,51 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
             onFocus={(e) => { e.target.style.borderColor = '#4ECDC4'; }}
             onBlur={(e) => { e.target.style.borderColor = '#ddd'; }}
           />
-          <button
-            data-testid="boardie-send"
-            onClick={handleSend}
-            disabled={!inputValue.trim() || isLoading}
-            style={{
-              background: inputValue.trim() && !isLoading ? '#4ECDC4' : '#ccc',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              padding: '8px 14px',
-              cursor: inputValue.trim() && !isLoading ? 'pointer' : 'default',
-              fontSize: 14,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            Send
-          </button>
+          {isLoading ? (
+            <button
+              data-testid="boardie-cancel"
+              onClick={cancelRequest}
+              style={{
+                background: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 14px',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              data-testid="boardie-send"
+              onClick={handleSend}
+              disabled={!inputValue.trim()}
+              style={{
+                background: inputValue.trim() ? '#4ECDC4' : '#ccc',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 14px',
+                cursor: inputValue.trim() ? 'pointer' : 'default',
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function MessageBubble({ message, onOptionClick }: { message: AgentMessage; onOptionClick?: (option: string) => void }) {
+function MessageBubble({ message, onOptionClick, selectedOption }: { message: AgentMessage; onOptionClick?: (option: string) => void; selectedOption?: string }) {
   const isUser = message.role === 'user';
   const isError = message.role === 'error';
   const isStatus = message.role === 'status';
@@ -304,26 +325,30 @@ function MessageBubble({ message, onOptionClick }: { message: AgentMessage; onOp
           gap: 6,
           marginTop: 6,
         }}>
-          {message.options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => onOptionClick?.(opt)}
-              disabled={!onOptionClick}
-              style={{
-                background: 'white',
-                color: '#4ECDC4',
-                border: '1.5px solid #4ECDC4',
-                borderRadius: 16,
-                padding: '5px 12px',
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: onOptionClick ? 'pointer' : 'default',
-                opacity: onOptionClick ? 1 : 0.5,
-              }}
-            >
-              {opt}
-            </button>
-          ))}
+          {message.options.map((opt) => {
+            const isSelected = selectedOption === opt;
+            const isDisabled = !onOptionClick;
+            return (
+              <button
+                key={opt}
+                onClick={() => onOptionClick?.(opt)}
+                disabled={isDisabled}
+                style={{
+                  background: isSelected ? '#4ECDC4' : 'white',
+                  color: isSelected ? 'white' : '#4ECDC4',
+                  border: '1.5px solid #4ECDC4',
+                  borderRadius: 16,
+                  padding: '5px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: onOptionClick ? 'pointer' : 'default',
+                  opacity: isDisabled && !isSelected ? 0.4 : 1,
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
         </div>
       )}
       <div style={{
