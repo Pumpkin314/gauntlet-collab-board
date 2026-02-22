@@ -22,7 +22,7 @@ Given a natural-language diagram description, output a SINGLE JSON array of tool
 No explanation, no markdown fences, no text before or after — ONLY the raw JSON array.
 
 ## Board center
-Board center is (${cx}, ${cy}). Place all diagrams near this point unless told otherwise.
+Board center is (${cx}, ${cy}). Place all diagrams near this point unless told otherwise.${viewportCenter.bounds ? `\nVisible viewport bounds: left=${Math.round(viewportCenter.bounds.left)}, top=${Math.round(viewportCenter.bounds.top)}, right=${Math.round(viewportCenter.bounds.right)}, bottom=${Math.round(viewportCenter.bounds.bottom)} (${Math.round(viewportCenter.bounds.width)}×${Math.round(viewportCenter.bounds.height)} at ${viewportCenter.bounds.scale.toFixed(2)}x zoom).\nTo fit objects to the user's screen, position and size them within these bounds with ~20px padding.` : ''}
 
 ## CRITICAL: coordinate system
 x and y are the TOP-LEFT CORNER of the shape's bounding box — NOT the center.

@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { AgentMessage } from './types';
-import type { ViewportCenter } from './types';
+import type { AgentMessage, ViewportCenter } from './types';
 import { runAgentCommand } from './pipeline';
 import { useBoardActions } from '../contexts/BoardContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,13 +31,19 @@ export function useAgent(
 
   // Track conversation history for multi-turn context
   const historyRef = useRef<ConversationMessage[]>([]);
+  const streamingIdRef = useRef<string>('streaming-' + crypto.randomUUID());
 
   const getViewportCenter = useCallback((): ViewportCenter => {
     const pos = stagePosRef.current ?? { x: 0, y: 0 };
     const scale = stageScaleRef.current ?? 1;
+    const left = -pos.x / scale;
+    const top = -pos.y / scale;
+    const width = window.innerWidth / scale;
+    const height = window.innerHeight / scale;
     return {
-      x: (-pos.x + window.innerWidth / 2) / scale,
-      y: (-pos.y + window.innerHeight / 2) / scale,
+      x: left + width / 2,
+      y: top + height / 2,
+      bounds: { left, top, right: left + width, bottom: top + height, width, height, scale },
     };
   }, [stagePosRef, stageScaleRef]);
 
@@ -60,6 +65,21 @@ export function useAgent(
 
     try {
       const viewportCenter = getViewportCenter();
+      const sid = streamingIdRef.current;
+
+      const onProgress = (status: AgentMessage) => {
+        const streamMsg: AgentMessage = { ...status, id: sid };
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === sid);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = streamMsg;
+            return next;
+          }
+          return [...prev, streamMsg];
+        });
+      };
+
       const resultMessages = await runAgentCommand(
         trimmed,
         actions,
@@ -67,6 +87,7 @@ export function useAgent(
         viewportCenter,
         historyRef.current,
         actions.getAllObjects,
+        onProgress,
       );
 
       // Update conversation history for context
@@ -76,13 +97,16 @@ export function useAgent(
         { role: 'assistant', content: resultMessages.map((m) => m.content).join('\n') },
       ];
 
-      setMessages((prev) => [...prev, ...resultMessages]);
+      // Remove streaming status and add final results
+      setMessages((prev) => [...prev.filter((m) => m.id !== sid), ...resultMessages]);
+      streamingIdRef.current = 'streaming-' + crypto.randomUUID();
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [
-        ...prev,
+        ...prev.filter((m) => m.id !== sid),
         { id: crypto.randomUUID(), role: 'error', content: errMsg, timestamp: Date.now() },
       ]);
+      streamingIdRef.current = 'streaming-' + crypto.randomUUID();
     } finally {
       setIsLoading(false);
     }

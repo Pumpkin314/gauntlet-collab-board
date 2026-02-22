@@ -25,9 +25,20 @@ export interface PipelineResult {
   executionResults: ExecutionResult[];
 }
 
+export type ProgressCallback = (status: AgentMessage) => void;
+
 export type SupportedShapeType = Exclude<ShapeType, 'connector'>;
 
 export interface ViewportCenter {
   x: number;
   y: number;
+  bounds?: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+    scale: number;
+  };
 }
