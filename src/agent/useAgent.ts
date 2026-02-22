@@ -30,8 +30,8 @@ export function useAgent(
   const actions = useBoardActions();
   const { currentUser } = useAuth();
 
-  // Track conversation history for multi-turn context
   const historyRef = useRef<ConversationMessage[]>([]);
+  const sessionObjectsRef = useRef<Map<string, { type: string; content?: string; color?: string; createdAt: number }>>(new Map());
   const streamingIdRef = useRef<string>('streaming-' + crypto.randomUUID());
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -85,18 +85,49 @@ export function useAgent(
         });
       };
 
-      const resultMessages = await runAgentCommand(
+      // Inject session memory into conversation context
+      let historyWithSessionMemory = historyRef.current;
+      if (sessionObjectsRef.current.size > 0) {
+        const allObjects = actions.getAllObjects();
+        const sessionIds = new Set(sessionObjectsRef.current.keys());
+        const liveSessionObjects = allObjects
+          .filter((obj) => sessionIds.has(obj.id))
+          .map((obj) => ({ id: obj.id, type: obj.type, content: obj.content, x: Math.round(obj.x), y: Math.round(obj.y), color: obj.color }));
+
+        if (liveSessionObjects.length > 0) {
+          const memoryBlock: ConversationMessage = {
+            role: 'user',
+            content: `[Session memory] Objects you created this session: ${JSON.stringify(liveSessionObjects)}`,
+          };
+          historyWithSessionMemory = [memoryBlock, ...historyRef.current];
+        }
+      }
+
+      const { messages: resultMessages, createdObjectIds } = await runAgentCommand(
         trimmed,
         actions,
         userId,
         viewportCenter,
-        historyRef.current,
+        historyWithSessionMemory,
         actions.getAllObjects,
         onProgress,
         abortController.signal,
       );
 
-      // Update conversation history for context
+      // Store newly created objects in session memory
+      for (const id of createdObjectIds) {
+        const allObjects = actions.getAllObjects();
+        const obj = allObjects.find((o) => o.id === id);
+        if (obj) {
+          sessionObjectsRef.current.set(id, {
+            type: obj.type,
+            content: obj.content,
+            color: obj.color,
+            createdAt: Date.now(),
+          });
+        }
+      }
+
       historyRef.current = [
         ...historyRef.current,
         { role: 'user', content: trimmed },
@@ -134,6 +165,7 @@ export function useAgent(
   const clearMessages = useCallback(() => {
     setMessages([]);
     historyRef.current = [];
+    sessionObjectsRef.current.clear();
   }, []);
 
   return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest };

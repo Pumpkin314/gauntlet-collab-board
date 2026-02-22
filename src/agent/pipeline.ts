@@ -60,9 +60,10 @@ export async function runAgentCommand(
   getAllObjects?: () => BoardObject[],
   onProgress?: ProgressCallback,
   abortSignal?: AbortSignal,
-): Promise<AgentMessage[]> {
+): Promise<{ messages: AgentMessage[]; createdObjectIds: string[] }> {
   const t0 = performance.now();
   const messages: AgentMessage[] = [];
+  const createdObjectIds: string[] = [];
   const trace = createAgentTrace(userId);
   let routePath: 'direct' | 'planner' | 'clarification' = 'direct';
   let totalToolCalls = 0;
@@ -76,7 +77,7 @@ export async function runAgentCommand(
     guardrailSpan?.end({ was_rejected: true });
     trace?.update({ outcome: 'error', path: 'rejected', total_duration_ms: Math.round(performance.now() - t0) });
     messages.push({ id: makeId(), role: 'error', content: 'Please enter a message.', timestamp: Date.now() });
-    return messages;
+    return { messages, createdObjectIds };
   }
 
   // 2. Rate limit
@@ -85,7 +86,7 @@ export async function runAgentCommand(
     guardrailSpan?.end({ was_rate_limited: true });
     trace?.update({ outcome: 'error', path: 'rate_limited', total_duration_ms: Math.round(performance.now() - t0) });
     messages.push({ id: makeId(), role: 'error', content: rateCheck.message!, timestamp: Date.now() });
-    return messages;
+    return { messages, createdObjectIds };
   }
 
   guardrailSpan?.end({ was_rejected: false, was_rate_limited: false });
@@ -125,7 +126,7 @@ export async function runAgentCommand(
     llmSpan?.end({ error: msg });
     trace?.update({ outcome: 'error', path: 'direct', total_duration_ms: Math.round(performance.now() - t0) });
     messages.push({ id: makeId(), role: 'error', content: msg, timestamp: Date.now() });
-    return messages;
+    return { messages, createdObjectIds };
   }
 
   // 4. Parse tool calls from response
@@ -182,7 +183,7 @@ export async function runAgentCommand(
       llmSpan?.end({ error: msg });
       trace?.update({ outcome: 'error', path: 'direct', total_duration_ms: Math.round(performance.now() - t0) });
       messages.push({ id: makeId(), role: 'error', content: msg, timestamp: Date.now() });
-      return messages;
+      return { messages, createdObjectIds };
     }
   }
 
@@ -204,7 +205,7 @@ export async function runAgentCommand(
     const totalMs = Math.round(performance.now() - t0);
     console.debug(`[Boardie] Total pipeline (clarification): ${totalMs}ms`);
     trace?.update({ outcome: 'clarification', path: routePath, total_duration_ms: totalMs });
-    return messages;
+    return { messages, createdObjectIds };
   }
 
   // 5c. Check for delegateToPlanner → single Sonnet call returning JSON plan
@@ -333,7 +334,7 @@ export async function runAgentCommand(
       plannerSpan?.end({ error: msg });
       trace?.update({ outcome: 'error', path: routePath, total_duration_ms: Math.round(performance.now() - t0) });
       messages.push({ id: makeId(), role: 'error', content: `Planner error: ${msg}`, timestamp: Date.now() });
-      return messages;
+      return { messages, createdObjectIds };
     }
   }
 
@@ -351,7 +352,7 @@ export async function runAgentCommand(
     validationSpan?.end({ actions_rejected: executableCalls.length });
     trace?.update({ outcome: 'error', path: routePath, total_duration_ms: Math.round(performance.now() - t0) });
     messages.push({ id: makeId(), role: 'error', content: actionCheck.message!, timestamp: Date.now() });
-    return messages;
+    return { messages, createdObjectIds };
   }
 
   validationSpan?.end({ actions_valid: executableCalls.length });
@@ -367,6 +368,15 @@ export async function runAgentCommand(
 
     const failures = results.filter((r) => !r.success);
     const successes = results.filter((r) => r.success);
+
+    // Track created object IDs for session memory
+    const createToolNames = new Set(['createStickyNote', 'createShape', 'createFrame', 'createText', 'createLine']);
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.success && r.objectId && createToolNames.has(executableCalls[i].name)) {
+        createdObjectIds.push(r.objectId);
+      }
+    }
 
     executionSpan?.end({
       actions_executed: successes.length,
@@ -417,5 +427,5 @@ export async function runAgentCommand(
     tool_calls_count: totalToolCalls,
   });
 
-  return messages;
+  return { messages, createdObjectIds };
 }
