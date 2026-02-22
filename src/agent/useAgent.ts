@@ -16,6 +16,7 @@ interface UseAgentReturn {
   isOpen: boolean;
   toggleOpen: () => void;
   clearMessages: () => void;
+  cancelRequest: () => void;
 }
 
 export function useAgent(
@@ -32,6 +33,7 @@ export function useAgent(
   // Track conversation history for multi-turn context
   const historyRef = useRef<ConversationMessage[]>([]);
   const streamingIdRef = useRef<string>('streaming-' + crypto.randomUUID());
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const getViewportCenter = useCallback((): ViewportCenter => {
     const pos = stagePosRef.current ?? { x: 0, y: 0 };
@@ -63,6 +65,9 @@ export function useAgent(
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const viewportCenter = getViewportCenter();
       const sid = streamingIdRef.current;
@@ -88,6 +93,7 @@ export function useAgent(
         historyRef.current,
         actions.getAllObjects,
         onProgress,
+        abortController.signal,
       );
 
       // Update conversation history for context
@@ -101,13 +107,17 @@ export function useAgent(
       setMessages((prev) => [...prev.filter((m) => m.id !== sid), ...resultMessages]);
       streamingIdRef.current = 'streaming-' + crypto.randomUUID();
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const isAbort = (err instanceof DOMException && err.name === 'AbortError')
+        || (err instanceof Error && /abort/i.test(err.message));
+      const errMsg = isAbort ? 'Request cancelled. Ready for your next message.' : (err instanceof Error ? err.message : String(err));
+      const currentSid = streamingIdRef.current;
       setMessages((prev) => [
-        ...prev.filter((m) => m.id !== sid),
-        { id: crypto.randomUUID(), role: 'error', content: errMsg, timestamp: Date.now() },
+        ...prev.filter((m) => m.id === currentSid ? false : true),
+        { id: crypto.randomUUID(), role: isAbort ? 'status' : 'error', content: errMsg, timestamp: Date.now() },
       ]);
       streamingIdRef.current = 'streaming-' + crypto.randomUUID();
     } finally {
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
   }, [isLoading, currentUser, actions, getViewportCenter]);
@@ -116,10 +126,15 @@ export function useAgent(
     setIsOpen((prev) => !prev);
   }, []);
 
+  const cancelRequest = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  }, []);
+
   const clearMessages = useCallback(() => {
     setMessages([]);
     historyRef.current = [];
   }, []);
 
-  return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages };
+  return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest };
 }
