@@ -4,9 +4,7 @@ import { rotatePoint } from './connectorSnap';
 /**
  * Given a connected object and optional anchor hint, compute the absolute
  * attachment point. Rotation-aware: all points are rotated around the
- * object's center by its rotation angle.
- *
- * If no hint, returns the nearest edge midpoint to otherPt.
+ * object's Konva origin (top-left corner at data.x, data.y).
  */
 export function resolveEndpoint(
   obj: BoardObject,
@@ -14,21 +12,20 @@ export function resolveEndpoint(
   otherPt?: { x: number; y: number },
 ): { x: number; y: number } {
   const { x, y, width: w, height: h, rotation } = obj;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
   const rot = rotation ?? 0;
 
+  // Unrotated midpoints in canvas space
   const rawMidpoints: Record<string, { x: number; y: number }> = {
-    top:    { x: cx, y },
-    right:  { x: x + w, y: cy },
-    bottom: { x: cx, y: y + h },
-    left:   { x, y: cy },
+    top:    { x: x + w / 2, y },
+    right:  { x: x + w, y: y + h / 2 },
+    bottom: { x: x + w / 2, y: y + h },
+    left:   { x, y: y + h / 2 },
   };
 
-  // Apply rotation to all midpoints
+  // Konva rotates around the group origin (x, y)
   const edgeMidpoints: Record<string, { x: number; y: number }> = {};
   for (const [key, pt] of Object.entries(rawMidpoints)) {
-    edgeMidpoints[key] = rotatePoint(pt.x, pt.y, cx, cy, rot);
+    edgeMidpoints[key] = rotatePoint(pt.x, pt.y, x, y, rot);
   }
 
   if (anchorHint && edgeMidpoints[anchorHint]) {

@@ -52,13 +52,12 @@ interface KeyPoint {
   anchor: 'top' | 'right' | 'bottom' | 'left' | undefined;
 }
 
-/** Get the 4 corners and 4 edge midpoints of a rect-like object, rotation-aware. */
+/** Get the 4 corners and 4 edge midpoints of a rect-like object, rotation-aware.
+ *  Konva rotates around the group origin (x, y), not the center. */
 function getRectKeyPoints(obj: BoardObject): KeyPoint[] {
   const { x, y, width: w, height: h, rotation } = obj;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
   const rot = rotation ?? 0;
-  const r = (px: number, py: number) => rotatePoint(px, py, cx, cy, rot);
+  const r = (px: number, py: number) => rotatePoint(px, py, x, y, rot);
 
   // Edge midpoints
   const top    = r(x + w / 2, y);
@@ -84,13 +83,12 @@ function getRectKeyPoints(obj: BoardObject): KeyPoint[] {
   ];
 }
 
-/** Get the 4 edges of a rect-like object, rotation-aware. */
+/** Get the 4 edges of a rect-like object, rotation-aware.
+ *  Konva rotates around the group origin (x, y), not the center. */
 function getRectEdges(obj: BoardObject): Edge[] {
   const { x, y, width: w, height: h, rotation } = obj;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
   const rot = rotation ?? 0;
-  const r = (px: number, py: number) => rotatePoint(px, py, cx, cy, rot);
+  const r = (px: number, py: number) => rotatePoint(px, py, x, y, rot);
 
   const tl = r(x, y);
   const tr = r(x + w, y);
