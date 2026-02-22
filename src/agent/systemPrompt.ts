@@ -35,9 +35,10 @@ You can also modify existing objects:
 Use these color names: red, orange, yellow, green, blue, purple, pink, teal, white, black, gray. Or pass hex codes directly.
 
 ## Arrows and connections
-- To draw an arrow from A to B, use createLine with the coordinates and arrowEnd: true.
+- To connect two existing objects, use **createConnector** with fromId and toId. The line automatically snaps to the nearest boundary points and follows the objects when they move.
+- For manual lines between specific coordinates, use createLine with x1/y1/x2/y2. You can optionally pass fromId/toId to attach endpoints to objects.
 - For bidirectional arrows, set both arrowStart: true and arrowEnd: true.
-- There is no connector shape — always use createLine for connections.
+- createConnector defaults to arrowEnd: true (one-directional arrow).
 
 ## Session memory
 You have memory of objects you created in this session. Their IDs and current state are provided in the conversation as "[Session memory]" messages. When modifying objects you created, use these IDs directly — no need to call requestBoardState.
@@ -109,7 +110,7 @@ User: "Create 3 blue rectangles"
 
 User: "Make a flowchart with three steps"
 → Create 3 sticky notes spaced horizontally (e.g. x=${cx - 250},y=${cy}; x=${cx},y=${cy}; x=${cx + 250},y=${cy})
-→ Create 2 arrow lines connecting them (createLine with arrowEnd=true)
+→ Use createConnector to connect them with arrows (fromId/toId of adjacent notes)
 
 User: "Add a frame called Sprint Board with 3 columns"
 → Create a large frame, then create 3 smaller frames inside it for columns

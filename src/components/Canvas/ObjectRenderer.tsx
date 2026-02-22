@@ -25,6 +25,7 @@ interface ObjectRendererProps {
   onTransformEnd?: () => void;
   onDimsChanged: () => void;
   onStartEdit: (data: BoardObject) => void;
+  stageScaleRef?: React.RefObject<number>;
 }
 
 export default memo(function ObjectRenderer({
@@ -39,6 +40,7 @@ export default memo(function ObjectRenderer({
   onTransformEnd,
   onDimsChanged,
   onStartEdit,
+  stageScaleRef,
 }: ObjectRendererProps) {
   useEffect(() => {
     if (isTestMode && window.__perfBridge) {
@@ -74,6 +76,10 @@ export default memo(function ObjectRenderer({
         if (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'frame') {
           extraProps.onStartEdit     = onStartEdit;
           extraProps.isInlineEditing = inlineEditId === obj.id;
+        }
+        if (obj.type === 'line') {
+          extraProps.visibleObjects = objects;
+          extraProps.stageScaleRef  = stageScaleRef;
         }
 
         return <ShapeComponent key={obj.id} {...sharedProps} {...extraProps} />;

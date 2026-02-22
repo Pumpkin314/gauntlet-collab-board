@@ -21,6 +21,8 @@ import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
 import ChatWidget from './ChatWidget';
 import type { ActiveTool, BoardObject } from '../types/board';
+import { getConnectedLines } from '../utils/connectorIndex';
+import { resolveEndpoint } from '../utils/anchorResolve';
 
 // ── Register all shape types ───────────────────────────────────────────────────
 registerShape('sticky', {
@@ -322,9 +324,26 @@ export default function Canvas() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
         e.preventDefault();
         const deletingSet = new Set(selected);
-        const releaseUpdates = objectsRef.current
+        const allObjs = objectsRef.current;
+
+        // Release frame children
+        const releaseUpdates = allObjs
           .filter(o => o.parentId && deletingSet.has(o.parentId) && !deletingSet.has(o.id))
           .map(o => ({ id: o.id, changes: { parentId: '' as any } }));
+
+        // Detach connectors: clear fromId/toId on lines connected to deleted objects
+        for (const delId of deletingSet) {
+          for (const conn of getConnectedLines(delId, allObjs)) {
+            if (deletingSet.has(conn.line.id)) continue;
+            const clearField = conn.endpoint === 'from' ? 'fromId' : 'toId';
+            const clearAnchor = conn.endpoint === 'from' ? 'fromAnchor' : 'toAnchor';
+            releaseUpdates.push({
+              id: conn.line.id,
+              changes: { [clearField]: '', [clearAnchor]: '' } as any,
+            });
+          }
+        }
+
         if (releaseUpdates.length > 0) batchUpdate(releaseUpdates);
         batchDelete(selected);
         deselectAll();
@@ -351,7 +370,7 @@ export default function Canvas() {
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
         e.preventDefault();
-        const items = clipboardRef.current.map(({ type, x, y, ...rest }) => ({
+        const items = clipboardRef.current.map(({ type, x, y, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({
           type, x: x + 20, y: y + 20, ...rest,
         }));
         const newIds = batchCreate(items);
@@ -366,7 +385,7 @@ export default function Canvas() {
         e.preventDefault();
         const items = objects
           .filter((o) => selected.includes(o.id))
-          .map(({ type, x, y, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
+          .map(({ type, x, y, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({ type, x: x + 20, y: y + 20, ...rest }));
         const newIds = batchCreate(items);
         selectAll(newIds);
         return;
@@ -495,11 +514,43 @@ export default function Canvas() {
       dotGridRef.current?.update(pos, stageScaleRef.current);
     } else {
       setIsDraggingShape(false);
+
+      // Persist connector updates
+      if (connectorDragCacheRef.current.length > 0) {
+        const node = e.target;
+        const konvaId = node.id();
+        const objId = konvaId.replace('note-', '');
+        const draggedObj = objectsRef.current.find(o => o.id === objId);
+        if (draggedObj) {
+          const currentObj = { ...draggedObj, x: node.x(), y: node.y() };
+          const connUpdates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+          for (const entry of connectorDragCacheRef.current) {
+            const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+            const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+            const resolved = resolveEndpoint(currentObj, undefined, otherPt);
+            const pts = [...entry.origPoints];
+            const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+            pts[endpointIdx * 2] = resolved.x;
+            pts[endpointIdx * 2 + 1] = resolved.y;
+            connUpdates.push({ id: entry.lineId, changes: { points: pts, x: pts[0], y: pts[1] } });
+          }
+          if (connUpdates.length > 0) batchUpdate(connUpdates);
+        }
+        // Re-cache line groups via RAF
+        for (const entry of connectorDragCacheRef.current) {
+          requestAnimationFrame(() => {
+            const group = entry.konvaNode as Konva.Group;
+            if (group && !group.isClientRectOnScreen?.()) group.cache();
+          });
+        }
+        connectorDragCacheRef.current = [];
+      }
+
       frameDragStartRef.current = null;
       frameDragChildNodesRef.current.clear();
       frameDragChildOriginsRef.current.clear();
     }
-  }, []);
+  }, [batchUpdate]);
 
   /** Ref-first pan: update ref + imperative DotGrid every frame,
    *  throttle state sync to ~150ms for viewport culling. */
@@ -517,6 +568,46 @@ export default function Canvas() {
             childNode.y(origin.y + dy);
           }
         }
+      }
+
+      // Imperatively update connected lines
+      if (connectorDragCacheRef.current.length > 0) {
+        const node = e.target;
+        const konvaId = node.id();
+        const objId = konvaId.replace('note-', '');
+        const draggedObj = objectsRef.current.find(o => o.id === objId);
+        if (draggedObj) {
+          const currentObj = {
+            ...draggedObj,
+            x: node.x(),
+            y: node.y(),
+          };
+          for (const entry of connectorDragCacheRef.current) {
+            const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+            const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+            const resolved = resolveEndpoint(currentObj, undefined, otherPt);
+            const lineGroup = entry.konvaNode as Konva.Group;
+            lineGroup.clearCache();
+            // Find the Line/Arrow child and update its points
+            const lineChild = lineGroup.findOne('Line') || lineGroup.findOne('Arrow');
+            const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+            if (lineChild) {
+              const pts = [...entry.origPoints];
+              pts[endpointIdx * 2] = resolved.x;
+              pts[endpointIdx * 2 + 1] = resolved.y;
+              (lineChild as any).points(pts);
+            }
+            // Update endpoint circle position
+            const circles = (lineGroup as Konva.Group).find('Circle');
+            const targetCircle = circles[endpointIdx];
+            if (targetCircle) {
+              targetCircle.x(resolved.x);
+              targetCircle.y(resolved.y);
+            }
+          }
+        }
+        // Force repaint — .points() changes don't auto-trigger Konva redraw
+        layerRef.current?.batchDraw();
       }
       return;
     }
@@ -628,13 +719,23 @@ export default function Canvas() {
   }, [deselectAll, inlineEdit]);
 
   const handleDelete = useCallback((id: string) => {
-    const obj = objectsRef.current.find(o => o.id === id);
+    const allObjs = objectsRef.current;
+    const obj = allObjs.find(o => o.id === id);
+    const updates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+
     if (obj?.type === 'frame') {
-      const children = objectsRef.current.filter(o => o.parentId === id);
-      if (children.length > 0) {
-        batchUpdate(children.map(c => ({ id: c.id, changes: { parentId: '' as any } })));
-      }
+      const children = allObjs.filter(o => o.parentId === id);
+      for (const c of children) updates.push({ id: c.id, changes: { parentId: '' as any } });
     }
+
+    // Detach connectors
+    for (const conn of getConnectedLines(id, allObjs)) {
+      const clearField = conn.endpoint === 'from' ? 'fromId' : 'toId';
+      const clearAnchor = conn.endpoint === 'from' ? 'fromAnchor' : 'toAnchor';
+      updates.push({ id: conn.line.id, changes: { [clearField]: '', [clearAnchor]: '' } as any });
+    }
+
+    if (updates.length > 0) batchUpdate(updates);
     deleteObject(id);
     deselectAll();
   }, [deleteObject, deselectAll, batchUpdate]);
@@ -701,15 +802,186 @@ export default function Canvas() {
   const handleTransformStart = useCallback(() => setIsDraggingShape(true), []);
   const handleTransformEnd   = useCallback(() => setIsDraggingShape(false), []);
 
+  // ── Connector updates during Transformer rotate/resize ──────────────────
+  interface TransformConnectorEntry {
+    lineId: string;
+    lineNode: Konva.Group;
+    endpoint: 'from' | 'to';
+    connectedObjId: string;
+    origPoints: number[];
+  }
+  const transformConnectorCacheRef = useRef<TransformConnectorEntry[]>([]);
+
+  const handleTransformerTransformStart = useCallback(() => {
+    setIsDraggingShape(true);
+    // Cache connected lines for all nodes being transformed
+    const entries: TransformConnectorEntry[] = [];
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    const allObjs = objectsRef.current;
+    const checkedLineIds = new Set<string>();
+    for (const selId of selectedIds) {
+      for (const conn of getConnectedLines(selId, allObjs)) {
+        if (checkedLineIds.has(conn.line.id)) continue;
+        if (selectedIds.has(conn.line.id)) continue; // skip lines that are themselves selected
+        checkedLineIds.add(conn.line.id);
+        const lineNode = layer.findOne(`#note-${conn.line.id}`) as Konva.Group | null;
+        if (lineNode) {
+          entries.push({
+            lineId: conn.line.id,
+            lineNode,
+            endpoint: conn.endpoint,
+            connectedObjId: selId,
+            origPoints: [...(conn.line.points ?? [])],
+          });
+        }
+      }
+    }
+    transformConnectorCacheRef.current = entries;
+  }, [selectedIds]);
+
+  const handleTransformerTransform = useCallback(() => {
+    if (transformConnectorCacheRef.current.length === 0) return;
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    for (const entry of transformConnectorCacheRef.current) {
+      const objNode = layer.findOne(`#note-${entry.connectedObjId}`) as Konva.Group | null;
+      if (!objNode) continue;
+
+      // Read live transform state from the Konva node
+      const baseObj = objectsRef.current.find(o => o.id === entry.connectedObjId);
+      if (!baseObj) continue;
+      const liveObj: BoardObject = {
+        ...baseObj,
+        x: objNode.x(),
+        y: objNode.y(),
+        width: baseObj.width * objNode.scaleX(),
+        height: baseObj.height * objNode.scaleY(),
+        rotation: objNode.rotation(),
+      };
+
+      const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+      const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+      const resolved = resolveEndpoint(liveObj, undefined, otherPt);
+
+      entry.lineNode.clearCache();
+      const lineChild = entry.lineNode.findOne('Line') || entry.lineNode.findOne('Arrow');
+      const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+      if (lineChild) {
+        const pts = [...entry.origPoints];
+        pts[endpointIdx * 2] = resolved.x;
+        pts[endpointIdx * 2 + 1] = resolved.y;
+        (lineChild as any).points(pts);
+      }
+      const circles = entry.lineNode.find('Circle');
+      const targetCircle = circles[endpointIdx];
+      if (targetCircle) {
+        targetCircle.x(resolved.x);
+        targetCircle.y(resolved.y);
+      }
+    }
+    layerRef.current?.batchDraw();
+  }, []);
+
+  const handleTransformerTransformEnd = useCallback(() => {
+    setIsDraggingShape(false);
+
+    if (transformConnectorCacheRef.current.length === 0) return;
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    const connUpdates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+    for (const entry of transformConnectorCacheRef.current) {
+      const objNode = layer.findOne(`#note-${entry.connectedObjId}`) as Konva.Group | null;
+      if (!objNode) continue;
+
+      const baseObj = objectsRef.current.find(o => o.id === entry.connectedObjId);
+      if (!baseObj) continue;
+      const liveObj: BoardObject = {
+        ...baseObj,
+        x: objNode.x(),
+        y: objNode.y(),
+        width: baseObj.width * objNode.scaleX(),
+        height: baseObj.height * objNode.scaleY(),
+        rotation: objNode.rotation(),
+      };
+
+      const otherEndIdx = entry.endpoint === 'from' ? 2 : 0;
+      const otherPt = { x: entry.origPoints[otherEndIdx]!, y: entry.origPoints[otherEndIdx + 1]! };
+      const resolved = resolveEndpoint(liveObj, undefined, otherPt);
+
+      const pts = [...entry.origPoints];
+      const endpointIdx = entry.endpoint === 'from' ? 0 : 1;
+      pts[endpointIdx * 2] = resolved.x;
+      pts[endpointIdx * 2 + 1] = resolved.y;
+      connUpdates.push({ id: entry.lineId, changes: { points: pts, x: pts[0], y: pts[1] } });
+
+      // Re-cache
+      requestAnimationFrame(() => { entry.lineNode?.cache(); });
+    }
+    if (connUpdates.length > 0) batchUpdate(connUpdates);
+    transformConnectorCacheRef.current = [];
+  }, [batchUpdate]);
+
   /** Called by ObjectRenderer after a resize so Transformer bbox stays in sync. */
   const handleDimsChanged = useCallback(() => {
     transformerRef.current?.forceUpdate();
   }, []);
 
+  // ── Transformer drag: move selected lines with group ────────────────────
+  const trDragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTransformerDragStart = useCallback(() => {
+    setIsDraggingShape(true);
+    const tr = transformerRef.current;
+    if (tr) trDragStartPosRef.current = { x: tr.x(), y: tr.y() };
+  }, []);
+
+  const handleTransformerDragEnd = useCallback(() => {
+    setIsDraggingShape(false);
+    const tr = transformerRef.current;
+    if (!tr || !trDragStartPosRef.current) return;
+    const dx = tr.x() - trDragStartPosRef.current.x;
+    const dy = tr.y() - trDragStartPosRef.current.y;
+    trDragStartPosRef.current = null;
+    if (dx === 0 && dy === 0) return;
+
+    // Find selected lines and translate their points
+    const lineUpdates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
+    for (const selId of selectedIds) {
+      const obj = objectsRef.current.find(o => o.id === selId);
+      if (obj?.type === 'line' && obj.points && obj.points.length >= 4) {
+        const pts = obj.points;
+        const newPts = [pts[0]! + dx, pts[1]! + dy, pts[2]! + dx, pts[3]! + dy];
+        lineUpdates.push({
+          id: obj.id,
+          changes: { points: newPts, x: newPts[0], y: newPts[1], fromId: '', toId: '', fromAnchor: '' as any, toAnchor: '' as any },
+        });
+        // Also imperatively move the Konva node
+        const lineNode = layerRef.current?.findOne(`#note-${obj.id}`);
+        if (lineNode) {
+          lineNode.x(0);
+          lineNode.y(0);
+        }
+      }
+    }
+    if (lineUpdates.length > 0) batchUpdate(lineUpdates);
+  }, [selectedIds, batchUpdate]);
+
   // ── Frame drag: imperative child movement (local-only until dragEnd) ─────
   const frameDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const frameDragChildNodesRef = useRef<Map<string, Konva.Node>>(new Map());
   const frameDragChildOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  // ── Connector drag cache: imperatively update connected lines during drag ──
+  interface ConnectorDragEntry {
+    lineId: string;
+    konvaNode: Konva.Node;
+    endpoint: 'from' | 'to';
+    origPoints: number[];
+  }
+  const connectorDragCacheRef = useRef<ConnectorDragEntry[]>([]);
 
   /** Fired when any drag begins on the Stage; distinguishes shape drags from
    *  canvas pans so the selection action menu is hidden during shape movement. */
@@ -722,6 +994,39 @@ export default function Canvas() {
       const konvaId = node.id();
       const objId = konvaId.replace('note-', '');
       const obj = objectsRef.current.find(o => o.id === objId);
+
+      // Cache connected lines for imperative movement during drag
+      const connEntries: ConnectorDragEntry[] = [];
+      const allObjs = objectsRef.current;
+      const idsToCheck = [objId];
+
+      // If frame, also check descendants for external connectors
+      if (obj?.type === 'frame') {
+        const descendants = getDescendantIds(objId, allObjs);
+        idsToCheck.push(...descendants);
+      }
+
+      const layer = layerRef.current;
+      if (layer) {
+        const checkedLineIds = new Set<string>();
+        for (const checkId of idsToCheck) {
+          for (const conn of getConnectedLines(checkId, allObjs)) {
+            if (checkedLineIds.has(conn.line.id)) continue;
+            checkedLineIds.add(conn.line.id);
+            const lineNode = layer.findOne(`#note-${conn.line.id}`);
+            if (lineNode) {
+              connEntries.push({
+                lineId: conn.line.id,
+                konvaNode: lineNode,
+                endpoint: conn.endpoint,
+                origPoints: [...(conn.line.points ?? [])],
+              });
+            }
+          }
+        }
+      }
+      connectorDragCacheRef.current = connEntries;
+
       if (obj?.type === 'frame') {
         frameDragStartRef.current = { x: node.x(), y: node.y() };
         const descendants = getDescendantIds(objId, objectsRef.current);
@@ -787,6 +1092,7 @@ export default function Canvas() {
             onTransformEnd={handleTransformEnd}
             onDimsChanged={handleDimsChanged}
             onStartEdit={handleStartInlineEdit}
+            stageScaleRef={stageScaleRef}
           />
           {boxSelectRect && <SelectionRect {...boxSelectRect} />}
           {pendingLineStart && (
@@ -798,8 +1104,11 @@ export default function Canvas() {
           )}
           <Transformer
             ref={transformerRef}
-            onTransformStart={handleTransformStart}
-            onTransformEnd={handleTransformEnd}
+            onTransformStart={handleTransformerTransformStart}
+            onTransform={handleTransformerTransform}
+            onTransformEnd={handleTransformerTransformEnd}
+            onDragStart={handleTransformerDragStart}
+            onDragEnd={handleTransformerDragEnd}
             boundBoxFunc={boundBoxFunc}
           />
         </Layer>
