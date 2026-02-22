@@ -170,6 +170,7 @@ export default function Canvas() {
   const isBoxDraggingRef  = useRef(false);
   const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
   const isPanningRef = useRef(false);
+  const lastDblClickRef = useRef(0);
   const panSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorPosRef = useRef({ x: 0, y: 0 });
   const stagePosRef = useRef(stagePos);
@@ -627,6 +628,10 @@ export default function Canvas() {
 
   // ── Object creation ───────────────────────────────────────────────────────
   const handleDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const now = Date.now();
+    if (now - lastDblClickRef.current < 200) return;
+    lastDblClickRef.current = now;
+
     if (activeTool === 'cursor' || activeTool === 'box-select') return;
     if (e.target !== e.target.getStage()) return;
 
