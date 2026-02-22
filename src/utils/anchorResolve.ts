@@ -35,7 +35,38 @@ export function resolveEndpoint(
   const rot = rotation ?? 0;
   const r = (px: number, py: number) => rotatePoint(px, py, x, y, rot);
 
-  // Rotated edge midpoints
+  // Circle/ellipse: project onto ellipse perimeter
+  if (obj.type === 'circle') {
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const rx = w / 2;
+    const ry = h / 2;
+
+    const cardinals: { pt: { x: number; y: number }; name: string }[] = [
+      { pt: { x: cx, y: y },         name: 'top' },
+      { pt: { x: x + w, y: cy },     name: 'right' },
+      { pt: { x: cx, y: y + h },     name: 'bottom' },
+      { pt: { x: x, y: cy },         name: 'left' },
+    ];
+
+    if (anchorHint) {
+      const match = cardinals.find(c => c.name === anchorHint);
+      if (match) return match.pt;
+    }
+
+    if (!otherPt) return cardinals[0].pt;
+
+    // Tier 1: snap to cardinal if close
+    for (const c of cardinals) {
+      if (Math.hypot(otherPt.x - c.pt.x, otherPt.y - c.pt.y) < MIDPOINT_SNAP_RADIUS) return c.pt;
+    }
+
+    // Tier 2: project onto ellipse perimeter
+    const angle = Math.atan2((otherPt.y - cy) / ry, (otherPt.x - cx) / rx);
+    return { x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) };
+  }
+
+  // Rotated edge midpoints (rect-like objects)
   const midpoints: { pt: { x: number; y: number }; name: string }[] = [
     { pt: r(x + w / 2, y),         name: 'top' },
     { pt: r(x + w, y + h / 2),     name: 'right' },

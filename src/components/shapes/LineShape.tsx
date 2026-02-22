@@ -150,6 +150,7 @@ export default memo(function LineShape({
     segmentDragStartRef.current = null;
   }, [pts, data.id, onUpdate]);
 
+  const hitWidth = Math.max(12, 20 / (stageScaleRef?.current ?? 1));
   const hasArrow = data.arrowStart || data.arrowEnd;
   const strokeColor = isSelected ? '#4ECDC4' : (data.strokeColor ?? data.color ?? '#333');
   const strokeWidth = (data.strokeWidth ?? 2) * (isSelected ? 1.5 : 1);
@@ -162,7 +163,7 @@ export default memo(function LineShape({
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           lineCap="round"
-          hitStrokeWidth={12}
+          hitStrokeWidth={hitWidth}
         />
       );
     }
@@ -179,7 +180,7 @@ export default memo(function LineShape({
         strokeWidth={strokeWidth}
         fill={strokeColor}
         lineCap="round"
-        hitStrokeWidth={12}
+        hitStrokeWidth={hitWidth}
         pointerLength={10}
         pointerWidth={10}
         pointerAtBeginning={pointerAtBeginning}
