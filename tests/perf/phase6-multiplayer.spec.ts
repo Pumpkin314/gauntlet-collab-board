@@ -152,13 +152,6 @@ async function measureMultiSyncLatency(
   return { median, p95, samples: latencies };
 }
 
-// ── Observer render-count diagnostics ────────────────────────────────────────
-
-/** Snapshot renderCount on every page so we can diff before/after. */
-async function snapshotRenderCounts(pages: Page[]): Promise<number[]> {
-  return Promise.all(pages.map(p => p.evaluate(() => window.__perfBridge?.renderCount ?? 0)));
-}
-
 // ── Test generation ───────────────────────────────────────────────────────────
 
 /**
