@@ -606,6 +606,8 @@ export default function Canvas() {
             }
           }
         }
+        // Force repaint — .points() changes don't auto-trigger Konva redraw
+        layerRef.current?.batchDraw();
       }
       return;
     }
