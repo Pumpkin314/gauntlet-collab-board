@@ -522,13 +522,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         lastAwarenessRemoteAtRef.current = Date.now();
       }
 
-      // When Firestore fallback is blocked, awareness must drive which remote
-      // cursors are rendered (presence ids must match cursorStore keys).
-      if (shouldBlockFirestoreFallback()) {
-        setPresence(remotePeers);
-      }
-
-      // Cold path: detect join/leave by comparing peer ID sets
+      // Cold path: detect join/leave by comparing peer ID sets.
+      // setPresence() is only called here (not on every cursor move) to avoid
+      // O(N × cursor_Hz) React re-renders that tank FPS with multiple users.
       const prev = remotePeerIdsRef.current;
       const joined = [...currentPeerIds].some((id) => !prev.has(id));
       const left = [...prev].some((id) => !currentPeerIds.has(id));
@@ -538,6 +534,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           if (!currentPeerIds.has(id)) removeCursor(id);
         }
         remotePeerIdsRef.current = currentPeerIds;
+        // When Firestore fallback is blocked, awareness drives which remote
+        // cursors are rendered (presence ids must match cursorStore keys).
+        if (shouldBlockFirestoreFallback()) {
+          setPresence(remotePeers);
+        }
       }
     };
     const onAwarenessUpdate = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {

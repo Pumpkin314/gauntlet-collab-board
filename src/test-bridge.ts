@@ -10,8 +10,17 @@ export interface PerfBridge {
   deleteAllObjects(): void;
   getObjects(): BoardObject[];
   getKonvaNodeCount(): number;
+  /** Returns the number of OTHER connected peers (excludes self). */
+  getPeerCount(): number;
   renderCount: number;
   resetRenderCount(): void;
+  /**
+   * NOTE: WebRTC debug metrics (webrtcConnectedPeerCount, webrtcSyncedPeerCount,
+   * webrtcPeerCount) live in DebugContext and are intentionally NOT bridged here.
+   * In headless Playwright tests, y-webrtc falls back to BroadcastChannel only
+   * (no real WebRTC ICE connections), making those counters unreliable/misleading.
+   * Use `getPeerCount()` (awareness-based) for test assertions about peer visibility.
+   */
 }
 
 declare global {
@@ -27,11 +36,13 @@ export function initPerfBridge(ctx: {
   batchCreate: PerfBridge['batchCreate'];
   deleteAllObjects: PerfBridge['deleteAllObjects'];
   getAllObjects: () => BoardObject[];
+  getPeerCount: () => number;
 }) {
   window.__perfBridge = {
     batchCreate: ctx.batchCreate,
     deleteAllObjects: ctx.deleteAllObjects,
     getObjects: ctx.getAllObjects,
+    getPeerCount: ctx.getPeerCount,
     getKonvaNodeCount: () => {
       const K = (window as any).Konva;
       return K?.stages?.[0]?.getLayers()?.[0]?.getChildren()?.length ?? 0;

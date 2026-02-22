@@ -12,7 +12,9 @@
     "test:perf": "playwright test tests/perf",
     "test:perf:baseline": "playwright test tests/perf/phase0-baseline.spec.ts",
     "test:perf:phase1": "playwright test tests/perf/phase1-render.spec.ts",
-    "test:perf:all": "playwright test tests/perf --reporter=json > tests/perf/reports/latest.json"
+    "test:perf:all": "playwright test tests/perf --reporter=json > tests/perf/reports/latest.json",
+    "test:perf:multiplayer:slim": "playwright test tests/perf/phase6-multiplayer.spec.ts --grep @slim --config playwright.multiplayer.config.ts",
+    "test:perf:multiplayer": "playwright test tests/perf/phase6-multiplayer.spec.ts --config playwright.multiplayer.config.ts"
   },
   "dependencies": {
     "firebase": "^11.1.0",
