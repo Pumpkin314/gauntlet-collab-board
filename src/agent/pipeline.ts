@@ -2,13 +2,47 @@ import type { AgentMessage, AgentToolCall, ViewportCenter, ProgressCallback } fr
 import type { BoardObject, ShapeType } from '../types/board';
 import { sanitizeInput, checkRateLimit, validateActionCount } from './guardrails';
 import { buildSystemPrompt } from './systemPrompt';
+import { buildLearningExplorerPrompt } from './learningExplorerPrompt';
 import { buildPlannerPrompt } from './plannerPrompt';
 import { callAnthropic } from './apiClient';
-import { TOOL_DEFINITIONS, TOOL_SCHEMAS } from './tools';
+import { TOOL_DEFINITIONS, TOOL_SCHEMAS, EXPLORER_TOOL_DEFINITIONS, KG_READONLY_TOOLS } from './tools';
 import { executeToolCalls } from './executor';
 import { resolveObjects } from './objectResolver';
 import type { BoardStateFilter } from './objectResolver';
 import { createAgentTrace } from './observability';
+import {
+  searchNodes as kgSearchNodes,
+  getPrerequisites as kgGetPrerequisites,
+  getFrontier as kgGetFrontier,
+  getSubgraph as kgGetSubgraph,
+  getNodesByGrade,
+} from '../data/knowledge-graph';
+
+export interface PipelineConfig {
+  mode: 'boardie' | 'explorer';
+  buildSystemPrompt: (vc: ViewportCenter) => string;
+  toolDefinitions: unknown[];
+}
+
+function getBoardieConfig(): PipelineConfig {
+  return {
+    mode: 'boardie',
+    buildSystemPrompt,
+    toolDefinitions: TOOL_DEFINITIONS,
+  };
+}
+
+function getExplorerConfig(): PipelineConfig {
+  return {
+    mode: 'explorer',
+    buildSystemPrompt: buildLearningExplorerPrompt,
+    toolDefinitions: EXPLORER_TOOL_DEFINITIONS,
+  };
+}
+
+export function getPipelineConfig(mode: 'boardie' | 'explorer'): PipelineConfig {
+  return mode === 'explorer' ? getExplorerConfig() : getBoardieConfig();
+}
 
 interface BoardActions {
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
@@ -60,6 +94,7 @@ export async function runAgentCommand(
   getAllObjects?: () => BoardObject[],
   onProgress?: ProgressCallback,
   abortSignal?: AbortSignal,
+  config?: PipelineConfig,
 ): Promise<{ messages: AgentMessage[]; createdObjectIds: string[] }> {
   const t0 = performance.now();
   const messages: AgentMessage[] = [];
@@ -95,7 +130,9 @@ export async function runAgentCommand(
   const statusMsg = (content: string): AgentMessage => ({ id: 'streaming-status', role: 'status', content, timestamp: Date.now() });
   onProgress?.(statusMsg('Planning...'));
 
-  const systemPrompt = buildSystemPrompt(viewportCenter);
+  const effectiveConfig = config ?? getBoardieConfig();
+  const systemPrompt = effectiveConfig.buildSystemPrompt(viewportCenter);
+  const toolDefs = effectiveConfig.toolDefinitions;
 
   const recentHistory = conversationHistory.slice(-20);
   const apiMessages: ConversationMessage[] = [
@@ -109,7 +146,7 @@ export async function runAgentCommand(
   let response;
   try {
     const t1 = performance.now();
-    response = await callAnthropic(apiMessages, TOOL_DEFINITIONS, systemPrompt, { abortSignal });
+    response = await callAnthropic(apiMessages, toolDefs, systemPrompt, { abortSignal });
     const llm1Duration = Math.round(performance.now() - t1);
     console.debug(`[Boardie] LLM call #1: ${llm1Duration}ms`);
 
@@ -144,10 +181,15 @@ export async function runAgentCommand(
     console.debug(`[Boardie] requestBoardState: ${resolved.length}/${allObjects.length} objects matched`);
     boardStateSpan?.end({ object_count: allObjects.length, matches_found: resolved.length, filter_used: !!filter });
 
-    // Build multi-turn messages: original + assistant tool_use + tool_result
+    // Build multi-turn messages: only include text + this tool_use block
+    // so the API doesn't complain about unmatched tool_use ids.
+    const filteredContent = response.content.filter(
+      (block: { type: string; id?: string }) =>
+        block.type === 'text' || (block.type === 'tool_use' && block.id === boardStateCall.id),
+    );
     const multiTurnMessages: ConversationMessage[] = [
       ...apiMessages,
-      { role: 'assistant', content: response.content },
+      { role: 'assistant', content: filteredContent },
       {
         role: 'user',
         content: [{
@@ -161,7 +203,7 @@ export async function runAgentCommand(
     // Second LLM call
     try {
       const t2 = performance.now();
-      const response2 = await callAnthropic(multiTurnMessages, TOOL_DEFINITIONS, systemPrompt, { abortSignal });
+      const response2 = await callAnthropic(multiTurnMessages, toolDefs, systemPrompt, { abortSignal });
       const llm2Duration = Math.round(performance.now() - t2);
       console.debug(`[Boardie] LLM call #2: ${llm2Duration}ms`);
 
@@ -177,6 +219,86 @@ export async function runAgentCommand(
       // Replace with second call's results (the first call only had the state query)
       toolCalls = parsed2.toolCalls;
       textContent = parsed2.textContent;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      llmSpan?.end({ error: msg });
+      trace?.update({ outcome: 'error', path: 'direct', total_duration_ms: Math.round(performance.now() - t0) });
+      messages.push({ id: makeId(), role: 'error', content: msg, timestamp: Date.now() });
+      return { messages, createdObjectIds };
+    }
+  }
+
+  // 5a-kg. KG read-only multi-turn loop (up to 3 rounds)
+  // The LLM may chain: search → getPrereqs → place nodes, needing multiple round-trips.
+  let kgTurnMessages: ConversationMessage[] = apiMessages;
+  let kgLastResponse = response;
+  const MAX_KG_TURNS = 3;
+
+  for (let kgTurn = 0; kgTurn < MAX_KG_TURNS; kgTurn++) {
+    const kgReadOnlyCalls = toolCalls.filter((tc) => KG_READONLY_TOOLS.has(tc.name));
+    if (kgReadOnlyCalls.length === 0) break;
+
+    onProgress?.(statusMsg(kgTurn === 0 ? 'Searching knowledge graph...' : 'Exploring further...'));
+
+    const toolResults: Array<{ type: string; tool_use_id: string; content: string }> = [];
+    for (const tc of kgReadOnlyCalls) {
+      let result: unknown;
+      switch (tc.name) {
+        case 'searchKnowledgeGraph': {
+          let found = kgSearchNodes(tc.input.query as string, tc.input.limit as number ?? 10);
+          if (tc.input.gradeLevel) {
+            found = found.filter(n => n.gradeLevel.includes(tc.input.gradeLevel as string));
+          }
+          result = found;
+          break;
+        }
+        case 'getPrerequisites':
+          result = kgGetPrerequisites(tc.input.kgNodeId as string);
+          break;
+        case 'computeFrontier':
+          result = kgGetFrontier(new Set(tc.input.masteredNodeIds as string[])).slice(0, 20);
+          break;
+        case 'expandAroundNode':
+          result = kgGetSubgraph([tc.input.kgNodeId as string], tc.input.depth as number ?? 1);
+          break;
+        case 'getNodesByGrade': {
+          const allForGrade = getNodesByGrade(tc.input.grade as string);
+          const standards = allForGrade.filter(n => n.type === 'standard');
+          result = standards.slice(0, (tc.input.limit as number) ?? 20);
+          break;
+        }
+      }
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: tc.id,
+        content: JSON.stringify(result),
+      });
+    }
+
+    // Only include text + KG read-only tool_use blocks in assistant message
+    const kgReadOnlyIds = new Set(kgReadOnlyCalls.map(tc => tc.id));
+    const filteredAssistantContent = kgLastResponse.content.filter(
+      (block: { type: string; id?: string }) =>
+        block.type === 'text' || (block.type === 'tool_use' && kgReadOnlyIds.has(block.id!)),
+    );
+
+    kgTurnMessages = [
+      ...kgTurnMessages,
+      { role: 'assistant', content: filteredAssistantContent },
+      { role: 'user', content: toolResults },
+    ];
+
+    try {
+      const t2 = performance.now();
+      const nextResponse = await callAnthropic(kgTurnMessages, toolDefs, systemPrompt, { abortSignal });
+      const llm2Duration = Math.round(performance.now() - t2);
+      console.debug(`[Explorer] KG multi-turn #${kgTurn + 1}: ${llm2Duration}ms`);
+
+      const parsed2 = parseResponse(nextResponse);
+      toolCalls = parsed2.toolCalls;
+      textContent = parsed2.textContent;
+      kgLastResponse = nextResponse;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') throw err;
       const msg = err instanceof Error ? err.message : String(err);
@@ -338,16 +460,18 @@ export async function runAgentCommand(
     }
   }
 
-  // Filter out any leftover meta calls (shouldn't be executed)
+  // Filter out any leftover meta/read-only calls (shouldn't be executed by executor)
   const executableCalls = toolCalls.filter(
-    (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner' && tc.name !== 'askClarification',
+    (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner'
+      && tc.name !== 'askClarification' && !KG_READONLY_TOOLS.has(tc.name),
   );
 
   // --- validation span ---
   const validationSpan = trace?.span('validation', { actions_proposed: executableCalls.length });
 
-  // 6. Validate action count
-  const actionCheck = validateActionCount(executableCalls.length);
+  // 6. Validate action count (KG read-only tools don't count)
+  const countableCalls = executableCalls.filter(tc => !KG_READONLY_TOOLS.has(tc.name));
+  const actionCheck = validateActionCount(countableCalls.length);
   if (!actionCheck.allowed) {
     validationSpan?.end({ actions_rejected: executableCalls.length });
     trace?.update({ outcome: 'error', path: routePath, total_duration_ms: Math.round(performance.now() - t0) });
