@@ -1,16 +1,17 @@
 import type { SupportedShapeType } from './types';
 
 export const SUPPORTED_SHAPE_TYPES: SupportedShapeType[] = [
-  'sticky', 'rect', 'circle', 'text', 'line', 'frame',
+  'sticky', 'rect', 'circle', 'text', 'line', 'frame', 'kg-node',
 ];
 
 export const SHAPE_DEFAULTS: Record<SupportedShapeType, { width: number; height: number; color: string }> = {
-  sticky: { width: 200, height: 200, color: '#FFE66D' },
-  rect:   { width: 160, height: 100, color: '#85C1E2' },
-  circle: { width: 120, height: 120, color: '#AA96DA' },
-  text:   { width: 200, height: 60,  color: '#333333' },
-  line:   { width: 200, height: 0,   color: '#333333' },
-  frame:  { width: 400, height: 300, color: '#f0f0f0' },
+  sticky:    { width: 200, height: 200, color: '#FFE66D' },
+  rect:      { width: 160, height: 100, color: '#85C1E2' },
+  circle:    { width: 120, height: 120, color: '#AA96DA' },
+  text:      { width: 200, height: 60,  color: '#333333' },
+  line:      { width: 200, height: 0,   color: '#333333' },
+  frame:     { width: 400, height: 300, color: '#f0f0f0' },
+  'kg-node': { width: 220, height: 80,  color: '#BDBDBD' },
 };
 
 export const COLOR_MAP: Record<string, string> = {

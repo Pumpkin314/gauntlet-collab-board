@@ -19,6 +19,7 @@ import CircleShape from './shapes/CircleShape';
 import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
+import KnowledgeNodeShape from './shapes/KnowledgeNodeShape';
 import ChatWidget from './ChatWidget';
 import type { ActiveTool, BoardObject } from '../types/board';
 import { getConnectedLines } from '../utils/connectorIndex';
@@ -54,6 +55,11 @@ registerShape('frame', {
   component: FrameShape,
   defaults:  { width: 400, height: 300, color: '#f0f0f0', content: 'Frame' },
   minWidth: 200, minHeight: 150,
+});
+registerShape('kg-node', {
+  component: KnowledgeNodeShape,
+  defaults:  { width: 220, height: 80, color: '#BDBDBD' },
+  minWidth: 140, minHeight: 60,
 });
 
 // ── local types ────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 // This file is the single source of truth for the board data schema.
 // All components, contexts, and the AI agent use these types.
 
-export type ShapeType = 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector' | 'frame';
+export type ShapeType = 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector' | 'frame' | 'kg-node';
 
 export type ActiveTool = 'cursor' | 'box-select' | 'sticky' | 'rect' | 'circle' | 'text' | 'line' | 'connector' | 'frame';
 
@@ -39,6 +39,11 @@ export interface BoardObject {
 
   // Frame containment — ID of the parent frame this object belongs to
   parentId?: string;
+
+  // Knowledge graph metadata (kg-node shapes only)
+  kgNodeId?: string;
+  kgConfidence?: 'mastered' | 'shaky' | 'gap' | 'unexplored';
+  kgGradeLevel?: string;
 
   // Ordering
   zIndex: number;

@@ -95,6 +95,7 @@ const SHAPE_DEFAULTS: Record<ShapeType, Partial<BoardObject>> = {
   line:      { width: 200, height:   0, color: '#333333', strokeWidth: 2 },
   connector: { width:   0, height:   0, color: '#666666', strokeWidth: 2 },
   frame:     { width: 400, height: 300, color: '#f0f0f0', content: 'Frame' },
+  'kg-node': { width: 220, height: 80, color: '#BDBDBD' },
 };
 
 // DebugInfo type and EMPTY_DEBUG are now in DebugContext.tsx
