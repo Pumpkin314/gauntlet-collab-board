@@ -80,7 +80,3 @@ The agent understands natural language. Examples:
 - [`final_submission/PRE-SEARCH.md`](final_submission/PRE-SEARCH.md) — Architecture pre-search document
 - [`final_submission/AI-DEVELOPMENT-LOG.md`](final_submission/AI-DEVELOPMENT-LOG.md) — AI tools, prompts, and learnings
 - [`final_submission/AI-COST-ANALYSIS.md`](final_submission/AI-COST-ANALYSIS.md) — Dev costs + production projections
-
-## License
-
-MIT
