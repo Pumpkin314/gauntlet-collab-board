@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BoardProvider } from '../contexts/BoardContext';
+import type { UserRole } from '../contexts/BoardContext';
 import { SelectionProvider } from '../contexts/SelectionContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getBoardMeta } from '../services/boardService';
@@ -9,77 +10,67 @@ import AccessDenied from './AccessDenied';
 import App from '../App';
 
 const isTestMode = import.meta.env.VITE_TEST_AUTH_BYPASS === 'true';
+const skipSync = import.meta.env.VITE_TEST_SKIP_SYNC === 'true';
 
 const LazyPerfBridge = isTestMode
   ? lazy(() => import('../components/PerfBridgeConnector'))
   : null;
 
-export type UserRole = 'owner' | 'editor' | 'viewer';
-
-function resolveRole(meta: BoardMeta, uid: string): UserRole | null {
-  if (meta.ownerId === uid) return 'owner';
-  const shared = meta.sharedWith?.[uid];
-  if (shared) return shared.role;
-  return null;
-}
-
 export default function BoardLayout() {
   const { boardId } = useParams<{ boardId: string }>();
   const { currentUser } = useAuth();
-  const [accessState, setAccessState] = useState<'loading' | 'granted' | 'denied'>('loading');
-  const [userRole, setUserRole] = useState<UserRole>('owner');
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (!currentUser || !boardId) return;
+    if (!boardId || !currentUser) return;
 
     // Skip access check in test mode
-    if (import.meta.env.VITE_TEST_AUTH_BYPASS === 'true') {
-      setAccessState('granted');
+    if (isTestMode || skipSync) {
       setUserRole('owner');
-      return;
-    }
-
-    // Skip Firestore calls when sync is disabled (test env with stub creds)
-    if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') {
-      setAccessState('granted');
-      setUserRole('owner');
+      setChecking(false);
       return;
     }
 
     let cancelled = false;
-    getBoardMeta(boardId).then((meta) => {
+    getBoardMeta(boardId).then((meta: BoardMeta | null) => {
       if (cancelled) return;
       if (!meta) {
-        // Board doesn't exist — allow creation (backward compat)
+        // Board doesn't exist — treat as owner for new boards
         setUserRole('owner');
-        setAccessState('granted');
-        return;
-      }
-      const role = resolveRole(meta, currentUser.uid);
-      if (role) {
-        setUserRole(role);
-        setAccessState('granted');
+      } else if (meta.ownerId === currentUser.uid) {
+        setUserRole('owner');
+      } else if (meta.sharedWith?.[currentUser.uid]) {
+        setUserRole(meta.sharedWith[currentUser.uid].role);
       } else {
-        setAccessState('denied');
+        setUserRole(null);
       }
+      setChecking(false);
     }).catch(() => {
-      if (!cancelled) setAccessState('granted');
+      if (!cancelled) {
+        setUserRole(null);
+        setChecking(false);
+      }
     });
-    return () => { cancelled = true; };
-  }, [currentUser, boardId]);
 
-  if (accessState === 'loading') {
+    return () => { cancelled = true; };
+  }, [boardId, currentUser]);
+
+  if (checking) {
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', color: '#888',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f5f7fa',
       }}>
-        Loading board...
+        <div style={{ color: '#888', fontSize: 16 }}>Loading board...</div>
       </div>
     );
   }
 
-  if (accessState === 'denied') {
+  if (!userRole) {
     return <AccessDenied />;
   }
 
