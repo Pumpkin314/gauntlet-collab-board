@@ -26,6 +26,7 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { FirestoreYjsProvider } from './firestoreYjsProvider';
 import { createWebrtcProvider } from './webrtcProvider';
+import { touchBoardTimestamp } from '../services/boardService';
 import type { BoardObject, PresenceUser, ShapeType } from '../types/board';
 import { setCursorPosition, removeCursor } from '../utils/cursorStore';
 import { useDebug } from './DebugContext';
@@ -671,6 +672,16 @@ export function BoardProvider({ boardId, children }: { boardId: string; children
 
     yObjects.observeDeep(syncToReact);
 
+    // Debounced board-meta timestamp touch (~5s) so the dashboard
+    // shows a recent "last edited" without adding hot-path latency.
+    let touchTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedTouch = () => {
+      if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') return;
+      if (touchTimer) clearTimeout(touchTimer);
+      touchTimer = setTimeout(() => touchBoardTimestamp(boardId), 5000);
+    };
+    yObjects.observeDeep(debouncedTouch);
+
     let firestoreProvider: FirestoreYjsProvider | null = null;
     if (!p2pOnlyRef.current) {
       // Firestore persistence (durable backup)
@@ -727,6 +738,8 @@ export function BoardProvider({ boardId, children }: { boardId: string; children
         icePathTimerRef.current = null;
       }
       yPresence.unobserveDeep(syncPresenceFromYjs);
+      yObjects.unobserveDeep(debouncedTouch);
+      if (touchTimer) clearTimeout(touchTimer);
       clearInterval(rateTimer);
       webrtcProvider.destroy();
       if (firestoreProvider) firestoreProvider.destroy();
