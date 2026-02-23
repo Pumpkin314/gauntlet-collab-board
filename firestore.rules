@@ -1,61 +1,64 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: check if the caller is the board owner
+    // Helper: get the parent board document
+    function boardDoc(boardId) {
+      return get(/databases/$(database)/documents/boards/$(boardId)).data;
+    }
+
     function isOwner(boardId) {
-      return request.auth != null
-        && get(/databases/$(database)/documents/boards/$(boardId)).data.ownerId == request.auth.uid;
-    }
-
-    // Helper: check if the caller has a share entry on the board
-    function getShareRole(boardId) {
-      return get(/databases/$(database)/documents/boards/$(boardId)).data.sharedWith[request.auth.uid].role;
-    }
-
-    function isShared(boardId) {
-      return request.auth != null
-        && request.auth.uid in get(/databases/$(database)/documents/boards/$(boardId)).data.sharedWithUids;
+      return request.auth != null && boardDoc(boardId).ownerId == request.auth.uid;
     }
 
     function isEditor(boardId) {
-      return isShared(boardId) && getShareRole(boardId) == 'editor';
+      return request.auth != null
+        && request.auth.uid in boardDoc(boardId).sharedWithUids
+        && boardDoc(boardId).sharedWith[request.auth.uid].role == 'editor';
     }
 
     function isViewer(boardId) {
-      return isShared(boardId) && getShareRole(boardId) == 'viewer';
+      return request.auth != null
+        && request.auth.uid in boardDoc(boardId).sharedWithUids
+        && boardDoc(boardId).sharedWith[request.auth.uid].role == 'viewer';
+    }
+
+    function hasAnyAccess(boardId) {
+      return isOwner(boardId) || isEditor(boardId) || isViewer(boardId);
     }
 
     // Board documents
     match /boards/{boardId} {
-      // Owner: full CRUD
       allow read: if request.auth != null && (
-        resource.data.ownerId == request.auth.uid || isShared(boardId)
-      );
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
-      allow update: if request.auth != null && (
         resource.data.ownerId == request.auth.uid
+        || request.auth.uid in resource.data.sharedWithUids
+      );
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update: if request.auth != null && (
+        // Owner can update anything
+        resource.data.ownerId == request.auth.uid
+        // Editors can update but NOT change sharing fields or ownership
         || (isEditor(boardId)
             && !request.resource.data.diff(resource.data).affectedKeys()
-                .hasAny(['sharedWith', 'sharedWithUids', 'ownerId']))
+                .hasAny(['sharedWith', 'sharedWithUids', 'ownerId', 'ownerName']))
       );
-      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
 
-      // Board subcollections: objects
+      // Board subcollections (objects, presence) inherit access from parent board
       match /objects/{objectId} {
-        allow read: if request.auth != null && (isOwner(boardId) || isShared(boardId));
-        allow write: if request.auth != null && (isOwner(boardId) || isEditor(boardId));
+        allow read: if hasAnyAccess(boardId);
+        allow write: if isOwner(boardId) || isEditor(boardId);
       }
 
-      // Board subcollections: presence
-      match /presence/{userId} {
-        allow read: if request.auth != null && (isOwner(boardId) || isShared(boardId));
-        allow write: if request.auth != null && (isOwner(boardId) || isShared(boardId));
+      match /presence/{presenceId} {
+        allow read: if hasAnyAccess(boardId);
+        allow write: if request.auth != null && hasAnyAccess(boardId);
       }
     }
 
-    // Users collection: anyone authenticated can read (for email lookup), self-only write
+    // User profiles for email-based lookup
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
