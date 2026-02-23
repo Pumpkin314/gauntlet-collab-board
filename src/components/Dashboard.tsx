@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserBoards, createBoard, deleteBoard } from '../services/boardService';
+import { getUserBoards, getSharedBoards, createBoard, deleteBoard } from '../services/boardService';
 import type { BoardMeta } from '../services/boardService';
 import ConfirmDialog from './ConfirmDialog';
 import './Dashboard.css';
@@ -35,6 +35,7 @@ export default function Dashboard() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const [boards, setBoards] = useState<BoardMeta[]>([]);
+  const [sharedBoards, setSharedBoards] = useState<BoardMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
@@ -47,6 +48,15 @@ export default function Dashboard() {
     });
     return unsub;
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (import.meta.env.VITE_TEST_SKIP_SYNC === 'true') return;
+    const unsub = getSharedBoards(currentUser.uid, setSharedBoards);
+    return unsub;
+  }, [currentUser]);
+
+  const atBoardLimit = boards.length >= 10;
 
   const handleCreate = useCallback(async () => {
     if (!currentUser) return;
@@ -92,9 +102,15 @@ export default function Dashboard() {
       </div>
 
       <div className="dashboard-grid">
-        <button className="board-card new-board-card" onClick={() => void handleCreate()}>
+        <button
+          className="board-card new-board-card"
+          onClick={() => void handleCreate()}
+          disabled={atBoardLimit}
+          title={atBoardLimit ? 'Board limit reached (max 10)' : undefined}
+          style={atBoardLimit ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+        >
           <div className="new-board-icon">+</div>
-          <div className="new-board-label">New Board</div>
+          <div className="new-board-label">{atBoardLimit ? 'Limit Reached' : 'New Board'}</div>
         </button>
 
         {boards.map((board) => (
@@ -121,6 +137,35 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {sharedBoards.length > 0 && (
+        <>
+          <h2 className="dashboard-section-title">Shared with me</h2>
+          <div className="dashboard-grid">
+            {sharedBoards.map((board) => {
+              const myShare = board.sharedWith?.[currentUser.uid];
+              return (
+                <div
+                  key={board.id}
+                  className="board-card"
+                  onClick={() => navigate(`/board/${board.id}`)}
+                >
+                  <div className="board-card-preview" />
+                  <div className="board-card-info">
+                    <div className="board-card-title">{board.title}</div>
+                    <div className="board-card-meta">
+                      {board.ownerName}
+                      {myShare && (
+                        <span className="board-card-role-badge">{myShare.role}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {deletingId && (
         <ConfirmDialog

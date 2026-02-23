@@ -135,6 +135,23 @@ body {
   color: #ff6b6b;
 }
 
+.share-btn {
+  padding: 8px 16px;
+  border: 2px solid #4ECDC4;
+  background: #4ECDC4;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.share-btn:hover {
+  background: #3db8b0;
+  border-color: #3db8b0;
+}
+
 /* Presence awareness */
 .user-profile-section {
   position: relative;
