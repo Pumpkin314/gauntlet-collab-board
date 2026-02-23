@@ -155,8 +155,7 @@ export default function Canvas() {
   const [colorPickerPos,  setColorPickerPos]  = useState({ x: 0, y: 0 });
   const [spaceHeld,       setSpaceHeld]       = useState(false);
   const [inlineEdit,      setInlineEdit]      = useState<InlineEdit | null>(null);
-  const isDraggingShapeRef = useRef(false);
-  const [, setDragVisTick] = useState(0);
+  const [isDraggingShape, setIsDraggingShape] = useState(false);
   const [lineVariant,     setLineVariant]     = useState<LineVariant>('line');
 
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -524,7 +523,7 @@ export default function Canvas() {
       setStagePos(pos);
       dotGridRef.current?.update(pos, stageScaleRef.current);
     } else {
-      { isDraggingShapeRef.current = false; setDragVisTick(t => t + 1); };
+      setIsDraggingShape(false);
 
       // Persist connector updates
       if (connectorDragCacheRef.current.length > 0) {
@@ -814,8 +813,8 @@ export default function Canvas() {
   // ── Stable callbacks for child props ─────────────────────────────────────
   /** Called by ObjectRenderer when a transform begins; marks drag-in-progress
    *  so the selection action menu stays hidden (avoids stale-position jitter). */
-  const handleTransformStart = useCallback(() => { isDraggingShapeRef.current = true; setDragVisTick(t => t + 1); }, []);
-  const handleTransformEnd   = useCallback(() => { isDraggingShapeRef.current = false; setDragVisTick(t => t + 1); }, []);
+  const handleTransformStart = useCallback(() => setIsDraggingShape(true), []);
+  const handleTransformEnd   = useCallback(() => setIsDraggingShape(false), []);
 
   // ── Connector updates during Transformer rotate/resize ──────────────────
   interface TransformConnectorEntry {
@@ -828,7 +827,7 @@ export default function Canvas() {
   const transformConnectorCacheRef = useRef<TransformConnectorEntry[]>([]);
 
   const handleTransformerTransformStart = useCallback(() => {
-    { isDraggingShapeRef.current = true; setDragVisTick(t => t + 1); };
+    setIsDraggingShape(true);
     // Cache connected lines for all nodes being transformed
     const entries: TransformConnectorEntry[] = [];
     const layer = layerRef.current;
@@ -901,7 +900,7 @@ export default function Canvas() {
   }, []);
 
   const handleTransformerTransformEnd = useCallback(() => {
-    { isDraggingShapeRef.current = false; setDragVisTick(t => t + 1); };
+    setIsDraggingShape(false);
 
     if (transformConnectorCacheRef.current.length === 0) return;
     const layer = layerRef.current;
@@ -948,13 +947,13 @@ export default function Canvas() {
   // ── Transformer drag: move selected lines with group ────────────────────
   const trDragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const handleTransformerDragStart = useCallback(() => {
-    { isDraggingShapeRef.current = true; setDragVisTick(t => t + 1); };
+    setIsDraggingShape(true);
     const tr = transformerRef.current;
     if (tr) trDragStartPosRef.current = { x: tr.x(), y: tr.y() };
   }, []);
 
   const handleTransformerDragEnd = useCallback(() => {
-    { isDraggingShapeRef.current = false; setDragVisTick(t => t + 1); };
+    setIsDraggingShape(false);
     const tr = transformerRef.current;
     if (!tr || !trDragStartPosRef.current) return;
     const dx = tr.x() - trDragStartPosRef.current.x;
@@ -1002,19 +1001,13 @@ export default function Canvas() {
    *  canvas pans so the selection action menu is hidden during shape movement. */
   const handleDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) {
-      isDraggingShapeRef.current = true;
+      setIsDraggingShape(true);
 
       // If dragging a frame, cache descendant node refs for imperative movement
       const node = e.target;
       const konvaId = node.id();
       const objId = konvaId.replace('note-', '');
       const obj = objectsRef.current.find(o => o.id === objId);
-
-      // Defer the re-render tick for frame drags so the imperative child
-      // positions aren't overwritten by React before the first dragMove.
-      if (obj?.type !== 'frame') {
-        setDragVisTick(t => t + 1);
-      }
 
       // Cache connected lines for imperative movement during drag
       const connEntries: ConnectorDragEntry[] = [];
@@ -1230,7 +1223,7 @@ export default function Canvas() {
 
       {/* Selection action menu — HTML overlay, never affects Transformer bbox.
           Hidden while a shape drag is in progress to avoid stale position lag. */}
-      {!isDraggingShapeRef.current && !isPanningRef.current && selectedIds.size === 1 && (() => {
+      {!isDraggingShape && !isPanningRef.current && selectedIds.size === 1 && (() => {
         const selId  = [...selectedIds][0];
         const selObj = objects.find((o) => o.id === selId);
         if (!selObj || !selId) return null;

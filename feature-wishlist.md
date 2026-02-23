@@ -82,11 +82,11 @@ Konva Transformer recalculates bounding boxes for all attached nodes per frame. 
 ### Segment drag (move entire line)
 Dragging the middle segment of a line/arrow should translate both endpoints in tandem, preserving relative positioning. Currently only endpoint handles are draggable.
 
-### Magnetic endpoint snapping
-When dragging a line endpoint near another object's boundary, it should magnetize/snap to the nearest edge point within a zoom-dependent threshold. Holding Shift bypasses snapping and uses exact cursor position. This lets lines act as visual connectors between objects.
+### ~~Magnetic endpoint snapping~~ ✅ Fixed
+Implemented in PR #31 (smart connectors). Lines snap to object edges with free edge slide during drag.
 
-### Lines in group selection should move with the group
-Lines that belong to a multi-select group (or frame children) currently stay put when the rest of the group is moved. They should translate their points along with the group delta.
+### Lines in group selection / frame children should move with the group
+Lines that belong to a multi-select group (or frame children) currently stay put when the rest of the group is moved. They should translate their points along with the group delta. **Note:** Smart connectors (PR #31) handle connected lines during individual object drag, but lines within frame children still don't move imperatively during frame drag (see Epic 5 in frames sprint plan).
 
 ---
 
@@ -123,11 +123,8 @@ Each user should have a boards page listing all boards they own or have access t
 - Ctrl+Z / Ctrl+Shift+Z shortcuts
 - Track object creation, deletion, moves, edits
 
-### Keyboard Shortcuts
-- Delete selected object (Backspace/Delete key)
-- Duplicate selected object (Ctrl+D)
-- Copy/paste (Ctrl+C / Ctrl+V)
-- Select all (Ctrl+A)
+### ~~Keyboard Shortcuts~~ ✅ Implemented
+Delete, Ctrl+D, Ctrl+C/V, Ctrl+A all implemented.
 
 ### Object Grouping
 - Multi-select with Shift+Click or drag box
@@ -239,19 +236,26 @@ Rotating a frame causes child objects to snap to incorrect x/y positions. The AA
 
 ---
 
-### Removing a child glitches sibling positions during frame drag
-After a child is removed from a frame (e.g. dragged out), remaining children visually glitch when the frame is subsequently dragged, then snap back to correct positions on drag end. Likely caused by stale cached node refs/origins from a previous drag session.
+### ~~Removing a child glitches sibling positions during frame drag~~ ✅ Fixed
+Fixed in PR #33 (`d936c8a`). Child origins now read from Yjs data instead of Konva nodes at drag-start, preventing stale imperative positions from prior drag sessions.
+
+---
+
+### ~~Multi-select drag releases children from co-selected frames~~ ✅ Fixed
+When multi-selecting a frame + its children and dragging, children were sometimes released because drag-end events fired in non-deterministic order — a child's containment was checked against the frame's old (pre-drag) position. Fixed in PR #33 (`d936c8a`) by skipping containment recheck when a child's parent frame is in the active selection.
 
 ---
 
 ### Frame children jump/glitch after repositioning within frame
-After objects are manually repositioned inside a frame, subsequent frame movement causes the children to jump or glitch before settling. Likely a stale-origin or delta-accumulation issue in the imperative frame-drag child movement logic.
+After objects are manually repositioned inside a frame, subsequent frame movement causes the children to jump or glitch before settling. Specifically occurs when only the frame is selected and dragged — positions correct on mouse release (Yjs commit is accurate, imperative drag is not).
+
+**Investigated root causes (ruled out):**
+- Konva vs Yjs origin mismatch at drag-start — making both read from Yjs didn't help
+- `setIsDraggingShape(true)` triggering re-render that overwrites imperative positions — skipping the re-render for frame drags reduced but didn't eliminate the jump
+- `useLayoutEffect` to re-apply imperative positions after React commit — no difference
+
+**Remaining hypothesis:** Other mid-drag re-renders (awareness updates, viewport culling throttle, etc.) reset child Konva node positions via `x={data.x}` props in BaseShape. May require a fundamentally different approach, e.g. suppressing React position props on children during frame drag, or moving frame-child movement entirely into Konva's group hierarchy.
 
 ---
 
-### Duplicated objects share identity
-Duplicated objects (Ctrl+D, Ctrl+V) behave as linked copies — actions on one affect the other. They should be fully independent entities with unique IDs and no shared state.
-
----
-
-**Last Updated:** February 21, 2026
+**Last Updated:** February 22, 2026
