@@ -209,6 +209,7 @@ export default function Canvas() {
   const isBoxDraggingRef  = useRef(false);
   const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
   const isPanningRef = useRef(false);
+  const minimapAnimRef = useRef(0);
   const lastDblClickRef = useRef(0);
   const panSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorPosRef = useRef({ x: 0, y: 0 });
@@ -1136,6 +1137,8 @@ export default function Canvas() {
       }
     } else {
       isPanningRef.current = true;
+      cancelAnimationFrame(minimapAnimRef.current);
+      minimapAnimRef.current = 0;
       layerRef.current?.listening(false);
     }
   }, []);
@@ -1293,9 +1296,8 @@ export default function Canvas() {
           const stage = stageRef.current;
           if (!stage) return;
 
-          // Smooth lerp animation toward target
+          cancelAnimationFrame(minimapAnimRef.current);
           const LERP = 0.25;
-          let raf = 0;
           const animate = () => {
             const cur = stagePosRef.current;
             const dx = targetPos.x - cur.x;
@@ -1305,15 +1307,15 @@ export default function Canvas() {
               stage.position(targetPos);
               stage.batchDraw();
               setStagePos(targetPos);
+              minimapAnimRef.current = 0;
               return;
             }
             const next = { x: cur.x + dx * LERP, y: cur.y + dy * LERP };
             stagePosRef.current = next;
             stage.position(next);
             stage.batchDraw();
-            raf = requestAnimationFrame(animate);
+            minimapAnimRef.current = requestAnimationFrame(animate);
           };
-          cancelAnimationFrame(raf);
           animate();
         }, [windowSize.width, windowSize.height])}
       />
