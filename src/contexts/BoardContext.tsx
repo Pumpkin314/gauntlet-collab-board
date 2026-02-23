@@ -208,10 +208,13 @@ function makeDiffSync(
 
 // ── context types ──────────────────────────────────────────────────────────
 
+export type UserRole = 'owner' | 'editor' | 'viewer';
+
 interface BoardDataValue {
   objects: BoardObject[];
   presence: PresenceUser[];
   loading: boolean;
+  userRole: UserRole;
 }
 
 interface BoardActionsValue {
@@ -252,7 +255,7 @@ export function useBoard(): BoardContextValue {
 
 // ── provider ───────────────────────────────────────────────────────────────
 
-export function BoardProvider({ boardId, children }: { boardId: string; children: ReactNode }) {
+export function BoardProvider({ boardId, userRole = 'owner', children }: { boardId: string; userRole?: UserRole; children: ReactNode }) {
   const { currentUser } = useAuth();
 
   const {
@@ -968,8 +971,8 @@ export function BoardProvider({ boardId, children }: { boardId: string; children
   // ── Context values ────────────────────────────────────────────────────────
 
   const dataValue = useMemo<BoardDataValue>(() => ({
-    objects, presence, loading,
-  }), [objects, presence, loading]);
+    objects, presence, loading, userRole,
+  }), [objects, presence, loading, userRole]);
 
   const actionsValue = useMemo<BoardActionsValue>(() => ({
     createObject, updateObject, deleteObject, deleteAllObjects,
