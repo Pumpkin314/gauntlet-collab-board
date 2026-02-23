@@ -20,6 +20,7 @@ import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
 import ChatWidget from './ChatWidget';
+import { Minimap } from './Canvas/Minimap';
 import type { ActiveTool, BoardObject } from '../types/board';
 import { getConnectedLines } from '../utils/connectorIndex';
 import { resolveEndpoint } from '../utils/anchorResolve';
@@ -1275,6 +1276,29 @@ export default function Canvas() {
           🗑️ Clear All
         </button>
       )}
+
+      <Minimap
+        objectsRef={objectsRef}
+        stagePosRef={stagePosRef}
+        stageScaleRef={stageScaleRef}
+        isPanningRef={isPanningRef}
+        windowWidth={windowSize.width}
+        windowHeight={windowSize.height}
+        onPanTo={useCallback((worldX: number, worldY: number) => {
+          const scale = stageScaleRef.current;
+          const newPos = {
+            x: -worldX * scale + windowSize.width / 2,
+            y: -worldY * scale + windowSize.height / 2,
+          };
+          stagePosRef.current = newPos;
+          setStagePos(newPos);
+          const stage = stageRef.current;
+          if (stage) {
+            stage.position(newPos);
+            stage.batchDraw();
+          }
+        }, [windowSize.width, windowSize.height])}
+      />
 
       <DebugOverlay stageScaleRef={stageScaleRef} stagePosRef={stagePosRef} />
 
