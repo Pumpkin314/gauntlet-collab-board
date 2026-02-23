@@ -59,7 +59,7 @@ export default memo(function InfoOverlay({
         }
       `}</style>
 
-      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {loading && (
           <span style={{
             display: 'inline-block',
@@ -71,14 +71,21 @@ export default memo(function InfoOverlay({
             flexShrink: 0,
           }} />
         )}
-        <span>{zoomLabel} · {panLabel} · {objectCount} obj</span>
+        <span style={{ display: 'flex', gap: 12, textAlign: 'center' }}>
+          <span>{zoomLabel}</span>
+          <span style={{ color: '#555' }}>·</span>
+          <span>{panLabel}</span>
+          <span style={{ color: '#555' }}>·</span>
+          <span>{objectCount} obj</span>
+        </span>
       </span>
 
-      <div className="info-details" style={{ marginTop: 6, fontSize: 10, color: '#999', lineHeight: 1.6 }}>
-        • Drag canvas to pan<br />
-        • Scroll to zoom<br />
-        • Double-click to create<br />
-        • Click shape to select
+      <div className="info-details" style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 4, fontSize: 9, color: '#666', fontStyle: 'italic' }}>
+        <span style={{ textAlign: 'center' }}>zoom<br />(scroll)</span>
+        <span style={{ color: 'transparent' }}>·</span>
+        <span style={{ textAlign: 'center' }}>pan<br />(drag)</span>
+        <span style={{ color: 'transparent' }}>·</span>
+        <span style={{ textAlign: 'center' }}>obj<br />(2x click)</span>
       </div>
     </div>
   );
