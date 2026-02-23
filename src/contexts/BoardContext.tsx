@@ -680,6 +680,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         });
       };
       firestoreProvider.onSynced = () => {
+        // Purge stale presence entries resurrected from CRDT history
+        const myKey = yPresenceKeyRef.current;
+        yPresence.doc!.transact(() => {
+          yPresence.forEach((_val, key) => {
+            if (key !== myKey) yPresence.delete(key);
+          });
+        });
         syncToReact();
         setLoading(false);
         updateDebug({ firestoreSynced: true });
@@ -711,12 +718,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         icePathTimerRef.current = null;
       }
       yPresence.unobserveDeep(syncPresenceFromYjs);
-      if (yPresenceKeyRef.current) {
-        yPresence.delete(yPresenceKeyRef.current);
-      }
       clearInterval(rateTimer);
       webrtcProvider.destroy();
       if (firestoreProvider) firestoreProvider.destroy();
+      if (yPresenceKeyRef.current) {
+        yPresence.delete(yPresenceKeyRef.current);
+      }
       ydoc.destroy();
       ydocRef.current     = null;
       yObjectsRef.current = null;

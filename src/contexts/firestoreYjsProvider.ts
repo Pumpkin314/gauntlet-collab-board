@@ -64,6 +64,7 @@ export class FirestorePersistenceProvider {
     // When the local doc mutates (not from Firestore), schedule a snapshot write
     this.updateHandler = (_update: Uint8Array, origin: unknown) => {
       if (origin === 'firestore') return;
+      if (!this.synced) return;
       this.schedulePersist();
     };
     ydoc.on('update', this.updateHandler);
@@ -134,7 +135,7 @@ export class FirestorePersistenceProvider {
     if (this.persistTimeout !== null) {
       clearTimeout(this.persistTimeout);
       this.persistTimeout = null;
-      void this.persist(); // flush final state on unmount
+      if (this.synced) void this.persist();
     }
     this.ydoc.off('update', this.updateHandler);
   }
