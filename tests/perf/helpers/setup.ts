@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 
 /** Navigates to the app and waits for the perf bridge to be available. */
 export async function launchApp(page: Page) {
-  await page.goto('/');
+  await page.goto('/board/test-board');
   await page.waitForFunction(
     () => typeof window.__perfBridge !== 'undefined',
     { timeout: 15_000 },

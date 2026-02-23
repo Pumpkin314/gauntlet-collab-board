@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { BoardProvider } from '../contexts/BoardContext';
 import { SelectionProvider } from '../contexts/SelectionContext';
 import App from '../App';
