@@ -29,6 +29,7 @@ function Dot({ color }: { color: string }) {
 }
 
 export default memo(function DebugOverlay({ stageScaleRef, stagePosRef }: DebugOverlayProps) {
+  if (!import.meta.env.DEV) return null;
   const { presence, objects } = useBoard();
   const { debugInfo, localCursorRef, yjsLatencyMs, yjsReceiveGapMs, yjsLatestSampleMs, yjsReceiveRate, yjsSendRate, p2pOnly } = useDebug();
   const [visible, setVisible] = useState(false);
