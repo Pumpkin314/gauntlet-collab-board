@@ -72,20 +72,20 @@ export default memo(function InfoOverlay({
           }} />
         )}
         <div style={{ display: 'flex', gap: 0, textAlign: 'center' }}>
-          <span style={{ flex: 1 }}>{zoomLabel}</span>
-          <span style={{ color: '#555', padding: '0 6px' }}>·</span>
-          <span style={{ flex: 1 }}>{panLabel}</span>
-          <span style={{ color: '#555', padding: '0 6px' }}>·</span>
-          <span style={{ flex: 1 }}>{objectCount}</span>
+          <span style={{ flex: 1, minWidth: 44 }}>{zoomLabel}</span>
+          <span style={{ color: '#555', padding: '0 4px' }}>·</span>
+          <span style={{ flex: 1, minWidth: 44 }}>{panLabel}</span>
+          <span style={{ color: '#555', padding: '0 4px' }}>·</span>
+          <span style={{ flex: 1, minWidth: 44 }}>{objectCount}</span>
         </div>
       </span>
 
       <div className="info-details" style={{ display: 'flex', gap: 0, marginTop: 4, fontSize: 9, color: '#666', fontStyle: 'italic' }}>
-        <span style={{ flex: 1, textAlign: 'center' }}>zoom<br />(scroll)</span>
-        <span style={{ padding: '0 6px', color: 'transparent' }}>·</span>
-        <span style={{ flex: 1, textAlign: 'center' }}>pan<br />(drag)</span>
-        <span style={{ padding: '0 6px', color: 'transparent' }}>·</span>
-        <span style={{ flex: 1, textAlign: 'center' }}>obj<br />(2x click)</span>
+        <span style={{ flex: 1, minWidth: 44, textAlign: 'center' }}>zoom<br />(scroll)</span>
+        <span style={{ padding: '0 4px', color: 'transparent' }}>·</span>
+        <span style={{ flex: 1, minWidth: 44, textAlign: 'center' }}>pan<br />(drag)</span>
+        <span style={{ padding: '0 4px', color: 'transparent' }}>·</span>
+        <span style={{ flex: 1, minWidth: 44, textAlign: 'center' }}>obj<br />(2x click)</span>
       </div>
     </div>
   );
