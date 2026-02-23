@@ -17,6 +17,8 @@
     "test:perf:multiplayer": "playwright test tests/perf/phase6-multiplayer.spec.ts --config playwright.multiplayer.config.ts"
   },
   "dependencies": {
+    "@types/dagre": "^0.7.53",
+    "dagre": "^0.8.5",
     "firebase": "^11.1.0",
     "konva": "^9.3.19",
     "langfuse": "^3.38.6",
@@ -35,6 +37,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.9.3",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^4.0.18"
   }
 }
