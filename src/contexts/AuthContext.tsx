@@ -75,9 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       setLoading(false);
+      if (user && import.meta.env.VITE_TEST_SKIP_SYNC !== 'true') {
+        const { ensureUserProfile } = await import('../services/userService');
+        ensureUserProfile(user).catch((e) =>
+          console.error('[AuthContext] ensureUserProfile failed:', e),
+        );
+      }
     });
     return unsubscribe;
   }, []);
