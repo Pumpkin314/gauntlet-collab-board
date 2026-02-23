@@ -250,9 +250,8 @@ export function useBoard(): BoardContextValue {
 
 // ── provider ───────────────────────────────────────────────────────────────
 
-export function BoardProvider({ children }: { children: ReactNode }) {
+export function BoardProvider({ boardId, children }: { boardId: string; children: ReactNode }) {
   const { currentUser } = useAuth();
-  const boardId = 'default-board';
 
   const {
     updateDebug, debugInfoRef, setYjsLatencyMs, setYjsReceiveGapMs,

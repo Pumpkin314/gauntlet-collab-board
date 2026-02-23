@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Canvas from './components/Canvas';
-import Login from './components/Login';
 import InactivityWarningModal from './components/InactivityWarningModal';
 import { useAuth } from './contexts/AuthContext';
 import { useBoard } from './contexts/BoardContext';
@@ -29,14 +29,15 @@ function App() {
   const [imageError, setImageError] = useState(false);
   const [showPresence, setShowPresence] = useState(false);
 
-  if (!currentUser) {
-    return <Login />;
-  }
+  if (!currentUser) return null;
 
   return (
     <div className="app">
       {/* Top bar with user profile */}
       <div data-testid="top-bar" className="top-bar">
+        <div className="back-nav">
+          <Link to="/" className="back-to-dashboard">← Boards</Link>
+        </div>
         <div className="user-profile-section">
           <div className="user-profile">
             {currentUser.photoURL && !imageError ? (

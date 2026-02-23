@@ -61,6 +61,25 @@ body {
   border-color: #4ECDC4;
 }
 
+.back-to-dashboard {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.back-to-dashboard:hover {
+  background: #f0fffe;
+  color: #4ECDC4;
+}
+
 .user-profile {
   display: flex;
   align-items: center;
