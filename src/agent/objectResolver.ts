@@ -18,6 +18,9 @@ export interface ResolvedObject {
   height: number;
   color: string;
   content?: string;
+  kgNodeId?: string;
+  kgConfidence?: string;
+  kgGradeLevel?: string;
 }
 
 /**
@@ -104,5 +107,8 @@ function toResolved(obj: BoardObject): ResolvedObject {
   if (obj.content !== undefined) {
     resolved.content = obj.content;
   }
+  if (obj.kgNodeId) resolved.kgNodeId = obj.kgNodeId;
+  if (obj.kgConfidence) resolved.kgConfidence = obj.kgConfidence;
+  if (obj.kgGradeLevel) resolved.kgGradeLevel = obj.kgGradeLevel;
   return resolved;
 }

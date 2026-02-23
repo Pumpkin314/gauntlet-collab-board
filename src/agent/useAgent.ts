@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AgentMessage, ViewportCenter } from './types';
 import { runAgentCommand } from './pipeline';
+import { getPipelineConfig } from './pipeline';
 import { useBoardActions } from '../contexts/BoardContext';
 import { useAuth } from '../contexts/AuthContext';
+
+export type AgentMode = 'boardie' | 'explorer';
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -17,6 +20,8 @@ interface UseAgentReturn {
   toggleOpen: () => void;
   clearMessages: () => void;
   cancelRequest: () => void;
+  mode: AgentMode;
+  setMode: (mode: AgentMode) => void;
 }
 
 export function useAgent(
@@ -26,12 +31,24 @@ export function useAgent(
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [mode, setModeState] = useState<AgentMode>('boardie');
 
   const actions = useBoardActions();
   const { currentUser } = useAuth();
 
-  const historyRef = useRef<ConversationMessage[]>([]);
-  const sessionObjectsRef = useRef<Map<string, { type: string; content?: string; color?: string; createdAt: number }>>(new Map());
+  // Per-mode conversation histories and session objects
+  const historyRef = useRef<Record<AgentMode, ConversationMessage[]>>({
+    boardie: [],
+    explorer: [],
+  });
+  const sessionObjectsRef = useRef<Record<AgentMode, Map<string, { type: string; content?: string; color?: string; createdAt: number }>>>({
+    boardie: new Map(),
+    explorer: new Map(),
+  });
+  const messagesPerModeRef = useRef<Record<AgentMode, AgentMessage[]>>({
+    boardie: [],
+    explorer: [],
+  });
   const streamingIdRef = useRef<string>('streaming-' + crypto.randomUUID());
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -49,13 +66,25 @@ export function useAgent(
     };
   }, [stagePosRef, stageScaleRef]);
 
+  const setMode = useCallback((newMode: AgentMode) => {
+    if (newMode === mode) return;
+    // Cancel any inflight request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    // Save current mode's messages
+    messagesPerModeRef.current[mode] = messages;
+    // Switch and restore
+    setModeState(newMode);
+    setMessages(messagesPerModeRef.current[newMode]);
+    setIsLoading(false);
+  }, [mode, messages]);
+
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
 
     const userId = currentUser?.uid ?? 'anonymous';
 
-    // Add user message to chat
     const userMsg: AgentMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -86,10 +115,12 @@ export function useAgent(
       };
 
       // Inject session memory into conversation context
-      let historyWithSessionMemory = historyRef.current;
-      if (sessionObjectsRef.current.size > 0) {
+      const currentHistory = historyRef.current[mode];
+      const currentSessionObjects = sessionObjectsRef.current[mode];
+      let historyWithSessionMemory = currentHistory;
+      if (currentSessionObjects.size > 0) {
         const allObjects = actions.getAllObjects();
-        const sessionIds = new Set(sessionObjectsRef.current.keys());
+        const sessionIds = new Set(currentSessionObjects.keys());
         const liveSessionObjects = allObjects
           .filter((obj) => sessionIds.has(obj.id))
           .map((obj) => ({ id: obj.id, type: obj.type, content: obj.content, x: Math.round(obj.x), y: Math.round(obj.y), color: obj.color }));
@@ -99,9 +130,11 @@ export function useAgent(
             role: 'user',
             content: `[Session memory] Objects you created this session: ${JSON.stringify(liveSessionObjects)}`,
           };
-          historyWithSessionMemory = [memoryBlock, ...historyRef.current];
+          historyWithSessionMemory = [memoryBlock, ...currentHistory];
         }
       }
+
+      const pipelineConfig = getPipelineConfig(mode);
 
       const { messages: resultMessages, createdObjectIds } = await runAgentCommand(
         trimmed,
@@ -112,6 +145,7 @@ export function useAgent(
         actions.getAllObjects,
         onProgress,
         abortController.signal,
+        pipelineConfig,
       );
 
       // Store newly created objects in session memory
@@ -119,7 +153,7 @@ export function useAgent(
         const allObjects = actions.getAllObjects();
         const obj = allObjects.find((o) => o.id === id);
         if (obj) {
-          sessionObjectsRef.current.set(id, {
+          currentSessionObjects.set(id, {
             type: obj.type,
             content: obj.content,
             color: obj.color,
@@ -128,13 +162,12 @@ export function useAgent(
         }
       }
 
-      historyRef.current = [
-        ...historyRef.current,
+      historyRef.current[mode] = [
+        ...currentHistory,
         { role: 'user', content: trimmed },
         { role: 'assistant', content: resultMessages.map((m) => m.content).join('\n') },
       ];
 
-      // Remove streaming status and add final results
       setMessages((prev) => [...prev.filter((m) => m.id !== sid), ...resultMessages]);
       streamingIdRef.current = 'streaming-' + crypto.randomUUID();
     } catch (err) {
@@ -151,7 +184,7 @@ export function useAgent(
       abortControllerRef.current = null;
       setIsLoading(false);
     }
-  }, [isLoading, currentUser, actions, getViewportCenter]);
+  }, [isLoading, currentUser, actions, getViewportCenter, mode]);
 
   const toggleOpen = useCallback(() => {
     setIsOpen((prev) => !prev);
@@ -164,9 +197,9 @@ export function useAgent(
 
   const clearMessages = useCallback(() => {
     setMessages([]);
-    historyRef.current = [];
-    sessionObjectsRef.current.clear();
-  }, []);
+    historyRef.current[mode] = [];
+    sessionObjectsRef.current[mode].clear();
+  }, [mode]);
 
-  return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest };
+  return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode };
 }

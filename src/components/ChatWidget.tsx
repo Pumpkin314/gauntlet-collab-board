@@ -1,25 +1,52 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { AgentMessage } from '../agent/types';
 import { useAgent } from '../agent/useAgent';
+import type { AgentMode } from '../agent/useAgent';
 
 interface ChatWidgetProps {
   stagePosRef: React.RefObject<{ x: number; y: number }>;
   stageScaleRef: React.RefObject<number>;
 }
 
+const MODE_CONFIG: Record<AgentMode, {
+  label: string;
+  icon: string;
+  color: string;
+  greeting: string;
+  hint: string;
+  placeholder: string;
+}> = {
+  boardie: {
+    label: 'Boardie',
+    icon: 'B',
+    color: '#4ECDC4',
+    greeting: "Hi! I'm Boardie. Tell me what to create on the board.",
+    hint: 'Try: "Add a yellow sticky note that says User Research"',
+    placeholder: 'Tell Boardie what to do...',
+  },
+  explorer: {
+    label: 'Learning Explorer',
+    icon: '🧭',
+    color: '#7C4DFF',
+    greeting: "Hi there! I'm the Learning Explorer. Let's discover what you know in math!",
+    hint: 'Try: "I\'m in 5th grade"',
+    placeholder: 'Tell me about your math knowledge...',
+  },
+};
+
 export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetProps) {
-  const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest } = useAgent(stagePosRef, stageScaleRef);
+  const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode } = useAgent(stagePosRef, stageScaleRef);
   const [inputValue, setInputValue] = useState('');
   const [clickedOptions, setClickedOptions] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll on new messages
+  const cfg = MODE_CONFIG[mode];
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Focus input when panel opens
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
@@ -49,6 +76,11 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
     }
   }, [handleSend]);
 
+  const handleModeToggle = useCallback(() => {
+    if (isLoading) return;
+    setMode(mode === 'boardie' ? 'explorer' : 'boardie');
+  }, [isLoading, mode, setMode]);
+
   // Collapsed toggle tab
   if (!isOpen) {
     return (
@@ -60,7 +92,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
           right: 0,
           top: '50%',
           transform: 'translateY(-50%)',
-          background: '#4ECDC4',
+          background: cfg.color,
           color: 'white',
           border: 'none',
           borderRadius: '8px 0 0 8px',
@@ -74,7 +106,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
           letterSpacing: 1,
         }}
       >
-        Boardie
+        {cfg.label}
       </button>
     );
   }
@@ -110,17 +142,35 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
             width: 28,
             height: 28,
             borderRadius: '50%',
-            background: '#4ECDC4',
+            background: cfg.color,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
             fontSize: 14,
             fontWeight: 700,
-          }}>B</div>
-          <span style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>Boardie</span>
+          }}>{cfg.icon}</div>
+          <span style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>{cfg.label}</span>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
+          {/* Mode toggle */}
+          <button
+            onClick={handleModeToggle}
+            disabled={isLoading}
+            title={`Switch to ${mode === 'boardie' ? 'Learning Explorer' : 'Boardie'}`}
+            style={{
+              background: 'none',
+              border: '1px solid #ddd',
+              cursor: isLoading ? 'default' : 'pointer',
+              fontSize: 11,
+              color: '#666',
+              padding: '4px 8px',
+              borderRadius: 4,
+              opacity: isLoading ? 0.4 : 1,
+            }}
+          >
+            {mode === 'boardie' ? '🧭 Explorer' : '🎨 Boardie'}
+          </button>
           {messages.length > 0 && (
             <button
               data-testid="boardie-clear"
@@ -177,9 +227,9 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
             marginTop: 40,
             lineHeight: 1.5,
           }}>
-            Hi! I'm Boardie. Tell me what to create on the board.
+            {cfg.greeting}
             <br /><br />
-            Try: "Add a yellow sticky note that says User Research"
+            {cfg.hint}
           </div>
         )}
 
@@ -187,6 +237,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
           <MessageBubble
             key={msg.id}
             message={msg}
+            accentColor={cfg.color}
             onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
             selectedOption={clickedOptions.get(msg.id)}
           />
@@ -221,7 +272,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Tell Boardie what to do..."
+            placeholder={cfg.placeholder}
             rows={1}
             style={{
               flex: 1,
@@ -236,7 +287,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
               maxHeight: 100,
               overflowY: 'auto',
             }}
-            onFocus={(e) => { e.target.style.borderColor = '#4ECDC4'; }}
+            onFocus={(e) => { e.target.style.borderColor = cfg.color; }}
             onBlur={(e) => { e.target.style.borderColor = '#ddd'; }}
           />
           {isLoading ? (
@@ -263,7 +314,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
               onClick={handleSend}
               disabled={!inputValue.trim()}
               style={{
-                background: inputValue.trim() ? '#4ECDC4' : '#ccc',
+                background: inputValue.trim() ? cfg.color : '#ccc',
                 color: 'white',
                 border: 'none',
                 borderRadius: 8,
@@ -283,7 +334,12 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
   );
 }
 
-function MessageBubble({ message, onOptionClick, selectedOption }: { message: AgentMessage; onOptionClick?: (option: string) => void; selectedOption?: string }) {
+function MessageBubble({ message, accentColor, onOptionClick, selectedOption }: {
+  message: AgentMessage;
+  accentColor: string;
+  onOptionClick?: (option: string) => void;
+  selectedOption?: string;
+}) {
   const isUser = message.role === 'user';
   const isError = message.role === 'error';
   const isStatus = message.role === 'status';
@@ -307,7 +363,7 @@ function MessageBubble({ message, onOptionClick, selectedOption }: { message: Ag
       maxWidth: '85%',
     }}>
       <div style={{
-        background: isUser ? '#4ECDC4' : isError ? '#FFF0F0' : '#f0f0f0',
+        background: isUser ? accentColor : isError ? '#FFF0F0' : '#f0f0f0',
         color: isUser ? 'white' : isError ? '#CC4444' : '#333',
         borderRadius: 12,
         padding: '8px 14px',
@@ -334,9 +390,9 @@ function MessageBubble({ message, onOptionClick, selectedOption }: { message: Ag
                 onClick={() => onOptionClick?.(opt)}
                 disabled={isDisabled}
                 style={{
-                  background: isSelected ? '#4ECDC4' : 'white',
-                  color: isSelected ? 'white' : '#4ECDC4',
-                  border: '1.5px solid #4ECDC4',
+                  background: isSelected ? accentColor : 'white',
+                  color: isSelected ? 'white' : accentColor,
+                  border: `1.5px solid ${accentColor}`,
                   borderRadius: 16,
                   padding: '5px 12px',
                   fontSize: 12,
