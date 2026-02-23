@@ -20,6 +20,7 @@ import TextShape from './shapes/TextShape';
 import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
 import ChatWidget from './ChatWidget';
+import { Minimap } from './Canvas/Minimap';
 import type { ActiveTool, BoardObject } from '../types/board';
 import { getConnectedLines } from '../utils/connectorIndex';
 import { resolveEndpoint } from '../utils/anchorResolve';
@@ -208,6 +209,7 @@ export default function Canvas() {
   const isBoxDraggingRef  = useRef(false);
   const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
   const isPanningRef = useRef(false);
+  const minimapAnimRef = useRef(0);
   const lastDblClickRef = useRef(0);
   const panSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorPosRef = useRef({ x: 0, y: 0 });
@@ -1135,6 +1137,8 @@ export default function Canvas() {
       }
     } else {
       isPanningRef.current = true;
+      cancelAnimationFrame(minimapAnimRef.current);
+      minimapAnimRef.current = 0;
       layerRef.current?.listening(false);
     }
   }, []);
@@ -1275,6 +1279,46 @@ export default function Canvas() {
           🗑️ Clear All
         </button>
       )}
+
+      <Minimap
+        objectsRef={objectsRef}
+        stagePosRef={stagePosRef}
+        stageScaleRef={stageScaleRef}
+        isPanningRef={isPanningRef}
+        windowWidth={windowSize.width}
+        windowHeight={windowSize.height}
+        onPanTo={useCallback((worldX: number, worldY: number) => {
+          const scale = stageScaleRef.current;
+          const targetPos = {
+            x: -worldX * scale + windowSize.width / 2,
+            y: -worldY * scale + windowSize.height / 2,
+          };
+          const stage = stageRef.current;
+          if (!stage) return;
+
+          cancelAnimationFrame(minimapAnimRef.current);
+          const LERP = 0.25;
+          const animate = () => {
+            const cur = stagePosRef.current;
+            const dx = targetPos.x - cur.x;
+            const dy = targetPos.y - cur.y;
+            if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+              stagePosRef.current = targetPos;
+              stage.position(targetPos);
+              stage.batchDraw();
+              setStagePos(targetPos);
+              minimapAnimRef.current = 0;
+              return;
+            }
+            const next = { x: cur.x + dx * LERP, y: cur.y + dy * LERP };
+            stagePosRef.current = next;
+            stage.position(next);
+            stage.batchDraw();
+            minimapAnimRef.current = requestAnimationFrame(animate);
+          };
+          animate();
+        }, [windowSize.width, windowSize.height])}
+      />
 
       <DebugOverlay stageScaleRef={stageScaleRef} stagePosRef={stagePosRef} />
 

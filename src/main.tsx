@@ -1,34 +1,26 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
-import { BoardProvider } from './contexts/BoardContext'
 import { DebugProvider } from './contexts/DebugContext'
-import { SelectionProvider } from './contexts/SelectionContext'
-
-const isTestMode = import.meta.env.VITE_TEST_AUTH_BYPASS === 'true';
+import AuthGate from './components/AuthGate'
+import BoardLayout from './components/BoardLayout'
+import Dashboard from './components/Dashboard'
 
 const rootEl = document.getElementById('root')!;
 
-async function render() {
-  const PerfBridgeConnector = isTestMode
-    ? (await import('./components/PerfBridgeConnector')).default
-    : null;
-
-  createRoot(rootEl).render(
-    <StrictMode>
-      <AuthProvider>
-        <DebugProvider>
-          <BoardProvider>
-            <SelectionProvider>
-              <App />
-              {PerfBridgeConnector && <PerfBridgeConnector />}
-            </SelectionProvider>
-          </BoardProvider>
-        </DebugProvider>
-      </AuthProvider>
-    </StrictMode>,
-  );
-}
-
-render();
+createRoot(rootEl).render(
+  <StrictMode>
+    <AuthProvider>
+      <DebugProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<AuthGate><Dashboard /></AuthGate>} />
+            <Route path="/board/:boardId" element={<AuthGate><BoardLayout /></AuthGate>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </DebugProvider>
+    </AuthProvider>
+  </StrictMode>,
+);
