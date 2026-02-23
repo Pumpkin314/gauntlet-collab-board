@@ -357,6 +357,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       ...localAwarenessBaseRef.current,
       cursorX:   0,
       cursorY:   0,
+      ts: Date.now(),
     });
     awarenessLocalSetCountRef.current++;
     updateDebug({ awarenessLocalSetCount: awarenessLocalSetCountRef.current });
@@ -434,10 +435,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         setYjsLatencyMs(null);
       }
 
-      // When Firestore fallback is blocked, derive visible presence from Yjs
-      // doc-backed presence. This keeps cursors/users synced even if awareness
-      // packets are dropped.
-      if (shouldBlockFirestoreFallback()) {
+      // When Firestore fallback is blocked and Yjs has fresh peer data, derive
+      // presence from the doc-backed map. Skipping when peerCount=0 prevents
+      // stale-ts Yjs entries from clobbering awareness-derived presence (idle
+      // users whose cursor ts expired but who are still connected).
+      if (peerCount > 0 && shouldBlockFirestoreFallback()) {
         setPresence(remotePeers);
       }
     };
@@ -484,7 +486,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       // setLocalState was called before the peer arrived, they will never see it.
       if (hasPeers) {
         const current = webrtcProvider.awareness.getLocalState();
-        if (current) webrtcProvider.awareness.setLocalState({ ...current });
+        if (current) webrtcProvider.awareness.setLocalState({ ...current, ts: Date.now() });
       }
     };
     webrtcProvider.on('peers', onPeers);
@@ -503,8 +505,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         if (clientId === ydoc.clientID) return;
         const parsed = coerceAwarenessState(state, clientId);
         if (!parsed) return;
-        // Skip stale entries (no timestamp or too old)
-        if (parsed.ts === undefined || now - parsed.ts > PRESENCE_STALE_MS) return;
+        // Always include peers with a valid state in presence (join/leave detection).
+        // Stale check only gates cursor rendering to avoid frozen ghost cursors.
         hasRemote = true;
         currentPeerIds.add(parsed.sessionId);
         remotePeers.push({
@@ -516,7 +518,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           cursorY: parsed.cursorY,
           lastActive: null,
         });
-        setCursorPosition(parsed.sessionId, parsed.cursorX, parsed.cursorY);
+        if (parsed.ts !== undefined && now - parsed.ts <= PRESENCE_STALE_MS) {
+          setCursorPosition(parsed.sessionId, parsed.cursorX, parsed.cursorY);
+        }
       });
 
       if (hasRemote) {
@@ -681,11 +685,16 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         });
       };
       firestoreProvider.onSynced = () => {
-        // Purge stale presence entries resurrected from CRDT history
+        // Purge only this user's own ghost sessions resurrected from CRDT history
+        // (same userId, different clientID key). Leaving other users' entries
+        // intact avoids wiping live peers' presence on join.
         const myKey = yPresenceKeyRef.current;
+        const myUserId = currentUser.uid;
         yPresence.doc!.transact(() => {
-          yPresence.forEach((_val, key) => {
-            if (key !== myKey) yPresence.delete(key);
+          yPresence.forEach((val, key) => {
+            if (key === myKey) return;
+            const entryUserId = val instanceof Y.Map ? val.get('userId') : null;
+            if (entryUserId === myUserId) yPresence.delete(key);
           });
         });
         syncToReact();
