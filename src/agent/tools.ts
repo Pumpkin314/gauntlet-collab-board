@@ -111,6 +111,51 @@ export const delegateToPlannerSchema = z.object({
   board_context: z.string().optional(),
 });
 
+// ── Knowledge Graph tool schemas ─────────────────────────────────────────────
+
+export const placeKnowledgeNodeSchema = z.object({
+  kgNodeId: z.string(),
+  description: z.string(),
+  gradeLevel: z.string().optional(),
+  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored']).optional().default('unexplored'),
+  x: z.number().optional(),
+  y: z.number().optional(),
+});
+
+export const connectKnowledgeNodesSchema = z.object({
+  fromKgNodeId: z.string(),
+  toKgNodeId: z.string(),
+});
+
+export const updateNodeConfidenceSchema = z.object({
+  kgNodeId: z.string(),
+  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored']),
+});
+
+export const computeFrontierSchema = z.object({
+  masteredNodeIds: z.array(z.string()),
+});
+
+export const expandAroundNodeSchema = z.object({
+  kgNodeId: z.string(),
+  depth: z.number().optional().default(1),
+});
+
+export const searchKnowledgeGraphSchema = z.object({
+  query: z.string(),
+  gradeLevel: z.string().optional(),
+  limit: z.number().optional().default(10),
+});
+
+export const getPrerequisitesSchema = z.object({
+  kgNodeId: z.string(),
+});
+
+export const getNodesByGradeSchema = z.object({
+  grade: z.string(),
+  limit: z.number().optional().default(20),
+});
+
 // ── Schema lookup by tool name ───────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
@@ -130,6 +175,14 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   applyTemplate:           applyTemplateSchema,
   askClarification:        askClarificationSchema,
   delegateToPlanner:       delegateToPlannerSchema,
+  placeKnowledgeNode:      placeKnowledgeNodeSchema,
+  connectKnowledgeNodes:   connectKnowledgeNodesSchema,
+  updateNodeConfidence:    updateNodeConfidenceSchema,
+  computeFrontier:         computeFrontierSchema,
+  expandAroundNode:        expandAroundNodeSchema,
+  searchKnowledgeGraph:    searchKnowledgeGraphSchema,
+  getPrerequisites:        getPrerequisitesSchema,
+  getNodesByGrade:         getNodesByGradeSchema,
 };
 
 // ── Anthropic tool definitions (sent in API request) ─────────────────────────
@@ -376,3 +429,127 @@ const META_TOOL_NAMES = new Set([
 export const PLANNER_TOOL_DEFINITIONS = TOOL_DEFINITIONS.filter(
   (t) => !META_TOOL_NAMES.has(t.name),
 );
+
+// ── Learning Explorer tool definitions ──────────────────────────────────────
+
+const KG_TOOL_DEFINITIONS = [
+  {
+    name: 'placeKnowledgeNode',
+    description: 'Place a knowledge graph node on the canvas as a visual card. The node represents a math standard or learning objective.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kgNodeId: { type: 'string', description: 'The knowledge graph node ID' },
+        description: { type: 'string', description: 'Description text to display' },
+        gradeLevel: { type: 'string', description: 'Grade level label (e.g. "5")' },
+        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored'], description: 'Student confidence level' },
+        x: { type: 'number', description: 'X position on canvas' },
+        y: { type: 'number', description: 'Y position on canvas' },
+      },
+      required: ['kgNodeId', 'description'],
+    },
+  },
+  {
+    name: 'connectKnowledgeNodes',
+    description: 'Draw a prerequisite arrow between two knowledge nodes already on the canvas.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        fromKgNodeId: { type: 'string', description: 'Source KG node ID (prerequisite)' },
+        toKgNodeId: { type: 'string', description: 'Target KG node ID (dependent)' },
+      },
+      required: ['fromKgNodeId', 'toKgNodeId'],
+    },
+  },
+  {
+    name: 'updateNodeConfidence',
+    description: 'Update the confidence level of a knowledge node on the canvas. Changes its color.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kgNodeId: { type: 'string', description: 'The knowledge graph node ID' },
+        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored'], description: 'New confidence level' },
+      },
+      required: ['kgNodeId', 'confidence'],
+    },
+  },
+  {
+    name: 'computeFrontier',
+    description: 'Compute and return the learning frontier — nodes whose prerequisites are all mastered but the node itself is not. Read-only, does not modify the board.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        masteredNodeIds: { type: 'array', items: { type: 'string' }, description: 'IDs of mastered KG nodes' },
+      },
+      required: ['masteredNodeIds'],
+    },
+  },
+  {
+    name: 'expandAroundNode',
+    description: 'Expand the knowledge graph view around a node, showing its prerequisites and dependents. Read-only query that returns graph data for placement.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kgNodeId: { type: 'string', description: 'Center node ID to expand around' },
+        depth: { type: 'number', description: 'How many levels to expand (default 1)' },
+      },
+      required: ['kgNodeId'],
+    },
+  },
+  {
+    name: 'searchKnowledgeGraph',
+    description: 'Search the knowledge graph for math standards matching a query. Read-only, returns matching nodes.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'Search text to match against standard descriptions' },
+        gradeLevel: { type: 'string', description: 'Filter by grade level (e.g. "5")' },
+        limit: { type: 'number', description: 'Max results (default 10)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'getPrerequisites',
+    description: 'Get the prerequisite nodes for a given knowledge graph node. Read-only query.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kgNodeId: { type: 'string', description: 'Node ID to look up prerequisites for' },
+      },
+      required: ['kgNodeId'],
+    },
+  },
+  {
+    name: 'getNodesByGrade',
+    description: 'Get all math standards for a specific grade level. Returns up to `limit` standard nodes (excludes groupings). Use this when a student tells you their grade. Read-only query.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        grade: { type: 'string', description: 'Grade level: "K", "1", "2", ..., "12"' },
+        limit: { type: 'number', description: 'Max results (default 20)' },
+      },
+      required: ['grade'],
+    },
+  },
+];
+
+/** Tool definitions for the Learning Explorer mode. */
+export const EXPLORER_TOOL_DEFINITIONS = [
+  ...KG_TOOL_DEFINITIONS,
+  // Include conversational + clarification + board query tools from Boardie
+  TOOL_DEFINITIONS.find(t => t.name === 'respondConversationally')!,
+  TOOL_DEFINITIONS.find(t => t.name === 'askClarification')!,
+  TOOL_DEFINITIONS.find(t => t.name === 'requestBoardState')!,
+  TOOL_DEFINITIONS.find(t => t.name === 'deleteObject')!,
+  TOOL_DEFINITIONS.find(t => t.name === 'moveObject')!,
+];
+
+/** Read-only KG tools that don't count toward action limits. */
+export const KG_READONLY_TOOLS = new Set([
+  'searchKnowledgeGraph',
+  'getPrerequisites',
+  'computeFrontier',
+  'expandAroundNode',
+  'getNodesByGrade',
+]);
