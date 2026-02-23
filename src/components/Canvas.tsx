@@ -111,16 +111,54 @@ function isInViewport(
   return dx * dx + dy * dy <= r * r;
 }
 
-/** Check if child's AABB is fully inside frame's AABB */
+/** Compute the four corners of a rotated rectangle (rotation around top-left origin). */
+function getRotatedCorners(
+  x: number, y: number, w: number, h: number, rotationDeg: number
+): Array<{ x: number; y: number }> {
+  const rad = (rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const offsets = [
+    { dx: 0, dy: 0 },
+    { dx: w, dy: 0 },
+    { dx: w, dy: h },
+    { dx: 0, dy: h },
+  ];
+  return offsets.map(({ dx, dy }) => ({
+    x: x + dx * cos - dy * sin,
+    y: y + dx * sin + dy * cos,
+  }));
+}
+
+/** Check if child is fully inside frame, accounting for rotation on both. */
 function isFullyInside(child: BoardObject, frame: BoardObject): boolean {
   const cw = child.width ?? 0;
   const ch = child.height ?? 0;
-  return (
-    child.x >= frame.x &&
-    child.y >= frame.y &&
-    child.x + cw <= frame.x + frame.width &&
-    child.y + ch <= frame.y + frame.height
-  );
+  const childRot = child.rotation ?? 0;
+  const frameRot = frame.rotation ?? 0;
+
+  const childCorners = getRotatedCorners(child.x, child.y, cw, ch, childRot);
+
+  if (Math.abs(frameRot) < 0.01) {
+    return childCorners.every(
+      c =>
+        c.x >= frame.x &&
+        c.y >= frame.y &&
+        c.x <= frame.x + frame.width &&
+        c.y <= frame.y + frame.height
+    );
+  }
+
+  const rad = (-frameRot * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return childCorners.every(c => {
+    const dx = c.x - frame.x;
+    const dy = c.y - frame.y;
+    const localX = dx * cos - dy * sin;
+    const localY = dx * sin + dy * cos;
+    return localX >= 0 && localY >= 0 && localX <= frame.width && localY <= frame.height;
+  });
 }
 
 /** Collect all descendant IDs of a frame (recursive) */
@@ -196,12 +234,13 @@ export default function Canvas() {
   const handleFrameAwareUpdate = useCallback((id: string, updates: Partial<BoardObject>) => {
     updateObject(id, updates);
 
-    // Only run frame logic when position changes (drag end)
-    if (updates.x === undefined && updates.y === undefined) return;
-
     const allObjs = objectsRef.current;
     const obj = allObjs.find(o => o.id === id);
     if (!obj) return;
+
+    const posChanged = updates.x !== undefined || updates.y !== undefined;
+    const frameResized = obj.type === 'frame' && (updates.width !== undefined || updates.height !== undefined);
+    if (!posChanged && !frameResized) return;
 
     const updatedObj = { ...obj, ...updates };
 
@@ -233,6 +272,15 @@ export default function Canvas() {
           batchUpdate(childUpdates);
         }
       }
+    }
+
+    // Release children that fell outside after frame resize
+    if (frameResized) {
+      const children = allObjs.filter(o => o.parentId === id);
+      const releaseUpdates = children
+        .filter(child => !isFullyInside(child, updatedObj))
+        .map(child => ({ id: child.id, changes: { parentId: '' as any } }));
+      if (releaseUpdates.length > 0) batchUpdate(releaseUpdates);
     }
 
     // Skip containment recheck when this object's parent frame is also being
@@ -559,6 +607,7 @@ export default function Canvas() {
       frameDragStartRef.current = null;
       frameDragChildNodesRef.current.clear();
       frameDragChildOriginsRef.current.clear();
+      frameDragChildPointsRef.current.clear();
     }
   }, [batchUpdate]);
 
@@ -576,6 +625,14 @@ export default function Canvas() {
           if (origin) {
             childNode.x(origin.x + dx);
             childNode.y(origin.y + dy);
+          }
+          const origPoints = frameDragChildPointsRef.current.get(childId);
+          if (origPoints) {
+            const shifted = origPoints.map((v, i) => v + (i % 2 === 0 ? dx : dy));
+            const lineNode = (childNode as Konva.Group).children?.[0];
+            if (lineNode && 'points' in lineNode) {
+              (lineNode as Konva.Line).points(shifted);
+            }
           }
         }
       }
@@ -987,6 +1044,7 @@ export default function Canvas() {
   const frameDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const frameDragChildNodesRef = useRef<Map<string, Konva.Node>>(new Map());
   const frameDragChildOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const frameDragChildPointsRef = useRef<Map<string, number[]>>(new Map());
 
   // ── Connector drag cache: imperatively update connected lines during drag ──
   interface ConnectorDragEntry {
@@ -1064,6 +1122,14 @@ export default function Canvas() {
         }
         frameDragChildNodesRef.current = nodeMap;
         frameDragChildOriginsRef.current = originMap;
+        const pointsMap = new Map<string, number[]>();
+        for (const childId of descendants) {
+          const childObj = allObjs.find(o => o.id === childId);
+          if (childObj?.type === 'line' && childObj.points && childObj.points.length >= 4) {
+            pointsMap.set(childId, [...childObj.points]);
+          }
+        }
+        frameDragChildPointsRef.current = pointsMap;
       } else {
         frameDragStartRef.current = null;
       }
