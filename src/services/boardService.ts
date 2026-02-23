@@ -6,7 +6,6 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
@@ -61,11 +60,18 @@ export function getUserBoards(
   const q = query(
     boardsCol,
     where('ownerId', '==', ownerId),
-    orderBy('updatedAt', 'desc'),
   );
   return onSnapshot(q, (snap) => {
-    const boards = snap.docs.map((d) => d.data() as BoardMeta);
+    const boards = snap.docs
+      .map((d) => d.data() as BoardMeta)
+      .sort((a, b) => {
+        const aTime = a.updatedAt?.toDate?.().getTime() ?? 0;
+        const bTime = b.updatedAt?.toDate?.().getTime() ?? 0;
+        return bTime - aTime;
+      });
     callback(boards);
+  }, (err) => {
+    console.error('[boardService] getUserBoards listener error:', err);
   });
 }
 

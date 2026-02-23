@@ -1286,17 +1286,35 @@ export default function Canvas() {
         windowHeight={windowSize.height}
         onPanTo={useCallback((worldX: number, worldY: number) => {
           const scale = stageScaleRef.current;
-          const newPos = {
+          const targetPos = {
             x: -worldX * scale + windowSize.width / 2,
             y: -worldY * scale + windowSize.height / 2,
           };
-          stagePosRef.current = newPos;
-          setStagePos(newPos);
           const stage = stageRef.current;
-          if (stage) {
-            stage.position(newPos);
+          if (!stage) return;
+
+          // Smooth lerp animation toward target
+          const LERP = 0.25;
+          let raf = 0;
+          const animate = () => {
+            const cur = stagePosRef.current;
+            const dx = targetPos.x - cur.x;
+            const dy = targetPos.y - cur.y;
+            if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+              stagePosRef.current = targetPos;
+              stage.position(targetPos);
+              stage.batchDraw();
+              setStagePos(targetPos);
+              return;
+            }
+            const next = { x: cur.x + dx * LERP, y: cur.y + dy * LERP };
+            stagePosRef.current = next;
+            stage.position(next);
             stage.batchDraw();
-          }
+            raf = requestAnimationFrame(animate);
+          };
+          cancelAnimationFrame(raf);
+          animate();
         }, [windowSize.width, windowSize.height])}
       />
 
