@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useCallback } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import Canvas from './components/Canvas';
 import InactivityWarningModal from './components/InactivityWarningModal';
+import ShareModal from './components/ShareModal';
 import { useAuth } from './contexts/AuthContext';
 import { useBoard } from './contexts/BoardContext';
+import { getBoardMeta } from './services/boardService';
+import type { BoardMeta } from './services/boardService';
 import './App.css';
 
 function getInitials(name: string): string {
@@ -25,9 +28,17 @@ function getColorFromName(name: string): string {
 
 function App() {
   const { currentUser, logout, showInactivityWarning, stayLoggedIn } = useAuth();
-  const { presence } = useBoard();
+  const { presence, userRole } = useBoard();
+  const { boardId } = useParams<{ boardId: string }>();
   const [imageError, setImageError] = useState(false);
   const [showPresence, setShowPresence] = useState(false);
+  const [shareModal, setShareModal] = useState<BoardMeta | null>(null);
+
+  const handleOpenShare = useCallback(async () => {
+    if (!boardId) return;
+    const meta = await getBoardMeta(boardId);
+    if (meta) setShareModal(meta);
+  }, [boardId]);
 
   if (!currentUser) return null;
 
@@ -56,6 +67,13 @@ function App() {
               </div>
             )}
             <span data-testid="user-name" className="user-name">{currentUser.displayName}</span>
+            <button
+              onClick={() => void handleOpenShare()}
+              className="share-btn"
+              title="Share board"
+            >
+              Share
+            </button>
             <button
               data-testid="presence-toggle-btn"
               onClick={() => setShowPresence(!showPresence)}
@@ -124,6 +142,17 @@ function App() {
         <InactivityWarningModal
           onStayLoggedIn={stayLoggedIn}
           onSignOut={() => void logout()}
+        />
+      )}
+
+      {shareModal && currentUser && boardId && (
+        <ShareModal
+          boardId={boardId}
+          boardMeta={shareModal}
+          currentUid={currentUser.uid}
+          currentRole={userRole}
+          onClose={() => setShareModal(null)}
+          onUpdated={() => void handleOpenShare()}
         />
       )}
     </div>
