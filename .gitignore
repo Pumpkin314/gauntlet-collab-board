@@ -39,5 +39,14 @@ debug_screenshots/*.png
 test-results/
 playwright-report/
 
-# Repomix generated chunk outputs
+# Repomix generated outputs
 repomix-*.xml
+repomix.*.json
+
+# Debug artifacts
+debug_screenshots/
+*.mov
+*.png
+
+# Claude Code worktrees
+.claude/worktrees/
