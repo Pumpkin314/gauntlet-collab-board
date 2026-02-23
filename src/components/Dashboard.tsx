@@ -167,35 +167,6 @@ export default function Dashboard() {
         </>
       )}
 
-      {sharedBoards.length > 0 && (
-        <>
-          <h2 className="dashboard-section-title">Shared with me</h2>
-          <div className="dashboard-grid">
-            {sharedBoards.map((board) => {
-              const myRole = board.sharedWith?.[currentUser.uid]?.role;
-              return (
-                <div
-                  key={board.id}
-                  className="board-card"
-                  onClick={() => navigate(`/board/${board.id}`)}
-                >
-                  <div className="board-card-preview" />
-                  <div className="board-card-info">
-                    <div className="board-card-title">{board.title}</div>
-                    <div className="board-card-meta">
-                      {board.ownerName}
-                      {myRole && (
-                        <span className="board-card-role-badge">{myRole}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
       {deletingId && (
         <ConfirmDialog
           title="Delete Board"
