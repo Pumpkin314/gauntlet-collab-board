@@ -1273,7 +1273,7 @@ export default function Canvas() {
           onClick={handleClearAll}
           style={{
             position: 'absolute', bottom: 20, left: boardieOpen ? 380 : 20,
-            transition: 'left 0.25s ease',
+            transition: 'left 0.25s ease', zIndex: 1001,
             background: '#ff6b6b', color: 'white', border: 'none',
             padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
             cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.3)',
