@@ -97,10 +97,6 @@ export default function Dashboard() {
           <div className="new-board-label">New Board</div>
         </button>
 
-        {loading && boards.length === 0 && (
-          <div className="board-card loading-card">Loading...</div>
-        )}
-
         {boards.map((board) => (
           <div
             key={board.id}
