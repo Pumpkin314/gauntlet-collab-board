@@ -82,11 +82,11 @@ Konva Transformer recalculates bounding boxes for all attached nodes per frame. 
 ### Segment drag (move entire line)
 Dragging the middle segment of a line/arrow should translate both endpoints in tandem, preserving relative positioning. Currently only endpoint handles are draggable.
 
-### Magnetic endpoint snapping
-When dragging a line endpoint near another object's boundary, it should magnetize/snap to the nearest edge point within a zoom-dependent threshold. Holding Shift bypasses snapping and uses exact cursor position. This lets lines act as visual connectors between objects.
+### ~~Magnetic endpoint snapping~~ ✅ Fixed
+Implemented in PR #31 (smart connectors). Lines snap to object edges with free edge slide during drag.
 
-### Lines in group selection should move with the group
-Lines that belong to a multi-select group (or frame children) currently stay put when the rest of the group is moved. They should translate their points along with the group delta.
+### ~~Lines in frame children should move with the group~~ ✅ Partially Fixed
+Lines that are children of a frame now visually track during frame drag — `frameDragChildPointsRef` caches original points at drag-start and shifts them imperatively in `handleDragMove`. Fixed in PR #33 (`a1a1d4e`). **Remaining:** Lines in multi-select groups (non-frame) may still not move with the group.
 
 ---
 
@@ -123,11 +123,8 @@ Each user should have a boards page listing all boards they own or have access t
 - Ctrl+Z / Ctrl+Shift+Z shortcuts
 - Track object creation, deletion, moves, edits
 
-### Keyboard Shortcuts
-- Delete selected object (Backspace/Delete key)
-- Duplicate selected object (Ctrl+D)
-- Copy/paste (Ctrl+C / Ctrl+V)
-- Select all (Ctrl+A)
+### ~~Keyboard Shortcuts~~ ✅ Implemented
+Delete, Ctrl+D, Ctrl+C/V, Ctrl+A all implemented.
 
 ### Object Grouping
 - Multi-select with Shift+Click or drag box
@@ -229,29 +226,50 @@ Two independent frame hierarchies (A→B→C and D→E→F) that partially overl
 
 ---
 
-### Frame resize doesn't recompute child containment
-After resizing a frame, children that are no longer within the frame's bounds should be released (parentId cleared). Currently containment is only checked on object drag end, not on frame resize end.
+### ~~Frame resize doesn't recompute child containment~~ ✅ Fixed
+Fixed in PR #33 (`a1a1d4e`). `handleFrameAwareUpdate` now detects frame resize (width/height changes) and re-checks all children against the new bounds, releasing any that no longer fit.
 
 ---
 
-### Frame rotation causes children to jump position
-Rotating a frame causes child objects to snap to incorrect x/y positions. The AABB-based containment and delta-based child movement don't account for the frame's rotation transform.
+### ~~Frame rotation causes children to jump position~~ ✅ Fixed
+Fixed in PR #33 (`a1a1d4e`). `isFullyInside` now computes rotated bounding box corners via `getRotatedCorners()` and transforms them into the frame's local coordinate space. Both child rotation and frame rotation are handled.
 
 ---
 
-### Removing a child glitches sibling positions during frame drag
-After a child is removed from a frame (e.g. dragged out), remaining children visually glitch when the frame is subsequently dragged, then snap back to correct positions on drag end. Likely caused by stale cached node refs/origins from a previous drag session.
+### ~~Removing a child glitches sibling positions during frame drag~~ ✅ Fixed
+Fixed in PR #33 (`d936c8a`). Child origins now read from Yjs data instead of Konva nodes at drag-start, preventing stale imperative positions from prior drag sessions.
+
+---
+
+### ~~Multi-select drag releases children from co-selected frames~~ ✅ Fixed
+When multi-selecting a frame + its children and dragging, children were sometimes released because drag-end events fired in non-deterministic order — a child's containment was checked against the frame's old (pre-drag) position. Fixed in PR #33 (`d936c8a`) by skipping containment recheck when a child's parent frame is in the active selection.
 
 ---
 
 ### Frame children jump/glitch after repositioning within frame
-After objects are manually repositioned inside a frame, subsequent frame movement causes the children to jump or glitch before settling. Likely a stale-origin or delta-accumulation issue in the imperative frame-drag child movement logic.
+After objects are manually repositioned inside a frame, subsequent frame movement causes the children to jump or glitch before settling. Specifically occurs when only the frame is selected and dragged — positions correct on mouse release (Yjs commit is accurate, imperative drag is not).
+
+**Investigated root causes (ruled out):**
+- Konva vs Yjs origin mismatch at drag-start — making both read from Yjs didn't help
+- `setIsDraggingShape(true)` triggering re-render that overwrites imperative positions — skipping the re-render for frame drags reduced but didn't eliminate the jump
+- `useLayoutEffect` to re-apply imperative positions after React commit — no difference
+- Shared mutable `frameDragState` module read by BaseShape to offset `x={data.x + delta}` — no effect
+- Detaching Transformer during frame drag — objects disappear
+- Resetting `tr.x(0)` each dragMove — Konva re-sets it immediately
+- Adding `tr.x()` to child positions — overcompensates, objects fly around
+- Computing dx as `(node.x() + tr.x()) - (startX + startTrX)` — same overcompensation
+
+**Confirmed root cause:** The Konva **Transformer** is the culprit. Debug logging proves:
+- When frame is NOT selected (no Transformer): drift between expected and actual child position is ~0.
+- When frame IS selected (Transformer attached): drift is massive (200-700px).
+- The Transformer has `onDragStart`/`onDragEnd` handlers and accumulates its own `x/y` offset during drag. This visually shifts attached nodes (the frame) but children (not attached to Transformer) don't receive the offset. Our imperative `dx = node.x() - start.x` doesn't capture the Transformer's visual contribution.
+- Between our imperative `childNode.x(origin + dx)` calls, something resets the child's Konva position — likely react-konva reconciliation triggered by mid-drag re-renders.
+
+**Likely fix direction:** Rearchitect frame-child movement to avoid fighting the Transformer. Options:
+1. Make children actual Konva children of the frame Group (nested in scene graph, not flat siblings) so Konva's transform propagation moves them automatically
+2. Disable the Transformer's draggable behavior for frames and handle frame drag entirely through the node's own drag system
+3. Use Konva's `group.add(child)` / `group.remove(child)` at drag-start/end to temporarily nest children
 
 ---
 
-### Duplicated objects share identity
-Duplicated objects (Ctrl+D, Ctrl+V) behave as linked copies — actions on one affect the other. They should be fully independent entities with unique IDs and no shared state.
-
----
-
-**Last Updated:** February 21, 2026
+**Last Updated:** February 22, 2026
