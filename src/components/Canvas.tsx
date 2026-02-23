@@ -202,6 +202,7 @@ export default function Canvas() {
   const [inlineEdit,      setInlineEdit]      = useState<InlineEdit | null>(null);
   const [isDraggingShape, setIsDraggingShape] = useState(false);
   const [lineVariant,     setLineVariant]     = useState<LineVariant>('line');
+  const [boardieOpen,     setBoardieOpen]     = useState(false);
 
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -1258,7 +1259,6 @@ export default function Canvas() {
         stageScale={stageScale}
         stagePos={stagePos}
         objectCount={objects.length}
-        usersOnline={presence.length + 1}
         loading={loading}
       />
 
@@ -1272,19 +1272,22 @@ export default function Canvas() {
         </div>
       )}
 
-      {objects.length > 0 && (
-        <button
-          onClick={handleClearAll}
-          style={{
-            position: 'absolute', bottom: 20, right: 20,
-            background: '#ff6b6b', color: 'white', border: 'none',
-            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.3)',
-          }}
-        >
-          🗑️ Clear All
-        </button>
-      )}
+      <button
+        onClick={objects.length > 0 ? handleClearAll : undefined}
+        disabled={objects.length === 0}
+        style={{
+          position: 'absolute', bottom: 20, left: boardieOpen ? 380 : 20,
+          transition: 'left 0.25s ease, opacity 0.2s ease, background 0.2s ease', zIndex: 1001,
+          background: objects.length > 0 ? '#ff6b6b' : 'rgba(255,107,107,0.25)',
+          color: objects.length > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+          border: 'none',
+          padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+          cursor: objects.length > 0 ? 'pointer' : 'default',
+          boxShadow: objects.length > 0 ? '0 4px 12px rgba(255,107,107,0.3)' : 'none',
+        }}
+      >
+        🗑️ Clear All
+      </button>
 
       <Minimap
         objectsRef={objectsRef}
@@ -1328,7 +1331,7 @@ export default function Canvas() {
 
       <DebugOverlay stageScaleRef={stageScaleRef} stagePosRef={stagePosRef} />
 
-      <ChatWidget stagePosRef={stagePosRef} stageScaleRef={stageScaleRef} />
+      <ChatWidget stagePosRef={stagePosRef} stageScaleRef={stageScaleRef} onOpenChange={setBoardieOpen} />
 
       <ColorPicker
         noteId={colorPickerNote}

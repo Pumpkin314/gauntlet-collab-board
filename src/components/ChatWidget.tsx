@@ -6,6 +6,7 @@ import type { AgentMode } from '../agent/useAgent';
 interface ChatWidgetProps {
   stagePosRef: React.RefObject<{ x: number; y: number }>;
   stageScaleRef: React.RefObject<number>;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const MODE_CONFIG: Record<AgentMode, {
@@ -34,7 +35,7 @@ const MODE_CONFIG: Record<AgentMode, {
   },
 };
 
-export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetProps) {
+export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }: ChatWidgetProps) {
   const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode } = useAgent(stagePosRef, stageScaleRef);
   const [inputValue, setInputValue] = useState('');
   const [clickedOptions, setClickedOptions] = useState<Map<string, string>>(new Map());
@@ -49,7 +50,8 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
-  }, [isOpen]);
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const handleSend = useCallback(() => {
     if (!inputValue.trim() || isLoading) return;
@@ -89,20 +91,20 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
         onClick={toggleOpen}
         style={{
           position: 'fixed',
-          right: 0,
+          left: 0,
           top: '50%',
           transform: 'translateY(-50%)',
           background: cfg.color,
           color: 'white',
           border: 'none',
-          borderRadius: '8px 0 0 8px',
+          borderRadius: '0 8px 8px 0',
           padding: '12px 8px',
           cursor: 'pointer',
           zIndex: 1000,
           writingMode: 'vertical-rl',
           fontSize: 13,
           fontWeight: 600,
-          boxShadow: '-2px 0 12px rgba(0,0,0,0.1)',
+          boxShadow: '2px 0 12px rgba(0,0,0,0.1)',
           letterSpacing: 1,
         }}
       >
@@ -116,12 +118,12 @@ export default function ChatWidget({ stagePosRef, stageScaleRef }: ChatWidgetPro
       data-testid="boardie-panel"
       style={{
         position: 'fixed',
-        right: 0,
-        top: 0,
+        left: 0,
+        top: 60,
         width: 360,
-        height: '100vh',
+        height: 'calc(100vh - 60px)',
         background: 'white',
-        boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+        boxShadow: '4px 0 24px rgba(0,0,0,0.12)',
         zIndex: 1000,
         display: 'flex',
         flexDirection: 'column',

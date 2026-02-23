@@ -1,7 +1,6 @@
 /**
- * InfoOverlay — bottom-left debug/status panel showing zoom, pan, object count, etc.
- * Memoized: re-renders only when its numeric/boolean props change, not on every
- * Canvas mouse-move re-render.
+ * InfoOverlay — compact status pill showing zoom, pan, and object count.
+ * Hovers to reveal instruction hints.
  */
 
 import { memo } from 'react';
@@ -10,7 +9,6 @@ interface InfoOverlayProps {
   stageScale: number;
   stagePos: { x: number; y: number };
   objectCount: number;
-  usersOnline: number;
   loading: boolean;
 }
 
@@ -18,26 +16,77 @@ export default memo(function InfoOverlay({
   stageScale,
   stagePos,
   objectCount,
-  usersOnline,
   loading,
 }: InfoOverlayProps) {
+  const zoomLabel = `${(stageScale * 100).toFixed(0)}%`;
+  const panLabel = `(${Math.round(stagePos.x)}, ${Math.round(stagePos.y)})`;
+
   return (
-    <div style={{
-      position: 'absolute', bottom: 20, left: 20,
-      background: 'rgba(0,0,0,0.7)', color: 'white',
-      padding: '10px 15px', borderRadius: 8, fontSize: 12, fontFamily: 'monospace',
-    }}>
-      <div>Zoom: {(stageScale * 100).toFixed(0)}%</div>
-      <div>Pan: ({Math.round(stagePos.x)}, {Math.round(stagePos.y)})</div>
-      <div>Objects: {objectCount}</div>
-      <div style={{ color: '#4ECDC4' }}>Users Online: {usersOnline}</div>
-      <div style={{ marginTop: 8, opacity: 0.7, fontSize: 11 }}>
-        • Drag canvas to pan<br />
-        • Scroll to zoom<br />
-        • Double-click to create<br />
-        • Click shape to select
+    <div
+      className="info-overlay-pill"
+      style={{
+        position: 'absolute',
+        top: 20,
+        left: 'calc(50% + 220px)',
+        background: 'rgba(30,30,30,0.55)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        color: '#ccc',
+        padding: '5px 12px',
+        borderRadius: 20,
+        fontSize: 11,
+        fontFamily: 'monospace',
+        zIndex: 1000,
+        cursor: 'default',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+      }}
+    >
+      <style>{`
+        .info-overlay-pill .info-details {
+          max-height: 0;
+          opacity: 0;
+          overflow: hidden;
+          transition: max-height 0.25s ease, opacity 0.2s ease;
+        }
+        .info-overlay-pill:hover .info-details {
+          max-height: 120px;
+          opacity: 1;
+        }
+        @keyframes sync-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+      `}</style>
+
+      <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {loading && (
+          <span style={{
+            display: 'inline-block',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: '#4ECDC4',
+            animation: 'sync-pulse 1.2s ease-in-out infinite',
+            flexShrink: 0,
+          }} />
+        )}
+        <div style={{ display: 'flex', gap: 0, textAlign: 'center' }}>
+          <span style={{ flex: 1, minWidth: 44 }}>{zoomLabel}</span>
+          <span style={{ color: '#555', padding: '0 4px' }}>·</span>
+          <span style={{ flex: 1, minWidth: 44 }}>{panLabel}</span>
+          <span style={{ color: '#555', padding: '0 4px' }}>·</span>
+          <span style={{ flex: 1, minWidth: 44 }}>{objectCount}</span>
+        </div>
+      </span>
+
+      <div className="info-details" style={{ display: 'flex', gap: 0, marginTop: 4, fontSize: 9, color: '#999', fontStyle: 'italic' }}>
+        <span style={{ flex: 1, minWidth: 44, textAlign: 'center' }}>zoom<br />(scroll)</span>
+        <span style={{ padding: '0 4px', color: 'transparent' }}>·</span>
+        <span style={{ flex: 1, minWidth: 44, textAlign: 'center' }}>pan<br />(drag)</span>
+        <span style={{ padding: '0 4px', color: 'transparent' }}>·</span>
+        <span style={{ flex: 1, minWidth: 44, textAlign: 'center' }}>obj<br />(2x click)</span>
       </div>
-      {loading && <div style={{ marginTop: 8, color: '#4ECDC4' }}>Syncing…</div>}
     </div>
   );
 }, (prev, next) =>
@@ -45,6 +94,5 @@ export default memo(function InfoOverlay({
   && prev.stagePos.x === next.stagePos.x
   && prev.stagePos.y === next.stagePos.y
   && prev.objectCount === next.objectCount
-  && prev.usersOnline === next.usersOnline
   && prev.loading === next.loading
 );
