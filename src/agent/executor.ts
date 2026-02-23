@@ -18,6 +18,17 @@ function jitter(): number {
   return Math.round((Math.random() - 0.5) * 40);
 }
 
+const CONFIDENCE_COLORS: Record<string, string> = {
+  mastered: '#4CAF50',
+  shaky: '#FFB74D',
+  gap: '#EF5350',
+  unexplored: '#BDBDBD',
+};
+
+function findBoardObjectByKgNodeId(kgNodeId: string, objects?: BoardObject[]): BoardObject | undefined {
+  return objects?.find(o => o.kgNodeId === kgNodeId);
+}
+
 /**
  * Dispatch a single already-validated tool action with explicit positions.
  * Template expansions call this directly so grid layout logic is bypassed —
@@ -175,6 +186,51 @@ function dispatchSingleAction(
       return { success: true, objectId: input.id as string };
     }
 
+    case 'placeKnowledgeNode': {
+      const confidence = (input.confidence as string) ?? 'unexplored';
+      const color = CONFIDENCE_COLORS[confidence] ?? CONFIDENCE_COLORS.unexplored;
+      const id = actions.createObject('kg-node', posX, posY, {
+        content: input.description as string,
+        color,
+        kgNodeId: input.kgNodeId as string,
+        kgConfidence: confidence as BoardObject['kgConfidence'],
+        ...(input.gradeLevel ? { kgGradeLevel: input.gradeLevel as string } : {}),
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'connectKnowledgeNodes': {
+      const fromObj = findBoardObjectByKgNodeId(input.fromKgNodeId as string, allObjects);
+      const toObj = findBoardObjectByKgNodeId(input.toKgNodeId as string, allObjects);
+      if (!fromObj || !toObj) {
+        return { success: false, error: `KG nodes not found on canvas: from=${input.fromKgNodeId}, to=${input.toKgNodeId}` };
+      }
+      const toPt = resolveEndpoint(toObj, undefined, { x: fromObj.x + fromObj.width / 2, y: fromObj.y + fromObj.height / 2 });
+      const fromPt = resolveEndpoint(fromObj, undefined, toPt);
+      const id = actions.createObject('line', fromPt.x, fromPt.y, {
+        points: [fromPt.x, fromPt.y, toPt.x, toPt.y],
+        fromId: fromObj.id,
+        toId: toObj.id,
+        arrowEnd: true,
+        color: '#999999',
+        strokeWidth: 2,
+      });
+      return { success: true, objectId: id };
+    }
+
+    case 'updateNodeConfidence': {
+      const obj = findBoardObjectByKgNodeId(input.kgNodeId as string, allObjects);
+      if (!obj) {
+        return { success: false, error: `KG node not found on canvas: ${input.kgNodeId}` };
+      }
+      const conf = input.confidence as string;
+      actions.updateObject(obj.id, {
+        kgConfidence: conf as BoardObject['kgConfidence'],
+        color: CONFIDENCE_COLORS[conf] ?? CONFIDENCE_COLORS.unexplored,
+      });
+      return { success: true, objectId: obj.id };
+    }
+
     default:
       return { success: false, error: `Unhandled tool: ${name}` };
   }
@@ -222,7 +278,7 @@ export function executeToolCalls(
 
   // Identify create-type calls without explicit positions for grid layout
   const createToolNames = new Set([
-    'createStickyNote', 'createShape', 'createFrame', 'createText',
+    'createStickyNote', 'createShape', 'createFrame', 'createText', 'placeKnowledgeNode',
   ]);
   const positionlessCreates = toolCalls.filter(
     (tc) => createToolNames.has(tc.name) && tc.input.x == null && tc.input.y == null,
@@ -278,6 +334,7 @@ export function executeToolCalls(
         results.push({ success: true });
         continue;
       }
+
 
       // ── Determine position for create tools ───────────────────────────────
       let posX: number;
