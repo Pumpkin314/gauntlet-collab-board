@@ -153,3 +153,31 @@ export function getAllNodes(): KGNode[] {
 export function getAllEdges(): KGEdge[] {
   return edges;
 }
+
+/**
+ * Return the best "anchor" nodes for a grade — standards that sit in the
+ * interior of the graph (have both prerequisite parents AND dependent
+ * children), ranked by total degree. Pure leaf nodes (no dependents) and
+ * pure root nodes (no prerequisites) are ranked lower; we want nodes that
+ * give the most diagnostic signal because they unlock the most and depend
+ * on the most.
+ *
+ * Used by the Learning Explorer to seed the initial canvas view.
+ */
+export function getAnchorNodes(grade: string, limit = 8): KGNode[] {
+  const gradeStandards = (gradeIndex.get(grade) ?? [])
+    .map(id => nodeMap.get(id))
+    .filter((n): n is KGNode => !!n && n.type === 'standard');
+
+  // Score: nodes with BOTH parents and children get a big bonus so they
+  // always rank above pure roots/leaves.
+  const scored = gradeStandards.map(n => {
+    const inDeg = (parentsMap.get(n.id) ?? []).length;
+    const outDeg = (childrenMap.get(n.id) ?? []).length;
+    const bothBonus = inDeg > 0 && outDeg > 0 ? 10 : 0;
+    return { node: n, score: inDeg + outDeg + bothBonus };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map(s => s.node);
+}

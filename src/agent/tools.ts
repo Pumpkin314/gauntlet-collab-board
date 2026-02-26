@@ -117,7 +117,7 @@ export const placeKnowledgeNodeSchema = z.object({
   kgNodeId: z.string(),
   description: z.string(),
   gradeLevel: z.string().optional(),
-  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored']).optional().default('unexplored'),
+  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored', 'provisional']).optional().default('unexplored'),
   x: z.number().optional(),
   y: z.number().optional(),
 });
@@ -129,7 +129,16 @@ export const connectKnowledgeNodesSchema = z.object({
 
 export const updateNodeConfidenceSchema = z.object({
   kgNodeId: z.string(),
-  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored']),
+  /** provisional = self-reported mastered, awaiting practice verification */
+  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored', 'provisional']),
+});
+
+export const givePracticeQuestionSchema = z.object({
+  kgNodeId: z.string(),
+  questionText: z.string(),
+  options: z.array(z.string()).min(2).max(4),
+  correctIndex: z.number().int().min(0).max(3),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium'),
 });
 
 export const computeFrontierSchema = z.object({
@@ -156,6 +165,11 @@ export const getNodesByGradeSchema = z.object({
   limit: z.number().optional().default(20),
 });
 
+export const getAnchorNodesSchema = z.object({
+  grade: z.string(),
+  limit: z.number().optional().default(8),
+});
+
 // ── Schema lookup by tool name ───────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
@@ -178,11 +192,13 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   placeKnowledgeNode:      placeKnowledgeNodeSchema,
   connectKnowledgeNodes:   connectKnowledgeNodesSchema,
   updateNodeConfidence:    updateNodeConfidenceSchema,
+  givePracticeQuestion:    givePracticeQuestionSchema,
   computeFrontier:         computeFrontierSchema,
   expandAroundNode:        expandAroundNodeSchema,
   searchKnowledgeGraph:    searchKnowledgeGraphSchema,
   getPrerequisites:        getPrerequisitesSchema,
   getNodesByGrade:         getNodesByGradeSchema,
+  getAnchorNodes:          getAnchorNodesSchema,
 };
 
 // ── Anthropic tool definitions (sent in API request) ─────────────────────────
@@ -442,7 +458,7 @@ const KG_TOOL_DEFINITIONS = [
         kgNodeId: { type: 'string', description: 'The knowledge graph node ID' },
         description: { type: 'string', description: 'Description text to display' },
         gradeLevel: { type: 'string', description: 'Grade level label (e.g. "5")' },
-        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored'], description: 'Student confidence level' },
+        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored', 'provisional'], description: 'Student confidence level' },
         x: { type: 'number', description: 'X position on canvas' },
         y: { type: 'number', description: 'Y position on canvas' },
       },
@@ -468,9 +484,24 @@ const KG_TOOL_DEFINITIONS = [
       type: 'object' as const,
       properties: {
         kgNodeId: { type: 'string', description: 'The knowledge graph node ID' },
-        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored'], description: 'New confidence level' },
+        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored', 'provisional'], description: 'New confidence level. Use "provisional" when self-reported mastered but not yet verified by practice.' },
       },
       required: ['kgNodeId', 'confidence'],
+    },
+  },
+  {
+    name: 'givePracticeQuestion',
+    description: 'Give the student a multiple-choice practice question to verify their self-reported confidence. Use for "provisional" (self-reported mastered) nodes to verify, or "shaky" nodes to probe understanding. The correct answer index is stored for the next turn to validate the student\'s response.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kgNodeId: { type: 'string', description: 'KG node ID being assessed' },
+        questionText: { type: 'string', description: 'The question to ask (include question mark)' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Answer options (2-4 items, do NOT include letter prefixes — A/B/C/D are added automatically)' },
+        correctIndex: { type: 'number', description: '0-based index of the correct answer in the options array' },
+        difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], description: 'Question difficulty: easy for shaky nodes, medium for provisional' },
+      },
+      required: ['kgNodeId', 'questionText', 'options', 'correctIndex'],
     },
   },
   {
@@ -532,6 +563,18 @@ const KG_TOOL_DEFINITIONS = [
       required: ['grade'],
     },
   },
+  {
+    name: 'getAnchorNodes',
+    description: 'Get the best "anchor" nodes for a grade — standards that sit in the middle of the KG (have both prerequisite parents AND dependent children). These are the most diagnostically useful starting nodes because they reveal the most about a student\'s knowledge. Use INSTEAD OF getNodesByGrade when placing the initial canvas nodes. Read-only.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        grade: { type: 'string', description: 'Grade level: "K", "1", "2", ..., "12"' },
+        limit: { type: 'number', description: 'Max nodes to return (default 8)' },
+      },
+      required: ['grade'],
+    },
+  },
 ];
 
 /** Tool definitions for the Learning Explorer mode. */
@@ -545,6 +588,12 @@ export const EXPLORER_TOOL_DEFINITIONS = [
   TOOL_DEFINITIONS.find(t => t.name === 'moveObject')!,
 ];
 
+/** Explorer tools handled at pipeline level (intercepted before executor). */
+export const EXPLORER_META_TOOLS = new Set([
+  'askClarification',
+  'givePracticeQuestion',
+]);
+
 /** Read-only KG tools that don't count toward action limits. */
 export const KG_READONLY_TOOLS = new Set([
   'searchKnowledgeGraph',
@@ -552,4 +601,5 @@ export const KG_READONLY_TOOLS = new Set([
   'computeFrontier',
   'expandAroundNode',
   'getNodesByGrade',
+  'getAnchorNodes',
 ]);
