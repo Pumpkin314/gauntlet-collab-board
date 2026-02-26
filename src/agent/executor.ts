@@ -219,10 +219,17 @@ function dispatchSingleAction(
     }
 
     case 'connectKnowledgeNodes': {
-      const fromObj = findBoardObjectByKgNodeId(input.fromKgNodeId as string, allObjects);
-      const toObj = findBoardObjectByKgNodeId(input.toKgNodeId as string, allObjects);
+      const fromKgNodeId = input.fromKgNodeId as string;
+      const toKgNodeId = input.toKgNodeId as string;
+
+      // Primary lookup by kgNodeId field; fallback for when LLM passes board UUID instead of KG standard ID.
+      const fromObj = findBoardObjectByKgNodeId(fromKgNodeId, allObjects)
+        ?? allObjects?.find(o => o.id === fromKgNodeId);
+      const toObj = findBoardObjectByKgNodeId(toKgNodeId, allObjects)
+        ?? allObjects?.find(o => o.id === toKgNodeId);
+
       if (!fromObj || !toObj) {
-        return { success: false, error: `KG nodes not found on canvas: from=${input.fromKgNodeId}, to=${input.toKgNodeId}` };
+        return { success: false, error: `KG nodes not found on canvas: from=${fromKgNodeId}, to=${toKgNodeId}` };
       }
       const toPt = resolveEndpoint(toObj, undefined, { x: fromObj.x + fromObj.width / 2, y: fromObj.y + fromObj.height / 2 });
       const fromPt = resolveEndpoint(fromObj, undefined, toPt);
