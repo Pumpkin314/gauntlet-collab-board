@@ -168,6 +168,6 @@ describe('kgNodeMap block label in system prompt (gs-018)', () => {
 
   it('[gs-018c] diagnostic flow includes explicit connect step after node placement', () => {
     const prompt = buildLearningExplorerPrompt(VIEWPORT, undefined, 'diagnostic');
-    expect(prompt).toContain('connectKnowledgeNodes` for each prerequisite relationship');
+    expect(prompt).toContain('connectKnowledgeNodes` for EVERY edge in the `edges` array');
   });
 });
