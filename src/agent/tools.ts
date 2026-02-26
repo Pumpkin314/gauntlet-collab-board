@@ -117,7 +117,7 @@ export const placeKnowledgeNodeSchema = z.object({
   kgNodeId: z.string(),
   description: z.string(),
   gradeLevel: z.string().optional(),
-  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored']).optional().default('unexplored'),
+  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored', 'provisional']).optional().default('unexplored'),
   x: z.number().optional(),
   y: z.number().optional(),
 });
