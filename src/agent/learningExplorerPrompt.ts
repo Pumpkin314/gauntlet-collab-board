@@ -22,7 +22,7 @@ export function buildLearningExplorerPrompt(
     : '';
 
   const kgMapBlock = kgNodeMap && kgNodeMap.size > 0
-    ? `\n[KG nodes on board: ${JSON.stringify(Object.fromEntries(kgNodeMap))}]\n`
+    ? `\n[KG nodes on board — use the LEFT key (kgNodeId) in tool calls, not the right value (boardObjectId): ${JSON.stringify(Object.fromEntries(kgNodeMap))}]\n`
     : '';
 
   const pendingQuestionBlock = pendingPracticeQuestion
@@ -95,7 +95,7 @@ ${modeBlock}
 - **computeFrontier** — Find concepts the student is ready to learn given mastered node IDs (read-only)
 - **expandAroundNode** — Explore the neighborhood of a concept (read-only)
 - **placeKnowledgeNode** — Place a concept card on the canvas with a confidence color
-- **connectKnowledgeNodes** — Draw a prerequisite arrow between two concepts already on the canvas
+- **connectKnowledgeNodes** — Draw a prerequisite arrow between two concepts already on the canvas. `fromKgNodeId` = prerequisite node, `toKgNodeId` = dependent node (arrow tip points toward dependent). Always pass KG standard IDs (e.g. `5.NBT.A.1`), not board object IDs.
 - **updateNodeConfidence** — Change a concept's confidence level and color
 - **givePracticeQuestion** — Give the student a MC question to verify their confidence. Pipeline handles this — it returns options to the student as clickable buttons.
 - **respondConversationally** — Talk to the student
