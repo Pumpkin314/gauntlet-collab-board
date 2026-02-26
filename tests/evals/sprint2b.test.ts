@@ -122,6 +122,34 @@ describe('connectKnowledgeNodes normal arrow creation (gs-017)', () => {
   });
 });
 
+// ── gs-019: same-batch place + connect ───────────────────────────────────────
+
+describe('connectKnowledgeNodes in same batch as placeKnowledgeNode (gs-019)', () => {
+  it('[gs-019] arrow is created when place and connect are in the same LLM turn', () => {
+    const actions = makeActions();
+    // Board starts empty — nodes will be placed and connected in one batch
+    const toolCalls = [
+      makeToolCall('placeKnowledgeNode', { kgNodeId: '4.NBT.A.1', description: 'Place value', confidence: 'unexplored', x: 200, y: 500 }),
+      makeToolCall('placeKnowledgeNode', { kgNodeId: '5.NBT.A.1', description: 'Decimal place value', confidence: 'unexplored', x: 400, y: 300 }),
+      makeToolCall('connectKnowledgeNodes', { fromKgNodeId: '4.NBT.A.1', toKgNodeId: '5.NBT.A.1' }),
+    ];
+
+    const kgNodeMap = new Map<string, string>();
+    const { results } = executeToolCalls(toolCalls, actions as never, VIEWPORT, undefined, [], kgNodeMap);
+
+    // All three calls must succeed
+    expect(results[0]!.success).toBe(true);
+    expect(results[1]!.success).toBe(true);
+    expect(results[2]!.success).toBe(true);
+
+    // Two nodes + one arrow line created
+    expect(actions._created.length).toBe(3);
+    const line = actions._created[2]!;
+    expect(line.type).toBe('line');
+    expect(line.overrides?.arrowEnd).toBe(true);
+  });
+});
+
 // ── Prompt: kgNodeMap label updated (gs-018) ─────────────────────────────────
 
 describe('kgNodeMap block label in system prompt (gs-018)', () => {

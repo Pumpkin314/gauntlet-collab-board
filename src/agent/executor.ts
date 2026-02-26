@@ -283,6 +283,24 @@ export function executeToolCalls(
   const total = toolCalls.length;
   let completed = 0;
 
+  // Live view of board objects — grows as this batch creates new objects so that
+  // connectKnowledgeNodes can find nodes placed earlier in the same LLM turn.
+  const liveObjects: BoardObject[] = [...(allObjects ?? [])];
+  const liveActions: BoardActions = {
+    ...actions,
+    createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string {
+      const id = actions.createObject(type, x, y, overrides);
+      liveObjects.push({
+        id, type, x, y,
+        width: (overrides?.width ?? 160) as number,
+        height: (overrides?.height ?? 80) as number,
+        zIndex: 0,
+        ...overrides,
+      } as BoardObject);
+      return id;
+    },
+  };
+
   const mutationOps = new Set(['deleteObject', 'moveObject', 'resizeObject', 'updateText', 'changeColor']);
 
   const toolLabel: Record<string, string> = {
@@ -351,7 +369,7 @@ export function executeToolCalls(
             const parentId = createdIds[action.parentActionIndex];
             if (parentId) resolvedInput.parentId = parentId;
           }
-          const r = dispatchSingleAction(action.name, resolvedInput, actions, allObjects, kgNodeMap);
+          const r = dispatchSingleAction(action.name, resolvedInput, liveActions, liveObjects, kgNodeMap);
           createdIds.push(r.objectId ?? '');
           results.push(r);
           if (r.success) fireProgress(action.name);
@@ -391,7 +409,7 @@ export function executeToolCalls(
 
       // Inject resolved position before dispatching
       const inputWithPos = { ...input, x: posX, y: posY };
-      const result = dispatchSingleAction(tc.name, inputWithPos, actions, allObjects, kgNodeMap);
+      const result = dispatchSingleAction(tc.name, inputWithPos, liveActions, liveObjects, kgNodeMap);
       results.push(result);
       if (result.success) fireProgress(tc.name);
     } catch (err) {
