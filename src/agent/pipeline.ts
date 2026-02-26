@@ -296,8 +296,13 @@ export async function runAgentCommand(
       console.debug(`[Explorer] KG multi-turn #${kgTurn + 1}: ${llm2Duration}ms`);
 
       const parsed2 = parseResponse(nextResponse);
-      toolCalls = parsed2.toolCalls;
-      textContent = parsed2.textContent;
+      // Merge: keep non-KG tool calls from the current set (e.g. respondConversationally
+      // that was emitted alongside the KG reads), then append the new response's calls.
+      // This prevents the second LLM response from silently dropping action calls the
+      // first response included next to its KG queries (the original stall-out bug).
+      const nonKgCalls = toolCalls.filter((tc) => !KG_READONLY_TOOLS.has(tc.name));
+      toolCalls = [...nonKgCalls, ...parsed2.toolCalls];
+      textContent = parsed2.textContent || textContent;
       kgLastResponse = nextResponse;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') throw err;
