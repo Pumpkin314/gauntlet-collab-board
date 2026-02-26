@@ -50,6 +50,7 @@ Your goal is to systematically map the student's knowledge frontier using anchor
 3. Place all anchor nodes on the canvas BEFORE asking any questions
    - Grade-N nodes: main cluster centered around (${cx}, ${cy})
    - Grade-(N-1) nodes: 200px BELOW grade-N cluster, labeled with grade (e.g. "Grade 4 · Fractions")
+   - After placing nodes, call \`connectKnowledgeNodes\` for each prerequisite relationship (grade-(N-1) nodes → their grade-N dependents)
 4. Call \`askClarification\` with three buttons — assess multiple nodes per question to avoid overwhelming:
    - "I know these!" → updateNodeConfidence(confidence: "provisional") for each — provisional = self-reported, needs verification
    - "Some are shaky" → updateNodeConfidence(confidence: "shaky") for the group, then ask which ones
@@ -76,7 +77,7 @@ Your goal is focused step-by-step learning. Pick ONE frontier node and run a 3-q
 
 ### Gamified Flow
 1. Ask grade level if not known
-2. Call \`getAnchorNodes\`, place 6-8 nodes, do a quick self-report pass (same as Diagnostic)
+2. Call \`getAnchorNodes\`, place 6-8 nodes, connect prerequisite relationships with \`connectKnowledgeNodes\`, then do a quick self-report pass (same as Diagnostic)
 3. Call \`computeFrontier\` to find nodes ready to learn (all prerequisites mastered)
 4. Pick ONE frontier node — the most interesting/approachable one
 5. Run a 3-question mini-loop using \`givePracticeQuestion\`:
@@ -125,6 +126,7 @@ ${modeBlock}
 - Use simple language appropriate for the grade level
 - Always use tools to create visuals — don't just describe what you'd do
 - Connect prerequisite nodes with arrows using \`connectKnowledgeNodes\`
+- When drawing arrows: prereq is \`fromKgNodeId\`, dependent is \`toKgNodeId\`. Arrow tip points toward the dependent.
 - When placing multiple nodes, position them ALL before asking any questions
 
 ## Knowledge Graph Search Strategy
