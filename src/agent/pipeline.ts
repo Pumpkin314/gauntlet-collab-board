@@ -3,6 +3,7 @@ import type { BoardObject, ShapeType } from '../types/board';
 import { sanitizeInput, checkRateLimit, validateActionCount } from './guardrails';
 import { buildSystemPrompt } from './systemPrompt';
 import { buildLearningExplorerPrompt } from './learningExplorerPrompt';
+import type { ExplorerMode, PendingPracticeQuestion } from './learningExplorerPrompt';
 import { buildPlannerPrompt } from './plannerPrompt';
 import { callAnthropic } from './apiClient';
 import { TOOL_DEFINITIONS, TOOL_SCHEMAS, EXPLORER_TOOL_DEFINITIONS, KG_READONLY_TOOLS } from './tools';
@@ -25,6 +26,8 @@ export interface PipelineConfig {
   toolDefinitions: unknown[];
   /** Explorer-only: tracks kgNodeId → boardObjectId for deduplication and bot awareness. */
   kgNodeMap?: Map<string, string>;
+  /** Explorer-only: current diagnostic/gamified mode selection. null = not yet chosen. */
+  explorerMode?: ExplorerMode;
 }
 
 function getBoardieConfig(): PipelineConfig {
@@ -35,17 +38,27 @@ function getBoardieConfig(): PipelineConfig {
   };
 }
 
-function getExplorerConfig(kgNodeMap?: Map<string, string>): PipelineConfig {
+function getExplorerConfig(
+  kgNodeMap?: Map<string, string>,
+  explorerMode?: ExplorerMode,
+  pendingPracticeQuestion?: PendingPracticeQuestion | null,
+): PipelineConfig {
   return {
     mode: 'explorer',
-    buildSystemPrompt: (vc: ViewportCenter) => buildLearningExplorerPrompt(vc, kgNodeMap),
+    buildSystemPrompt: (vc: ViewportCenter) => buildLearningExplorerPrompt(vc, kgNodeMap, explorerMode, pendingPracticeQuestion),
     toolDefinitions: EXPLORER_TOOL_DEFINITIONS,
     kgNodeMap,
+    explorerMode,
   };
 }
 
-export function getPipelineConfig(mode: 'boardie' | 'explorer', kgNodeMap?: Map<string, string>): PipelineConfig {
-  return mode === 'explorer' ? getExplorerConfig(kgNodeMap) : getBoardieConfig();
+export function getPipelineConfig(
+  mode: 'boardie' | 'explorer',
+  kgNodeMap?: Map<string, string>,
+  explorerMode?: ExplorerMode,
+  pendingPracticeQuestion?: PendingPracticeQuestion | null,
+): PipelineConfig {
+  return mode === 'explorer' ? getExplorerConfig(kgNodeMap, explorerMode, pendingPracticeQuestion) : getBoardieConfig();
 }
 
 interface BoardActions {
@@ -99,7 +112,7 @@ export async function runAgentCommand(
   onProgress?: ProgressCallback,
   abortSignal?: AbortSignal,
   config?: PipelineConfig,
-): Promise<{ messages: AgentMessage[]; createdObjectIds: string[] }> {
+): Promise<{ messages: AgentMessage[]; createdObjectIds: string[]; pendingPracticeQuestion?: PendingPracticeQuestion }> {
   const t0 = performance.now();
   const messages: AgentMessage[] = [];
   const createdObjectIds: string[] = [];
@@ -324,23 +337,76 @@ export async function runAgentCommand(
 
   llmSpan?.end();
 
-  // 5b. Check for askClarification → return early with choice buttons
+  const createToolNamesSet = new Set(['createStickyNote', 'createShape', 'createFrame', 'createText', 'createLine', 'placeKnowledgeNode']);
+
+  /**
+   * Execute board-mutation tool calls (placeKnowledgeNode, updateNodeConfidence, etc.)
+   * that appear alongside a clarification or practice-question call in the same turn.
+   * This ensures nodes are placed on the canvas before the early return.
+   */
+  function executePreClarificationMutations(preCalls: AgentToolCall[]) {
+    if (preCalls.length === 0) return;
+    const currentObjects = getAllObjects?.() ?? [];
+    const { results, agentMessages } = executeToolCalls(
+      preCalls, actions, viewportCenter, onProgress, currentObjects,
+      effectiveConfig.kgNodeMap,
+      effectiveConfig.mode === 'explorer',
+    );
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      if (r.success && r.objectId && createToolNamesSet.has(preCalls[i]!.name)) {
+        createdObjectIds.push(r.objectId);
+      }
+    }
+    for (const msg of agentMessages) {
+      messages.push({ id: makeId(), role: 'agent', content: msg, timestamp: Date.now() });
+    }
+  }
+
+  // 5b. Check for askClarification OR givePracticeQuestion → execute board mutations first, then return early
   const clarificationCall = toolCalls.find((tc) => tc.name === 'askClarification');
-  if (clarificationCall) {
+  const practiceQuestionCall = toolCalls.find((tc) => tc.name === 'givePracticeQuestion');
+  const earlyReturnCall = clarificationCall ?? practiceQuestionCall;
+
+  if (earlyReturnCall) {
     routePath = 'clarification';
-    const question = clarificationCall.input.question as string;
-    const options = clarificationCall.input.options as string[];
+    // Execute any board mutations (placeKnowledgeNode, updateNodeConfidence, etc.) that came with this response
+    const metaAndReadonly = new Set(['askClarification', 'givePracticeQuestion', 'requestBoardState', 'delegateToPlanner']);
+    const preClarificationMutations = toolCalls.filter(
+      (tc) => !metaAndReadonly.has(tc.name) && !KG_READONLY_TOOLS.has(tc.name),
+    );
+    executePreClarificationMutations(preClarificationMutations);
+
+    if (clarificationCall) {
+      const question = clarificationCall.input.question as string;
+      const options = clarificationCall.input.options as string[];
+      messages.push({ id: makeId(), role: 'agent', content: question, timestamp: Date.now(), options });
+      const totalMs = Math.round(performance.now() - t0);
+      console.debug(`[Boardie] Total pipeline (clarification): ${totalMs}ms`);
+      trace?.update({ outcome: 'clarification', path: routePath, total_duration_ms: totalMs });
+      return { messages, createdObjectIds };
+    }
+
+    // givePracticeQuestion — format as MC question with lettered options
+    const { kgNodeId, questionText, options, correctIndex } = practiceQuestionCall!.input;
+    const rawOptions = options as string[];
+    const letters = ['A', 'B', 'C', 'D'];
+    const formattedOptions = rawOptions.map((opt, i) => `${letters[i]}) ${opt}`);
     messages.push({
       id: makeId(),
       role: 'agent',
-      content: question,
+      content: questionText as string,
       timestamp: Date.now(),
-      options,
+      options: formattedOptions,
     });
     const totalMs = Math.round(performance.now() - t0);
-    console.debug(`[Boardie] Total pipeline (clarification): ${totalMs}ms`);
+    console.debug(`[Boardie] Total pipeline (practice question): ${totalMs}ms`);
     trace?.update({ outcome: 'clarification', path: routePath, total_duration_ms: totalMs });
-    return { messages, createdObjectIds };
+    return {
+      messages,
+      createdObjectIds,
+      pendingPracticeQuestion: { kgNodeId: kgNodeId as string, correctIndex: correctIndex as number },
+    };
   }
 
   // 5c. Check for delegateToPlanner → single Sonnet call returning JSON plan
@@ -476,7 +542,7 @@ export async function runAgentCommand(
   // Filter out any leftover meta/read-only calls (shouldn't be executed by executor)
   const executableCalls = toolCalls.filter(
     (tc) => tc.name !== 'requestBoardState' && tc.name !== 'delegateToPlanner'
-      && tc.name !== 'askClarification' && !KG_READONLY_TOOLS.has(tc.name),
+      && tc.name !== 'askClarification' && tc.name !== 'givePracticeQuestion' && !KG_READONLY_TOOLS.has(tc.name),
   );
 
   // --- validation span ---

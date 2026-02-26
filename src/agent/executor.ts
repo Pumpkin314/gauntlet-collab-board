@@ -21,6 +21,8 @@ function jitter(): number {
 
 const CONFIDENCE_COLORS: Record<string, string> = {
   mastered: '#4CAF50',
+  /** provisional = self-reported mastered, awaiting practice verification (light green) */
+  provisional: '#A5D6A7',
   shaky: '#FFB74D',
   gap: '#EF5350',
   unexplored: '#BDBDBD',

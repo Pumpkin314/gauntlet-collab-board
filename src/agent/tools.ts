@@ -129,7 +129,16 @@ export const connectKnowledgeNodesSchema = z.object({
 
 export const updateNodeConfidenceSchema = z.object({
   kgNodeId: z.string(),
-  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored']),
+  /** provisional = self-reported mastered, awaiting practice verification */
+  confidence: z.enum(['mastered', 'shaky', 'gap', 'unexplored', 'provisional']),
+});
+
+export const givePracticeQuestionSchema = z.object({
+  kgNodeId: z.string(),
+  questionText: z.string(),
+  options: z.array(z.string()).min(2).max(4),
+  correctIndex: z.number().int().min(0).max(3),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium'),
 });
 
 export const computeFrontierSchema = z.object({
@@ -183,6 +192,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   placeKnowledgeNode:      placeKnowledgeNodeSchema,
   connectKnowledgeNodes:   connectKnowledgeNodesSchema,
   updateNodeConfidence:    updateNodeConfidenceSchema,
+  givePracticeQuestion:    givePracticeQuestionSchema,
   computeFrontier:         computeFrontierSchema,
   expandAroundNode:        expandAroundNodeSchema,
   searchKnowledgeGraph:    searchKnowledgeGraphSchema,
@@ -448,7 +458,7 @@ const KG_TOOL_DEFINITIONS = [
         kgNodeId: { type: 'string', description: 'The knowledge graph node ID' },
         description: { type: 'string', description: 'Description text to display' },
         gradeLevel: { type: 'string', description: 'Grade level label (e.g. "5")' },
-        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored'], description: 'Student confidence level' },
+        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored', 'provisional'], description: 'Student confidence level' },
         x: { type: 'number', description: 'X position on canvas' },
         y: { type: 'number', description: 'Y position on canvas' },
       },
@@ -474,9 +484,24 @@ const KG_TOOL_DEFINITIONS = [
       type: 'object' as const,
       properties: {
         kgNodeId: { type: 'string', description: 'The knowledge graph node ID' },
-        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored'], description: 'New confidence level' },
+        confidence: { type: 'string', enum: ['mastered', 'shaky', 'gap', 'unexplored', 'provisional'], description: 'New confidence level. Use "provisional" when self-reported mastered but not yet verified by practice.' },
       },
       required: ['kgNodeId', 'confidence'],
+    },
+  },
+  {
+    name: 'givePracticeQuestion',
+    description: 'Give the student a multiple-choice practice question to verify their self-reported confidence. Use for "provisional" (self-reported mastered) nodes to verify, or "shaky" nodes to probe understanding. The correct answer index is stored for the next turn to validate the student\'s response.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kgNodeId: { type: 'string', description: 'KG node ID being assessed' },
+        questionText: { type: 'string', description: 'The question to ask (include question mark)' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Answer options (2-4 items, do NOT include letter prefixes — A/B/C/D are added automatically)' },
+        correctIndex: { type: 'number', description: '0-based index of the correct answer in the options array' },
+        difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], description: 'Question difficulty: easy for shaky nodes, medium for provisional' },
+      },
+      required: ['kgNodeId', 'questionText', 'options', 'correctIndex'],
     },
   },
   {
@@ -562,6 +587,12 @@ export const EXPLORER_TOOL_DEFINITIONS = [
   TOOL_DEFINITIONS.find(t => t.name === 'deleteObject')!,
   TOOL_DEFINITIONS.find(t => t.name === 'moveObject')!,
 ];
+
+/** Explorer tools handled at pipeline level (intercepted before executor). */
+export const EXPLORER_META_TOOLS = new Set([
+  'askClarification',
+  'givePracticeQuestion',
+]);
 
 /** Read-only KG tools that don't count toward action limits. */
 export const KG_READONLY_TOOLS = new Set([

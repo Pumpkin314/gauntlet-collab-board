@@ -2,8 +2,15 @@ import { useState, useCallback, useRef } from 'react';
 import type { AgentMessage, ViewportCenter } from './types';
 import { runAgentCommand } from './pipeline';
 import { getPipelineConfig } from './pipeline';
+import type { ExplorerMode, PendingPracticeQuestion } from './learningExplorerPrompt';
 import { useBoardActions } from '../contexts/BoardContext';
 import { useAuth } from '../contexts/AuthContext';
+
+/** Maps mode-selection button labels to ExplorerMode values. */
+const MODE_BUTTON_MAP: Record<string, ExplorerMode> = {
+  'Map my knowledge': 'diagnostic',
+  "I know my level, let's go": 'gamified',
+};
 
 export type AgentMode = 'boardie' | 'explorer';
 
@@ -47,6 +54,10 @@ export function useAgent(
   });
   /** Explorer-only: kgNodeId → boardObjectId. Enables dedup and bot awareness. */
   const kgNodeMapRef = useRef<Map<string, string>>(new Map());
+  /** Explorer-only: which mode the student selected (null = not yet chosen). */
+  const explorerModeRef = useRef<ExplorerMode>(null);
+  /** Explorer-only: correctIndex for the last givePracticeQuestion, cleared after student answers. */
+  const pendingPracticeQuestionRef = useRef<PendingPracticeQuestion | null>(null);
   const messagesPerModeRef = useRef<Record<AgentMode, AgentMessage[]>>({
     boardie: [],
     explorer: [],
@@ -100,6 +111,19 @@ export function useAgent(
     abortControllerRef.current = abortController;
 
     try {
+      // Detect mode selection from button-click text before calling the pipeline.
+      // This runs before the API call so the chosen mode is in the system prompt immediately.
+      if (mode === 'explorer' && explorerModeRef.current === null) {
+        const selectedMode = MODE_BUTTON_MAP[trimmed];
+        if (selectedMode) explorerModeRef.current = selectedMode;
+      }
+
+      // If a practice question was pending, the student's current message is their answer.
+      // Clear the pending state so the system prompt no longer injects the correct-answer hint
+      // after this turn (the LLM will have already validated and called updateNodeConfidence).
+      const pendingQuestion = mode === 'explorer' ? pendingPracticeQuestionRef.current : null;
+      pendingPracticeQuestionRef.current = null;
+
       const viewportCenter = getViewportCenter();
       const sid = streamingIdRef.current;
 
@@ -136,9 +160,14 @@ export function useAgent(
         }
       }
 
-      const pipelineConfig = getPipelineConfig(mode, mode === 'explorer' ? kgNodeMapRef.current : undefined);
+      const pipelineConfig = getPipelineConfig(
+        mode,
+        mode === 'explorer' ? kgNodeMapRef.current : undefined,
+        mode === 'explorer' ? explorerModeRef.current : undefined,
+        pendingQuestion,
+      );
 
-      const { messages: resultMessages, createdObjectIds } = await runAgentCommand(
+      const { messages: resultMessages, createdObjectIds, pendingPracticeQuestion } = await runAgentCommand(
         trimmed,
         actions,
         userId,
@@ -174,6 +203,11 @@ export function useAgent(
         { role: 'assistant', content: resultMessages.map((m) => m.content).join('\n') },
       ];
 
+      // Store pending practice question so the next system prompt includes the correct-answer hint
+      if (pendingPracticeQuestion) {
+        pendingPracticeQuestionRef.current = pendingPracticeQuestion;
+      }
+
       setMessages((prev) => [...prev.filter((m) => m.id !== sid), ...resultMessages]);
       streamingIdRef.current = 'streaming-' + crypto.randomUUID();
     } catch (err) {
@@ -205,7 +239,11 @@ export function useAgent(
     setMessages([]);
     historyRef.current[mode] = [];
     sessionObjectsRef.current[mode].clear();
-    if (mode === 'explorer') kgNodeMapRef.current.clear();
+    if (mode === 'explorer') {
+      kgNodeMapRef.current.clear();
+      explorerModeRef.current = null;
+      pendingPracticeQuestionRef.current = null;
+    }
   }, [mode]);
 
   return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode };

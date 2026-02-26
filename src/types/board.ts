@@ -42,7 +42,8 @@ export interface BoardObject {
 
   // Knowledge graph metadata (kg-node shapes only)
   kgNodeId?: string;
-  kgConfidence?: 'mastered' | 'shaky' | 'gap' | 'unexplored';
+  /** 'provisional' = self-reported mastered, pending practice verification */
+  kgConfidence?: 'mastered' | 'shaky' | 'gap' | 'unexplored' | 'provisional';
   kgGradeLevel?: string;
 
   // Ordering

@@ -4,10 +4,12 @@ import BaseShape from './BaseShape';
 import type { ShapeProps } from '../../types/board';
 
 const FRONTIER_STROKE = '#2196F3';
+const PROVISIONAL_STROKE = '#388E3C';
 
 export default memo(function KnowledgeNodeShape(props: ShapeProps) {
   const { data, isSelected } = props;
   const isFrontier = data.kgConfidence === 'unexplored';
+  const isProvisional = data.kgConfidence === 'provisional';
 
   return (
     <BaseShape
@@ -21,8 +23,9 @@ export default memo(function KnowledgeNodeShape(props: ShapeProps) {
             width={w}
             height={h}
             fill={data.color}
-            stroke={isSelected ? '#4ECDC4' : isFrontier ? FRONTIER_STROKE : '#666'}
-            strokeWidth={isSelected ? 3 : isFrontier ? 2.5 : 1.5}
+            stroke={isSelected ? '#4ECDC4' : isFrontier ? FRONTIER_STROKE : isProvisional ? PROVISIONAL_STROKE : '#666'}
+            strokeWidth={isSelected ? 3 : isFrontier ? 2.5 : isProvisional ? 2.5 : 1.5}
+            dash={isProvisional && !isSelected ? [8, 4] : undefined}
             cornerRadius={12}
             shadowBlur={isFrontier ? 8 : 4}
             shadowColor={isFrontier ? 'rgba(33,150,243,0.4)' : 'rgba(0,0,0,0.15)'}
