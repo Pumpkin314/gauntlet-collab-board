@@ -156,6 +156,11 @@ export const getNodesByGradeSchema = z.object({
   limit: z.number().optional().default(20),
 });
 
+export const getAnchorNodesSchema = z.object({
+  grade: z.string(),
+  limit: z.number().optional().default(8),
+});
+
 // ── Schema lookup by tool name ───────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
@@ -183,6 +188,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   searchKnowledgeGraph:    searchKnowledgeGraphSchema,
   getPrerequisites:        getPrerequisitesSchema,
   getNodesByGrade:         getNodesByGradeSchema,
+  getAnchorNodes:          getAnchorNodesSchema,
 };
 
 // ── Anthropic tool definitions (sent in API request) ─────────────────────────
@@ -532,6 +538,18 @@ const KG_TOOL_DEFINITIONS = [
       required: ['grade'],
     },
   },
+  {
+    name: 'getAnchorNodes',
+    description: 'Get the best "anchor" nodes for a grade — standards that sit in the middle of the KG (have both prerequisite parents AND dependent children). These are the most diagnostically useful starting nodes because they reveal the most about a student\'s knowledge. Use INSTEAD OF getNodesByGrade when placing the initial canvas nodes. Read-only.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        grade: { type: 'string', description: 'Grade level: "K", "1", "2", ..., "12"' },
+        limit: { type: 'number', description: 'Max nodes to return (default 8)' },
+      },
+      required: ['grade'],
+    },
+  },
 ];
 
 /** Tool definitions for the Learning Explorer mode. */
@@ -552,4 +570,5 @@ export const KG_READONLY_TOOLS = new Set([
   'computeFrontier',
   'expandAroundNode',
   'getNodesByGrade',
+  'getAnchorNodes',
 ]);

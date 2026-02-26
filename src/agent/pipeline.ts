@@ -16,6 +16,7 @@ import {
   getFrontier as kgGetFrontier,
   getSubgraph as kgGetSubgraph,
   getNodesByGrade,
+  getAnchorNodes,
 } from '../data/knowledge-graph';
 
 export interface PipelineConfig {
@@ -269,6 +270,10 @@ export async function runAgentCommand(
           const allForGrade = getNodesByGrade(tc.input.grade as string);
           const standards = allForGrade.filter(n => n.type === 'standard');
           result = standards.slice(0, (tc.input.limit as number) ?? 20);
+          break;
+        }
+        case 'getAnchorNodes': {
+          result = getAnchorNodes(tc.input.grade as string, (tc.input.limit as number) ?? 8);
           break;
         }
       }
