@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { executeToolCalls } from '../../src/agent/executor';
 import { buildLearningExplorerPrompt } from '../../src/agent/learningExplorerPrompt';
+import { getAnchorNodes, getEdgesAmong } from '../../src/data/knowledge-graph';
 import type { AgentToolCall } from '../../src/agent/types';
 import type { BoardObject } from '../../src/types/board';
 
@@ -169,5 +170,46 @@ describe('kgNodeMap block label in system prompt (gs-018)', () => {
   it('[gs-018c] diagnostic flow includes explicit connect step after node placement', () => {
     const prompt = buildLearningExplorerPrompt(VIEWPORT, undefined, 'diagnostic');
     expect(prompt).toContain('connectKnowledgeNodes` for EVERY edge in the `edges` array');
+  });
+});
+
+// ── gs-020: getAnchorNodes returns edges ─────────────────────────────────────
+
+describe('getAnchorNodes returns dependency edges (gs-020)', () => {
+  it('[gs-020a] grade 6 anchors include intra-grade edges (6.RP.A.1 → 6.RP.A.2)', () => {
+    const nodes = getAnchorNodes('6', 8);
+    const ids = nodes.map(n => n.id);
+    const edges = getEdgesAmong(ids);
+
+    // We know from the KG that 6.RP.A.1 → 6.RP.A.2 is a real edge
+    const rpA1 = nodes.find(n => n.code === '6.RP.A.1');
+    const rpA2 = nodes.find(n => n.code === '6.RP.A.2');
+    expect(rpA1).toBeDefined();
+    expect(rpA2).toBeDefined();
+
+    const edge = edges.find(e => e.source === rpA1!.id && e.target === rpA2!.id);
+    expect(edge).toBeDefined();
+  });
+
+  it('[gs-020b] getEdgesAmong includes cross-grade edge when both grades present', () => {
+    const g6 = getAnchorNodes('6', 8);
+    const g5 = getAnchorNodes('5', 3);
+    const allIds = [...g6.map(n => n.id), ...g5.map(n => n.id)];
+    const edges = getEdgesAmong(allIds);
+
+    // 5.NF.B.3 → 6.RP.A.2 is a real cross-grade edge in the KG
+    const nfB3 = g5.find(n => n.code === '5.NF.B.3');
+    const rpA2 = g6.find(n => n.code === '6.RP.A.2');
+    expect(nfB3).toBeDefined();
+    expect(rpA2).toBeDefined();
+
+    const crossEdge = edges.find(e => e.source === nfB3!.id && e.target === rpA2!.id);
+    expect(crossEdge).toBeDefined();
+  });
+
+  it('[gs-020c] getEdgesAmong returns empty array when no edges exist among ids', () => {
+    // Use two unrelated node IDs that have no edge between them
+    const edges = getEdgesAmong(['nonexistent-a', 'nonexistent-b']);
+    expect(edges).toEqual([]);
   });
 });
