@@ -155,6 +155,16 @@ export function getAllEdges(): KGEdge[] {
 }
 
 /**
+ * Return all KG edges where both source and target are in the provided id set.
+ * Used by the pipeline to attach edge data to getAnchorNodes responses so the
+ * LLM knows which nodes to connect without having to guess or call getPrerequisites.
+ */
+export function getEdgesAmong(ids: string[]): KGEdge[] {
+  const idSet = new Set(ids);
+  return edges.filter(e => idSet.has(e.source) && idSet.has(e.target));
+}
+
+/**
  * Return the best "anchor" nodes for a grade — standards that sit in the
  * interior of the graph (have both prerequisite parents AND dependent
  * children), ranked by total degree. Pure leaf nodes (no dependents) and
