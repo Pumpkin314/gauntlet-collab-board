@@ -31,7 +31,7 @@ export function useAgent(
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setModeState] = useState<AgentMode>('boardie');
+  const [mode, setModeState] = useState<AgentMode>('explorer');
 
   const actions = useBoardActions();
   const { currentUser } = useAuth();

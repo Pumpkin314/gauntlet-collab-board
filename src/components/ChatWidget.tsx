@@ -18,12 +18,12 @@ const MODE_CONFIG: Record<AgentMode, {
   placeholder: string;
 }> = {
   boardie: {
-    label: 'Boardie',
-    icon: 'B',
+    label: 'Learnie',
+    icon: 'L',
     color: '#4ECDC4',
-    greeting: "Hi! I'm Boardie. Tell me what to create on the board.",
+    greeting: "Hi! I'm Learnie. Tell me what to create on the board.",
     hint: 'Try: "Add a yellow sticky note that says User Research"',
-    placeholder: 'Tell Boardie what to do...',
+    placeholder: 'Tell Learnie what to do...',
   },
   explorer: {
     label: 'Learning Explorer',
@@ -159,7 +159,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
           <button
             onClick={handleModeToggle}
             disabled={isLoading}
-            title={`Switch to ${mode === 'boardie' ? 'Learning Explorer' : 'Boardie'}`}
+            title={`Switch to ${mode === 'boardie' ? 'Learning Explorer' : 'Learnie'}`}
             style={{
               background: 'none',
               border: '1px solid #ddd',
@@ -171,7 +171,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
               opacity: isLoading ? 0.4 : 1,
             }}
           >
-            {mode === 'boardie' ? '🧭 Explorer' : '🎨 Boardie'}
+            {mode === 'boardie' ? '🧭 Explorer' : '🎨 Learnie'}
           </button>
           {messages.length > 0 && (
             <button
