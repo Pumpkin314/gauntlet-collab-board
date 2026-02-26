@@ -5,6 +5,7 @@ import { resolveColor } from './capabilities';
 import { TEMPLATE_REGISTRY } from './templateRegistry';
 import { gridPositions } from './geometryHelpers';
 import { resolveEndpoint } from '../utils/anchorResolve';
+import { checkSafety } from './safety';
 
 interface BoardActions {
   createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string;
@@ -266,6 +267,7 @@ export function executeToolCalls(
   onProgress?: ProgressCallback,
   allObjects?: BoardObject[],
   kgNodeMap?: Map<string, string>,
+  applySafety?: boolean,
 ): { results: ExecutionResult[]; agentMessages: string[] } {
   const results: ExecutionResult[] = [];
   const agentMessages: string[] = [];
@@ -350,7 +352,9 @@ export function executeToolCalls(
 
       // ── respondConversationally ───────────────────────────────────────────
       if (tc.name === 'respondConversationally') {
-        agentMessages.push(input.message as string);
+        const rawMessage = input.message as string;
+        const message = applySafety ? checkSafety(rawMessage).text : rawMessage;
+        agentMessages.push(message);
         results.push({ success: true });
         continue;
       }

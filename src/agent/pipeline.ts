@@ -495,7 +495,11 @@ export async function runAgentCommand(
     const executionSpan = trace?.span('execution', { actions_count: executableCalls.length });
     const t3 = performance.now();
     const currentObjects = getAllObjects?.() ?? [];
-    const { results, agentMessages } = executeToolCalls(executableCalls, actions, viewportCenter, onProgress, currentObjects, effectiveConfig.kgNodeMap);
+    const { results, agentMessages } = executeToolCalls(
+      executableCalls, actions, viewportCenter, onProgress, currentObjects,
+      effectiveConfig.kgNodeMap,
+      effectiveConfig.mode === 'explorer',
+    );
     const execDuration = Math.round(performance.now() - t3);
     console.debug(`[Boardie] Execution: ${execDuration}ms`);
 
