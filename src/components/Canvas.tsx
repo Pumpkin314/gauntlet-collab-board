@@ -21,6 +21,7 @@ import LineShape from './shapes/LineShape';
 import FrameShape from './shapes/FrameShape';
 import KnowledgeNodeShape from './shapes/KnowledgeNodeShape';
 import ChatWidget from './ChatWidget';
+import { Minimap } from './Canvas/Minimap';
 import type { ActiveTool, BoardObject } from '../types/board';
 import { getConnectedLines } from '../utils/connectorIndex';
 import { resolveEndpoint } from '../utils/anchorResolve';
@@ -187,7 +188,10 @@ export default function Canvas() {
   const {
     objects, presence, createObject, updateObject,
     deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchUpdate, batchDelete, loading,
+    userRole,
   } = useBoard();
+
+  const isViewer = userRole === 'viewer';
 
   const { selectedIds, select, toggleSelect, setSelection, deselectAll, selectAll } = useSelection();
 
@@ -215,6 +219,7 @@ export default function Canvas() {
   const isBoxDraggingRef  = useRef(false);
   const [pendingLineStart, setPendingLineStart] = useState<{ x: number; y: number } | null>(null);
   const isPanningRef = useRef(false);
+  const minimapAnimRef = useRef(0);
   const lastDblClickRef = useRef(0);
   const panSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorPosRef = useRef({ x: 0, y: 0 });
@@ -386,7 +391,13 @@ export default function Canvas() {
 
       const selected = [...selectedIds];
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) {
+      // Viewers can only use Escape and non-mutating shortcuts
+      if (isViewer) {
+        if (e.key === 'Escape') { deselectAll(); return; }
+        return;
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0 && !isViewer) {
         e.preventDefault();
         const deletingSet = new Set(selected);
         const allObjs = objectsRef.current;
@@ -433,7 +444,7 @@ export default function Canvas() {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0 && !isViewer) {
         e.preventDefault();
         const items = clipboardRef.current.map(({ type, x, y, id: _, createdBy: _1, createdByName: _2, zIndex: _3, fromId, toId, fromAnchor, toAnchor, ...rest }) => ({
           type, x: x + 20, y: y + 20, ...JSON.parse(JSON.stringify(rest)),
@@ -459,7 +470,7 @@ export default function Canvas() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, batchUpdate, deselectAll, selectAll]);
+  }, [selectedIds, objects, pendingLineStart, batchDelete, batchCreate, batchUpdate, deselectAll, selectAll, isViewer]);
 
   // ── Transformer: attach to selected non-line nodes ───────────────────────
   const objectsForTransformerRef = useRef(objects);
@@ -494,7 +505,7 @@ export default function Canvas() {
     setToolMode((prev) => (prev === 'infinite' ? 'single' : 'infinite'));
   }, []);
 
-  const isDraggable = activeTool !== 'box-select' || spaceHeld;
+  const isDraggable = !isViewer && (activeTool !== 'box-select' || spaceHeld);
 
   // ── Right-click: cancel pending line step 1 ──────────────────────────────
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -701,6 +712,7 @@ export default function Canvas() {
 
   // ── Object creation ───────────────────────────────────────────────────────
   const handleDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (isViewer) return;
     const now = Date.now();
     if (now - lastDblClickRef.current < 200) return;
     lastDblClickRef.current = now;
@@ -777,6 +789,7 @@ export default function Canvas() {
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const handleSelect = useCallback((id: string, e?: unknown) => {
+    if (isViewer) return;
     const konvaEvent = e as Konva.KonvaEventObject<MouseEvent> | undefined;
     if (konvaEvent?.evt?.shiftKey) {
       toggleSelect(id);
@@ -787,7 +800,7 @@ export default function Canvas() {
     if (obj?.type !== 'frame') {
       updateObject(id, { zIndex: Date.now() });
     }
-  }, [select, toggleSelect, updateObject]);
+  }, [select, toggleSelect, updateObject, isViewer]);
 
   const handleDeselectClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) {
@@ -797,6 +810,7 @@ export default function Canvas() {
   }, [deselectAll, inlineEdit]);
 
   const handleDelete = useCallback((id: string) => {
+    if (isViewer) return;
     const allObjs = objectsRef.current;
     const obj = allObjs.find(o => o.id === id);
     const updates: Array<{ id: string; changes: Partial<BoardObject> }> = [];
@@ -1142,6 +1156,8 @@ export default function Canvas() {
       }
     } else {
       isPanningRef.current = true;
+      cancelAnimationFrame(minimapAnimRef.current);
+      minimapAnimRef.current = 0;
       layerRef.current?.listening(false);
     }
   }, []);
@@ -1195,15 +1211,17 @@ export default function Canvas() {
               lineVariant={lineVariant}
             />
           )}
-          <Transformer
-            ref={transformerRef}
-            onTransformStart={handleTransformerTransformStart}
-            onTransform={handleTransformerTransform}
-            onTransformEnd={handleTransformerTransformEnd}
-            onDragStart={handleTransformerDragStart}
-            onDragEnd={handleTransformerDragEnd}
-            boundBoxFunc={boundBoxFunc}
-          />
+          {!isViewer && (
+            <Transformer
+              ref={transformerRef}
+              onTransformStart={handleTransformerTransformStart}
+              onTransform={handleTransformerTransform}
+              onTransformEnd={handleTransformerTransformEnd}
+              onDragStart={handleTransformerDragStart}
+              onDragEnd={handleTransformerDragEnd}
+              boundBoxFunc={boundBoxFunc}
+            />
+          )}
         </Layer>
 
         <Layer listening={false}>
@@ -1242,14 +1260,16 @@ export default function Canvas() {
         />
       )}
 
-      <Toolbar
-        activeTool={activeTool}
-        toolMode={toolMode}
-        lineVariant={lineVariant}
-        onToolChange={handleToolChange}
-        onModeToggle={handleModeToggle}
-        onLineVariantChange={setLineVariant}
-      />
+      {!isViewer && (
+        <Toolbar
+          activeTool={activeTool}
+          toolMode={toolMode}
+          lineVariant={lineVariant}
+          onToolChange={handleToolChange}
+          onModeToggle={handleModeToggle}
+          onLineVariantChange={setLineVariant}
+        />
+      )}
 
       <InfoOverlay
         stageScale={stageScale}
@@ -1284,6 +1304,46 @@ export default function Canvas() {
       >
         🗑️ Clear All
       </button>
+
+      <Minimap
+        objectsRef={objectsRef}
+        stagePosRef={stagePosRef}
+        stageScaleRef={stageScaleRef}
+        isPanningRef={isPanningRef}
+        windowWidth={windowSize.width}
+        windowHeight={windowSize.height}
+        onPanTo={useCallback((worldX: number, worldY: number) => {
+          const scale = stageScaleRef.current;
+          const targetPos = {
+            x: -worldX * scale + windowSize.width / 2,
+            y: -worldY * scale + windowSize.height / 2,
+          };
+          const stage = stageRef.current;
+          if (!stage) return;
+
+          cancelAnimationFrame(minimapAnimRef.current);
+          const LERP = 0.25;
+          const animate = () => {
+            const cur = stagePosRef.current;
+            const dx = targetPos.x - cur.x;
+            const dy = targetPos.y - cur.y;
+            if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+              stagePosRef.current = targetPos;
+              stage.position(targetPos);
+              stage.batchDraw();
+              setStagePos(targetPos);
+              minimapAnimRef.current = 0;
+              return;
+            }
+            const next = { x: cur.x + dx * LERP, y: cur.y + dy * LERP };
+            stagePosRef.current = next;
+            stage.position(next);
+            stage.batchDraw();
+            minimapAnimRef.current = requestAnimationFrame(animate);
+          };
+          animate();
+        }, [windowSize.width, windowSize.height])}
+      />
 
       <DebugOverlay stageScaleRef={stageScaleRef} stagePosRef={stagePosRef} />
 

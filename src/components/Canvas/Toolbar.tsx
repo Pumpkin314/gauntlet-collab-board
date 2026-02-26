@@ -39,9 +39,10 @@ interface ToolbarProps {
   onToolChange: (tool: ActiveTool) => void;
   onModeToggle: () => void;
   onLineVariantChange: (variant: LineVariant) => void;
+  isViewer?: boolean;
 }
 
-export default function Toolbar({ activeTool, toolMode, lineVariant, onToolChange, onModeToggle, onLineVariantChange }: ToolbarProps) {
+export default function Toolbar({ activeTool, toolMode, lineVariant, onToolChange, onModeToggle, onLineVariantChange, isViewer = false }: ToolbarProps) {
   const [hoveredTool, setHoveredTool] = useState<ActiveTool | null>(null);
   const [lineDropdownOpen, setLineDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -66,7 +67,7 @@ export default function Toolbar({ activeTool, toolMode, lineVariant, onToolChang
       display: 'flex', gap: 8, background: 'white', padding: '8px 12px',
       borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 1000,
     }}>
-      {TOOLS.map(({ tool, label, title }) => {
+      {(isViewer ? TOOLS.filter(t => t.tool === 'cursor' || t.tool === 'box-select') : TOOLS).map(({ tool, label, title }) => {
         const isActive = activeTool === tool;
         const isInfinite = toolMode === 'infinite';
         const isLine = tool === 'line';
