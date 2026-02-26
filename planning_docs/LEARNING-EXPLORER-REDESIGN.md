@@ -28,15 +28,10 @@ Pre-compute "middle" nodes per grade (nodes with both prerequisite parents AND d
 
 Pure root nodes (no prerequisites) and pure leaf nodes (no dependents) are ranked lower since they provide less diagnostic signal.
 
-### Cross-Grade Node Handling (OPEN — needs design decision)
-When loading grade N nodes, some may have prerequisites in grade N-1 (or lower).
-
-**Options under discussion:**
-- **Option A (current default):** Only show grade-N anchor nodes initially. Cross-grade prerequisites appear naturally when the graph expands downward after a student marks a node as red/yellow.
-- **Option B:** Include the top-3 nodes from grade N-1 as "context nodes" (grayed/dimmed) in the initial view, so students can see where they're coming from.
-- **Option C:** Bot explicitly asks "Do you want me to also check some grade N-1 topics?" if multiple grade-N gaps are found.
-
-**Question for product decision:** Should cross-grade prerequisites be shown proactively (Option B) or reactively (Option A)? This affects the visual complexity of the initial canvas and the diagnostic flow.
+### Cross-Grade Node Handling (DECIDED)
+- **Initial canvas:** Place grade-N anchor nodes + 2-3 grade-(N-1) anchor nodes below as prerequisite context, clearly labeled with their grade (e.g., "Grade 4 · Fractions"). Students see the learning ladder without being overwhelmed.
+- **Cross-grade expansion:** Reactive — prerequisites from a lower grade only appear after a student identifies a gap. Placed below the flagged node with a grade label. Never apologize for lower-grade content; frame positively.
+- Implementation: bot calls `getAnchorNodes(grade)` then `getAnchorNodes(grade-1, 3)` for initial placement.
 
 ---
 
@@ -231,10 +226,13 @@ Every tool call implementation must:
 
 ## Open Design Questions (need product decision)
 
-1. **Cross-grade prerequisites:** When grade N gaps are found, should grade N-1 prerequisite nodes appear proactively in the initial view (Option B) or only after explicit gap identification (Option A)? See "Cross-Grade Node Handling" section above.
+1. **Initial anchor node count:** Currently 6-8 for grade N + 2-3 from grade N-1. Should this be adaptive based on how connected the grade's KG is?
 
-2. **Initial anchor node count:** Currently 6-8. Should this be adaptive based on how connected the grade's KG is?
+2. **Gamified mode difficulty curve:** Should the 3-question mini-loop always use the same difficulty, or escalate (easy → medium → hard)?
 
-3. **Gamified mode difficulty curve:** Should the 3-question mini-loop always use the same difficulty, or escalate (easy → medium → hard)?
+3. **Mastery trail visual:** Collapsed vs. expanded view — should collapsed pills show the topic code only, or topic code + subject area icon?
 
-4. **Mastery trail visual:** Collapsed vs. expanded view — should collapsed pills show the topic code only, or topic code + subject area icon?
+## Context Management (between sprints)
+- Between sprint sessions: compact aggressively. Clear conversation history and session objects. Only persist the kgNodeMap and final confidence states in Firestore.
+- Context window budget: keep codebase docs loaded by topic, not all at once. Consult `.claude/context/` docs before reading source files.
+- Refer to this doc (`LEARNING-EXPLORER-REDESIGN.md`) for full plan context rather than re-reading source files when starting a new sprint.
