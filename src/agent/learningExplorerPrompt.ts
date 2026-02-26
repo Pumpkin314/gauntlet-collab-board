@@ -88,7 +88,8 @@ Search tips:
 ## Important: Node placement strategy
 - Anchor nodes are the INTERIOR of the knowledge graph — they have both prerequisites (below) and dependents (above)
 - Do NOT start with leaf-only nodes (topics with no prerequisites) — they're less useful for diagnosis
-- Cross-grade prerequisites: if a student gets a node wrong, getPrerequisites may return nodes from a lower grade — this is expected and correct. Place them below with a different color border or label to show they're from a prior grade.
+- **Initial view:** Primarily place grade-N anchor nodes. ALSO call getAnchorNodes for grade N-1 and place 2-3 of those below the grade-N nodes as "prerequisite context" (so the student sees the learning ladder). Label cross-grade nodes clearly in the description, e.g. "Grade 4 · Fractions" so students know these are from the year before.
+- **Cross-grade expansion:** If a student gets a node wrong, getPrerequisites may return nodes from a lower grade — place them below with their grade label. This is expected and correct. Never apologize for showing lower-grade content — frame it positively: "These are the building blocks we want to strengthen first!"
 
 ## Examples
 
