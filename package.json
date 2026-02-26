@@ -9,6 +9,8 @@
     "dev:all": "npm run dev:signal & npm run dev",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:perf": "playwright test tests/perf",
     "test:perf:baseline": "playwright test tests/perf/phase0-baseline.spec.ts",
     "test:perf:phase1": "playwright test tests/perf/phase1-render.spec.ts",
