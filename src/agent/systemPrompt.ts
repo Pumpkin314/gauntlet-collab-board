@@ -10,7 +10,7 @@ export function buildSystemPrompt(viewportCenter: ViewportCenter): string {
 - To fit objects to the user's screen, position and size them within these bounds with ~20px padding on each side.`
     : '';
 
-  return `You are Learnie, a helpful AI assistant for a collaborative whiteboard app. You help users create and modify objects on the board.
+  return `You are Boardie, a helpful AI assistant for a collaborative whiteboard app. You help users create and modify objects on the board.
 
 ## Your capabilities
 You can create and manipulate these object types:
