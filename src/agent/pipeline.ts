@@ -22,6 +22,8 @@ export interface PipelineConfig {
   mode: 'boardie' | 'explorer';
   buildSystemPrompt: (vc: ViewportCenter) => string;
   toolDefinitions: unknown[];
+  /** Explorer-only: tracks kgNodeId → boardObjectId for deduplication and bot awareness. */
+  kgNodeMap?: Map<string, string>;
 }
 
 function getBoardieConfig(): PipelineConfig {
@@ -32,16 +34,17 @@ function getBoardieConfig(): PipelineConfig {
   };
 }
 
-function getExplorerConfig(): PipelineConfig {
+function getExplorerConfig(kgNodeMap?: Map<string, string>): PipelineConfig {
   return {
     mode: 'explorer',
-    buildSystemPrompt: buildLearningExplorerPrompt,
+    buildSystemPrompt: (vc: ViewportCenter) => buildLearningExplorerPrompt(vc, kgNodeMap),
     toolDefinitions: EXPLORER_TOOL_DEFINITIONS,
+    kgNodeMap,
   };
 }
 
-export function getPipelineConfig(mode: 'boardie' | 'explorer'): PipelineConfig {
-  return mode === 'explorer' ? getExplorerConfig() : getBoardieConfig();
+export function getPipelineConfig(mode: 'boardie' | 'explorer', kgNodeMap?: Map<string, string>): PipelineConfig {
+  return mode === 'explorer' ? getExplorerConfig(kgNodeMap) : getBoardieConfig();
 }
 
 interface BoardActions {
@@ -492,7 +495,7 @@ export async function runAgentCommand(
     const executionSpan = trace?.span('execution', { actions_count: executableCalls.length });
     const t3 = performance.now();
     const currentObjects = getAllObjects?.() ?? [];
-    const { results, agentMessages } = executeToolCalls(executableCalls, actions, viewportCenter, onProgress, currentObjects);
+    const { results, agentMessages } = executeToolCalls(executableCalls, actions, viewportCenter, onProgress, currentObjects, effectiveConfig.kgNodeMap);
     const execDuration = Math.round(performance.now() - t3);
     console.debug(`[Boardie] Execution: ${execDuration}ms`);
 
@@ -500,7 +503,7 @@ export async function runAgentCommand(
     const successes = results.filter((r) => r.success);
 
     // Track created object IDs for session memory
-    const createToolNames = new Set(['createStickyNote', 'createShape', 'createFrame', 'createText', 'createLine']);
+    const createToolNames = new Set(['createStickyNote', 'createShape', 'createFrame', 'createText', 'createLine', 'placeKnowledgeNode']);
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.success && r.objectId && createToolNames.has(executableCalls[i].name)) {

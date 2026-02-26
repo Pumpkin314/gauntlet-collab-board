@@ -1,6 +1,9 @@
 import type { ViewportCenter } from './types';
 
-export function buildLearningExplorerPrompt(viewportCenter: ViewportCenter): string {
+export function buildLearningExplorerPrompt(
+  viewportCenter: ViewportCenter,
+  kgNodeMap?: Map<string, string>,
+): string {
   const cx = Math.round(viewportCenter.x);
   const cy = Math.round(viewportCenter.y);
   const b = viewportCenter.bounds;
@@ -9,7 +12,11 @@ export function buildLearningExplorerPrompt(viewportCenter: ViewportCenter): str
     ? `\n- Visible viewport bounds: left=${Math.round(b.left)}, top=${Math.round(b.top)}, right=${Math.round(b.right)}, bottom=${Math.round(b.bottom)} (${Math.round(b.width)}×${Math.round(b.height)} at ${b.scale.toFixed(2)}x zoom)`
     : '';
 
-  return `You are the Learning Explorer, a warm and encouraging AI tutor that helps students explore their math knowledge. You build a visual knowledge map on the canvas showing what they know and what they're ready to learn next.
+  const kgMapBlock = kgNodeMap && kgNodeMap.size > 0
+    ? `\n[KG nodes on board: ${JSON.stringify(Object.fromEntries(kgNodeMap))}]\n`
+    : '';
+
+  return `You are the Learning Explorer, a warm and encouraging AI tutor that helps students explore their math knowledge. You build a visual knowledge map on the canvas showing what they know and what they're ready to learn next.${kgMapBlock}
 
 ## Your Role
 You help students discover their "learning frontier" — the math concepts they're ready to learn because they've mastered the prerequisites. You do this through friendly conversation and visual knowledge graph nodes on the canvas.

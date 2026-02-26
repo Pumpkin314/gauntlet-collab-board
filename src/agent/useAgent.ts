@@ -45,6 +45,8 @@ export function useAgent(
     boardie: new Map(),
     explorer: new Map(),
   });
+  /** Explorer-only: kgNodeId → boardObjectId. Enables dedup and bot awareness. */
+  const kgNodeMapRef = useRef<Map<string, string>>(new Map());
   const messagesPerModeRef = useRef<Record<AgentMode, AgentMessage[]>>({
     boardie: [],
     explorer: [],
@@ -134,7 +136,7 @@ export function useAgent(
         }
       }
 
-      const pipelineConfig = getPipelineConfig(mode);
+      const pipelineConfig = getPipelineConfig(mode, mode === 'explorer' ? kgNodeMapRef.current : undefined);
 
       const { messages: resultMessages, createdObjectIds } = await runAgentCommand(
         trimmed,
@@ -159,6 +161,10 @@ export function useAgent(
             color: obj.color,
             createdAt: Date.now(),
           });
+          // Keep kgNodeMap in sync for explorer mode
+          if (mode === 'explorer' && obj.type === 'kg-node' && obj.kgNodeId) {
+            kgNodeMapRef.current.set(obj.kgNodeId, id);
+          }
         }
       }
 
@@ -199,6 +205,7 @@ export function useAgent(
     setMessages([]);
     historyRef.current[mode] = [];
     sessionObjectsRef.current[mode].clear();
+    if (mode === 'explorer') kgNodeMapRef.current.clear();
   }, [mode]);
 
   return { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode };

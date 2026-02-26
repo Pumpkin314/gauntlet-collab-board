@@ -33,12 +33,14 @@ function findBoardObjectByKgNodeId(kgNodeId: string, objects?: BoardObject[]): B
  * Dispatch a single already-validated tool action with explicit positions.
  * Template expansions call this directly so grid layout logic is bypassed —
  * template actions always carry pre-computed coordinates.
+ * @param kgNodeMap - When provided, placeKnowledgeNode deduplicates against this map.
  */
 function dispatchSingleAction(
   name: string,
   input: Record<string, unknown>,
   actions: BoardActions,
   allObjects?: BoardObject[],
+  kgNodeMap?: Map<string, string>,
 ): ExecutionResult {
   // posX/posY must be provided by the caller for create-type tools.
   const posX = (input.x as number | undefined) ?? 0;
@@ -187,15 +189,29 @@ function dispatchSingleAction(
     }
 
     case 'placeKnowledgeNode': {
+      const kgNodeId = input.kgNodeId as string;
       const confidence = (input.confidence as string) ?? 'unexplored';
       const color = CONFIDENCE_COLORS[confidence] ?? CONFIDENCE_COLORS.unexplored;
+
+      // Dedup: if this KG node is already on the board, update confidence instead of duplicating.
+      if (kgNodeMap && kgNodeMap.has(kgNodeId)) {
+        const existingBoardId = kgNodeMap.get(kgNodeId)!;
+        actions.updateObject(existingBoardId, {
+          kgConfidence: confidence as BoardObject['kgConfidence'],
+          color,
+        });
+        return { success: true, objectId: existingBoardId };
+      }
+
       const id = actions.createObject('kg-node', posX, posY, {
         content: input.description as string,
         color,
-        kgNodeId: input.kgNodeId as string,
+        kgNodeId,
         kgConfidence: confidence as BoardObject['kgConfidence'],
         ...(input.gradeLevel ? { kgGradeLevel: input.gradeLevel as string } : {}),
       });
+      // Record in map so subsequent calls for the same kgNodeId are redirected.
+      kgNodeMap?.set(kgNodeId, id);
       return { success: true, objectId: id };
     }
 
@@ -239,6 +255,9 @@ function dispatchSingleAction(
 /**
  * Execute a batch of validated tool calls against the board.
  * Returns execution results + any conversational messages.
+ * @param kgNodeMap - Explorer-only map of kgNodeId → boardObjectId for deduplication.
+ *   When provided, placeKnowledgeNode redirects to updateNodeConfidence if the node
+ *   is already on the board, and new placements are recorded in the map.
  */
 export function executeToolCalls(
   toolCalls: AgentToolCall[],
@@ -246,6 +265,7 @@ export function executeToolCalls(
   viewportCenter: ViewportCenter,
   onProgress?: ProgressCallback,
   allObjects?: BoardObject[],
+  kgNodeMap?: Map<string, string>,
 ): { results: ExecutionResult[]; agentMessages: string[] } {
   const results: ExecutionResult[] = [];
   const agentMessages: string[] = [];
@@ -320,7 +340,7 @@ export function executeToolCalls(
             const parentId = createdIds[action.parentActionIndex];
             if (parentId) resolvedInput.parentId = parentId;
           }
-          const r = dispatchSingleAction(action.name, resolvedInput, actions, allObjects);
+          const r = dispatchSingleAction(action.name, resolvedInput, actions, allObjects, kgNodeMap);
           createdIds.push(r.objectId ?? '');
           results.push(r);
           if (r.success) fireProgress(action.name);
@@ -358,7 +378,7 @@ export function executeToolCalls(
 
       // Inject resolved position before dispatching
       const inputWithPos = { ...input, x: posX, y: posY };
-      const result = dispatchSingleAction(tc.name, inputWithPos, actions, allObjects);
+      const result = dispatchSingleAction(tc.name, inputWithPos, actions, allObjects, kgNodeMap);
       results.push(result);
       if (result.success) fireProgress(tc.name);
     } catch (err) {
