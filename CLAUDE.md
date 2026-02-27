@@ -20,5 +20,16 @@
 - Project-specific skills are located in .claude/skills/ and .agents/skills/. These give you access to specialized knowledge that could be useful to tasks.
 
 
-## Unit tests
-- After making major changes and finalizing them, be sure to run the unit tests to make sure everything runs right so we don't play bug whack-a-mole. This should happen at the end of big changes, e.g. before a PR is merged.
+## Testing
+
+Use the **`run-tests` skill** (`.claude/skills/run-tests/SKILL.md`) whenever running any part of the test suite. It documents the three-tier stack (Vitest unit tests, single-player Playwright perf, multiplayer Playwright perf), which tier to run for a given change type, and how to parallelize Tier 1 + Tier 2.
+
+**Minimum bar:** Always run `npm run test` (Tier 1) after any non-trivial change. Run the full suite before a PR is merged.
+
+## Regression Handling
+
+When a code change causes a previously passing test to fail:
+
+- **Do not automatically fix the regression.** Stop, describe the failing test(s) and the exact reason the change broke them, propose a fix, and wait for user approval before touching anything.
+- **Exception:** If a test is asserting old behavior that was *intentionally* changed (e.g., a UI label rename), you may note this and ask for confirmation to update the test — but still wait for approval.
+- The goal is to keep the user in the loop on what the tests are actually protecting. Smoothing over a regression without discussion hides signal.

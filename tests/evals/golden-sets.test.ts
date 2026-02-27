@@ -137,14 +137,14 @@ describe('KG node map injected into system prompt', () => {
       ['2.NBT.A.1', 'board-obj-2'],
     ]);
     const prompt = buildLearningExplorerPrompt(VIEWPORT, kgNodeMap);
-    expect(prompt).toContain('[KG nodes on board:');
+    expect(prompt).toContain('[KG nodes on board');
     expect(prompt).toContain('2.OA.A.1');
     expect(prompt).toContain('board-obj-1');
   });
 
   it('[gs-003b] omits [KG nodes on board] block when map is empty', () => {
     const prompt = buildLearningExplorerPrompt(VIEWPORT);
-    expect(prompt).not.toContain('[KG nodes on board:');
+    expect(prompt).not.toContain('[KG nodes on board');
   });
 });
 

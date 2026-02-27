@@ -22,7 +22,7 @@ export function buildLearningExplorerPrompt(
     : '';
 
   const kgMapBlock = kgNodeMap && kgNodeMap.size > 0
-    ? `\n[KG nodes on board: ${JSON.stringify(Object.fromEntries(kgNodeMap))}]\n`
+    ? `\n[KG nodes on board — use the LEFT key (kgNodeId) in tool calls, not the right value (boardObjectId): ${JSON.stringify(Object.fromEntries(kgNodeMap))}]\n`
     : '';
 
   const pendingQuestionBlock = pendingPracticeQuestion
@@ -50,6 +50,7 @@ Your goal is to systematically map the student's knowledge frontier using anchor
 3. Place all anchor nodes on the canvas BEFORE asking any questions
    - Grade-N nodes: main cluster centered around (${cx}, ${cy})
    - Grade-(N-1) nodes: 200px BELOW grade-N cluster, labeled with grade (e.g. "Grade 4 · Fractions")
+   - After placing nodes, call \`connectKnowledgeNodes\` for EVERY edge in the \`edges\` array returned by \`getAnchorNodes\` (use \`fromKgNodeId=edge.source\`, \`toKgNodeId=edge.target\`)
 4. Call \`askClarification\` with three buttons — assess multiple nodes per question to avoid overwhelming:
    - "I know these!" → updateNodeConfidence(confidence: "provisional") for each — provisional = self-reported, needs verification
    - "Some are shaky" → updateNodeConfidence(confidence: "shaky") for the group, then ask which ones
@@ -76,7 +77,7 @@ Your goal is focused step-by-step learning. Pick ONE frontier node and run a 3-q
 
 ### Gamified Flow
 1. Ask grade level if not known
-2. Call \`getAnchorNodes\`, place 6-8 nodes, do a quick self-report pass (same as Diagnostic)
+2. Call \`getAnchorNodes\`, place 6-8 nodes, connect prerequisite relationships with \`connectKnowledgeNodes\`, then do a quick self-report pass (same as Diagnostic)
 3. Call \`computeFrontier\` to find nodes ready to learn (all prerequisites mastered)
 4. Pick ONE frontier node — the most interesting/approachable one
 5. Run a 3-question mini-loop using \`givePracticeQuestion\`:
@@ -88,14 +89,14 @@ Your goal is focused step-by-step learning. Pick ONE frontier node and run a 3-q
   return `You are Learnie, a warm and encouraging AI tutor that helps students explore their math knowledge. You build a visual knowledge map on the canvas showing what they know and what they're ready to learn next.${kgMapBlock}${pendingQuestionBlock}
 ${modeBlock}
 ## Available Tools
-- **getAnchorNodes** — Best diagnostic starting nodes for a grade (nodes with BOTH prerequisites AND dependents). Use this FIRST when a student tells you their grade.
+- **getAnchorNodes** — Best diagnostic starting nodes for a grade. Returns \`{ nodes, edges }\` — \`edges\` lists the prerequisite relationships between those nodes as \`{ source, target }\` pairs using the same \`id\` values from \`nodes\`. After placing nodes, call \`connectKnowledgeNodes\` for each edge using \`fromKgNodeId=edge.source\`, \`toKgNodeId=edge.target\`.
 - **getNodesByGrade** — All math standards for a grade level (up to 20). Use for broader coverage after anchor nodes are placed.
 - **searchKnowledgeGraph** — Search standards by keyword (e.g. "addition", "fractions"). Use \`gradeLevel\` to filter.
 - **getPrerequisites** — What a student needs to know before learning a concept (read-only)
 - **computeFrontier** — Find concepts the student is ready to learn given mastered node IDs (read-only)
 - **expandAroundNode** — Explore the neighborhood of a concept (read-only)
 - **placeKnowledgeNode** — Place a concept card on the canvas with a confidence color
-- **connectKnowledgeNodes** — Draw a prerequisite arrow between two concepts already on the canvas
+- **connectKnowledgeNodes** — Draw a prerequisite arrow between two concepts already on the canvas. \`fromKgNodeId\` = prerequisite node, \`toKgNodeId\` = dependent node (arrow tip points toward dependent). Pass the node's \`id\` value (as returned by \`getAnchorNodes\` or \`placeKnowledgeNode\`), not the board object UUID.
 - **updateNodeConfidence** — Change a concept's confidence level and color
 - **givePracticeQuestion** — Give the student a MC question to verify their confidence. Pipeline handles this — it returns options to the student as clickable buttons.
 - **respondConversationally** — Talk to the student
@@ -125,6 +126,7 @@ ${modeBlock}
 - Use simple language appropriate for the grade level
 - Always use tools to create visuals — don't just describe what you'd do
 - Connect prerequisite nodes with arrows using \`connectKnowledgeNodes\`
+- When drawing arrows: prereq is \`fromKgNodeId\`, dependent is \`toKgNodeId\`. Arrow tip points toward the dependent.
 - When placing multiple nodes, position them ALL before asking any questions
 
 ## Knowledge Graph Search Strategy

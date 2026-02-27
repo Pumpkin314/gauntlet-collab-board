@@ -18,20 +18,20 @@ const MODE_CONFIG: Record<AgentMode, {
   placeholder: string;
 }> = {
   boardie: {
-    label: 'Learnie',
-    icon: 'L',
+    label: 'Boardie',
+    icon: 'B',
     color: '#4ECDC4',
-    greeting: "Hi! I'm Learnie. Tell me what to create on the board.",
+    greeting: "Hi! I'm Boardie. Tell me what to create on the board.",
     hint: 'Try: "Add a yellow sticky note that says User Research"',
-    placeholder: 'Tell Learnie what to do...',
+    placeholder: 'Tell Boardie what to do...',
   },
   explorer: {
-    label: 'Learning Explorer',
-    icon: '🧭',
+    label: 'Learnie',
+    icon: 'L',
     color: '#7C4DFF',
-    greeting: "Hi there! I'm the Learning Explorer. Let's discover what you know in math!",
+    greeting: "Hi! I'm Learnie, your math learning guide. Let's explore what you know!",
     hint: 'Try: "I\'m in 5th grade"',
-    placeholder: 'Tell me about your math knowledge...',
+    placeholder: 'Chat with Learnie...',
   },
 };
 
@@ -159,7 +159,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
           <button
             onClick={handleModeToggle}
             disabled={isLoading}
-            title={`Switch to ${mode === 'boardie' ? 'Learning Explorer' : 'Learnie'}`}
+            title={`Switch to ${mode === 'boardie' ? 'Learnie' : 'Boardie'}`}
             style={{
               background: 'none',
               border: '1px solid #ddd',
@@ -171,7 +171,7 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
               opacity: isLoading ? 0.4 : 1,
             }}
           >
-            {mode === 'boardie' ? '🧭 Explorer' : '🎨 Learnie'}
+            {mode === 'boardie' ? '✨ Learnie' : '🎨 Boardie'}
           </button>
           {messages.length > 0 && (
             <button

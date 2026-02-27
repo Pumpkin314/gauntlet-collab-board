@@ -18,6 +18,7 @@ import {
   getSubgraph as kgGetSubgraph,
   getNodesByGrade,
   getAnchorNodes,
+  getEdgesAmong,
 } from '../data/knowledge-graph';
 
 export interface PipelineConfig {
@@ -286,7 +287,15 @@ export async function runAgentCommand(
           break;
         }
         case 'getAnchorNodes': {
-          result = getAnchorNodes(tc.input.grade as string, (tc.input.limit as number) ?? 8);
+          const anchorNodes = getAnchorNodes(tc.input.grade as string, (tc.input.limit as number) ?? 8);
+          // Include all node IDs already on the board so cross-grade edges are captured
+          // (e.g. 5.NF.B.3 → 6.RP.A.2 when grade-5 anchors are fetched after grade-6 ones).
+          const boardNodeIds = effectiveConfig.kgNodeMap
+            ? [...effectiveConfig.kgNodeMap.keys()]
+            : [];
+          const allRelevantIds = [...anchorNodes.map(n => n.id), ...boardNodeIds];
+          const edges = getEdgesAmong(allRelevantIds);
+          result = { nodes: anchorNodes, edges };
           break;
         }
       }

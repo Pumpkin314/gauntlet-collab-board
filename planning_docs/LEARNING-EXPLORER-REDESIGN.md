@@ -194,6 +194,52 @@ Categories:
 - `mode_switch` × `diagnostic_to_gamified / gamified_resets`
 - `edge_cases` × `unknown_grade / kg_node_not_found / empty_board`
 
+### Stage 3 — Playwright Conversation Flow Tests (earmarked — not yet implemented)
+
+**Goal:** Run the real app locally with a real (or seeded) LLM, drive a scripted multi-turn conversation with Learnie, and assert that the board state ends up correct.
+
+**When to implement:** Once we have 2-3 stable conversation flows we're happy with — i.e. we know exactly what Learnie *should* say and do step-by-step. These tests are expensive (real LLM calls + browser automation) so they run on-demand, not on every commit.
+
+**Proposed test file:** `tests/playwright/learnie-flows.test.ts`
+
+**Hooks needed before writing tests:**
+- A `window.__boardState` bridge (similar to `window.__perfBridge`) that exposes the current board objects, kgNodeMap, and explorerMode to Playwright
+- A `VITE_LEARNIE_SCRIPT_MODE=true` env flag that intercepts `callAnthropic` and replays a pre-recorded response sequence instead of hitting the real API — so tests are deterministic and free
+- Alternatively: record a real session's LLM responses as fixtures, replay them in CI
+
+**Conversation scenarios to cover (fill in scripts once flows are stable):**
+
+| ID | Scenario | Chat script | Board assertions |
+|----|----------|-------------|-----------------|
+| `flow-01` | Grade 5 diagnostic, all nodes mastered | TBD | All grade-5 anchors placed; arrows connect grade-4 → grade-5; all nodes green |
+| `flow-02` | Grade 5 diagnostic, mixed confidence | TBD | Provisional nodes light-green; gap nodes red; prereqs placed below red nodes |
+| `flow-03` | Practice question correct → mastered | TBD | Node transitions provisional → mastered (solid green) after correct answer |
+| `flow-04` | Practice question incorrect → shaky | TBD | Node transitions provisional → shaky (orange) after wrong answer |
+| `flow-05` | Same-batch place + connect (regression for BF-1 fix) | TBD | Arrows present immediately after placement turn; no missing connectors |
+
+**Implementation sketch (for when we're ready):**
+
+```ts
+// tests/playwright/learnie-flows.test.ts
+test('flow-01: grade 5 diagnostic all mastered', async ({ page }) => {
+  await page.goto('http://localhost:3000?testMode=learnie-script');
+
+  // Drive the scripted conversation
+  await sendMessage(page, "I'm in 5th grade");
+  await page.getByText('Map my knowledge').click();
+  await page.getByText('I know these!').click();
+
+  // Assert board state via the bridge
+  const board = await page.evaluate(() => window.__boardState());
+  const nodes = board.objects.filter(o => o.type === 'kg-node');
+  const arrows = board.objects.filter(o => o.type === 'line' && o.arrowEnd);
+
+  expect(nodes.length).toBeGreaterThanOrEqual(6);
+  expect(arrows.length).toBeGreaterThanOrEqual(2); // at least grade-4 → grade-5 links
+  expect(nodes.every(n => n.kgConfidence === 'mastered')).toBe(true);
+});
+```
+
 ---
 
 ## Error Handling Standard
