@@ -1,6 +1,6 @@
 # Learning Explorer — Full Redesign Plan
 
-**Status as of 2026-02-25:** Sprint 1 complete. Sprints 2–4 pending.
+**Status as of 2026-02-26:** Sprint 1 complete. BF-1/BF-2 complete (PR #43, squashed to main). BF-3 complete (branch feature/bf-3-gap-expansion). Sprints 2–4 pending.
 
 ---
 
