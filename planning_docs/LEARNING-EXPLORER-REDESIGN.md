@@ -1,6 +1,6 @@
 # Learning Explorer — Full Redesign Plan
 
-**Status as of 2026-02-26:** Sprint 1 complete. BF-1/BF-2 complete (PR #43, squashed to main). BF-3 complete (branch feature/bf-3-gap-expansion). Sprints 2–4 pending.
+**Status as of 2026-02-27:** Sprint 1 complete. BF-1/BF-2/BF-3 complete (main). Sprint 2 core complete (mode selection, provisional coloring, practice loop — all in prompt+pipeline+executor). Sprint 2.5, Sprints 3–4, and BF-4 pending. Connector bugs documented in planning_docs/LEARNING_CONNECTOR_BUGFIX.md.
 
 ---
 

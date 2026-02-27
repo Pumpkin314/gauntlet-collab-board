@@ -642,6 +642,12 @@ export async function runAgentCommand(
           if (!gapObj) continue;
 
           const prereqs = kgGetPrerequisites(gapKgNodeId);
+          const unplacedPrereqs = prereqs.filter(p => !effectiveConfig.kgNodeMap!.has(p.id));
+          const spreadWidth = 240; // 220px node + 20px gap
+          const totalWidth = (unplacedPrereqs.length - 1) * spreadWidth;
+          const startX = gapObj.x - totalWidth / 2;
+
+          let unplacedIdx = 0;
           for (const prereq of prereqs) {
             const alreadyOnBoard = effectiveConfig.kgNodeMap.has(prereq.id);
 
@@ -652,12 +658,13 @@ export async function runAgentCommand(
                 input: {
                   kgNodeId: prereq.id,
                   description: prereq.description,
-                  x: gapObj.x,
+                  x: startX + unplacedIdx * spreadWidth,
                   y: gapObj.y + 200,
                   confidence: 'unexplored',
                   gradeLevel: prereq.gradeLevel[0] ?? '',
                 },
               });
+              unplacedIdx++;
             }
 
             // Connect prereq → gap; skip if that line already exists on the board.

@@ -3,7 +3,7 @@
  *
  * Covers: connectKnowledgeNodes UUID fallback (gs-016), normal arrow creation (gs-017),
  * same-batch place+connect (gs-019), prompt labels (gs-018), anchor edges (gs-020),
- * and gap expansion pipeline hook (gs-021, gs-022).
+ * gap expansion pipeline hook (gs-021, gs-022), and prereq x-spread (gs-024).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -406,6 +406,39 @@ describe('Gap expansion deduplication (gs-022)', () => {
     // Other (unplaced) prerequisites should still be placed
     // (6.RP.A.2 has 4 prereqs total; 1 is already on board → 3 new nodes)
     expect(newNodes.length).toBe(3);
+  });
+
+  it('[gs-024] multiple prereqs from gap expansion have distinct x values', async () => {
+    const mockedCall = vi.mocked(callAnthropic);
+    mockedCall.mockResolvedValueOnce(
+      makeApiResponse2([{
+        name: 'updateNodeConfidence',
+        input: { kgNodeId: GAP_NODE_KG_ID, confidence: 'gap' },
+      }]),
+    );
+
+    const actions = makeGapActions();
+    const kgNodeMap = new Map([[GAP_NODE_KG_ID, GAP_NODE_BOARD_ID]]);
+    const config = getPipelineConfig('explorer', kgNodeMap, 'diagnostic', null);
+
+    await runAgentCommand(
+      "I don't know this",
+      actions as never,
+      'user-1',
+      VIEWPORT,
+      [],
+      actions.getAllObjects,
+      undefined,
+      undefined,
+      config,
+    );
+
+    const newNodes = actions._created.filter(c => c.type === 'kg-node');
+    expect(newNodes.length).toBeGreaterThan(1);
+
+    const xValues = newNodes.map(n => n.x);
+    const uniqueX = new Set(xValues);
+    expect(uniqueX.size).toBe(xValues.length);
   });
 
   it('[gs-022b] existing prereq→gap edge is not duplicated', async () => {
