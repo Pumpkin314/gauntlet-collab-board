@@ -620,6 +620,81 @@ export async function runAgentCommand(
         timestamp: Date.now(),
       });
     }
+
+    // BF-3: Gap expansion — when a node is marked 'gap', auto-place its KG prerequisites
+    // below it (y + 200) without an LLM call, then draw prerequisite → gap edges.
+    if (effectiveConfig.mode === 'explorer' && effectiveConfig.kgNodeMap) {
+      const gapKgNodeIds: string[] = [];
+      for (let i = 0; i < executableCalls.length; i++) {
+        const tc = executableCalls[i]!;
+        const r = results[i];
+        if (tc.name === 'updateNodeConfidence' && tc.input.confidence === 'gap' && r?.success) {
+          gapKgNodeIds.push(tc.input.kgNodeId as string);
+        }
+      }
+
+      if (gapKgNodeIds.length > 0) {
+        const postExecObjects = getAllObjects?.() ?? [];
+        const expansionCalls: AgentToolCall[] = [];
+
+        for (const gapKgNodeId of gapKgNodeIds) {
+          const gapObj = postExecObjects.find(o => o.kgNodeId === gapKgNodeId);
+          if (!gapObj) continue;
+
+          const prereqs = kgGetPrerequisites(gapKgNodeId);
+          for (const prereq of prereqs) {
+            const alreadyOnBoard = effectiveConfig.kgNodeMap.has(prereq.id);
+
+            if (!alreadyOnBoard) {
+              expansionCalls.push({
+                id: makeId(),
+                name: 'placeKnowledgeNode',
+                input: {
+                  kgNodeId: prereq.id,
+                  description: prereq.description,
+                  x: gapObj.x,
+                  y: gapObj.y + 200,
+                  confidence: 'unexplored',
+                  gradeLevel: prereq.gradeLevel[0] ?? '',
+                },
+              });
+            }
+
+            // Connect prereq → gap; skip if that line already exists on the board.
+            const shouldConnect = alreadyOnBoard
+              ? (() => {
+                  const prereqBoardId = effectiveConfig.kgNodeMap!.get(prereq.id)!;
+                  return !postExecObjects.some(
+                    o => o.type === 'line' && o.fromId === prereqBoardId && o.toId === gapObj.id,
+                  );
+                })()
+              : true; // freshly placed node never has an existing edge
+
+            if (shouldConnect) {
+              expansionCalls.push({
+                id: makeId(),
+                name: 'connectKnowledgeNodes',
+                input: { fromKgNodeId: prereq.id, toKgNodeId: gapKgNodeId },
+              });
+            }
+          }
+        }
+
+        if (expansionCalls.length > 0) {
+          const { results: expandResults, agentMessages: expandMessages } = executeToolCalls(
+            expansionCalls, actions, viewportCenter, onProgress, postExecObjects,
+            effectiveConfig.kgNodeMap,
+            true, // explorer mode — apply safety
+          );
+          for (const r of expandResults) {
+            if (r.success && r.objectId) createdObjectIds.push(r.objectId);
+          }
+          for (const msg of expandMessages) {
+            messages.push({ id: makeId(), role: 'agent', content: msg, timestamp: Date.now() });
+          }
+        }
+      }
+    }
   }
 
   // 8. Add any text content from the LLM
