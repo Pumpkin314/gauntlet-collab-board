@@ -3,7 +3,8 @@
  *
  * Covers: connectKnowledgeNodes UUID fallback (gs-016), normal arrow creation (gs-017),
  * same-batch place+connect (gs-019), prompt labels (gs-018), anchor edges (gs-020),
- * gap expansion pipeline hook (gs-021, gs-022), and prereq x-spread (gs-024).
+ * liveObjects dimension fallback (gs-023), gap expansion pipeline hook (gs-021, gs-022),
+ * and prereq x-spread (gs-024).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -123,6 +124,36 @@ describe('connectKnowledgeNodes normal arrow creation (gs-017)', () => {
     // fromId/toId should reference the board object IDs, not the KG IDs
     expect(line.overrides?.fromId).toBe('board-uuid-from');
     expect(line.overrides?.toId).toBe('board-uuid-to');
+  });
+});
+
+// ── gs-023: liveObjects width reflects SHAPE_DEFAULTS ────────────────────────
+
+describe('same-batch place+connect uses correct kg-node dimensions (gs-023)', () => {
+  it('[gs-023] connector endpoints land outside the 220px kg-node boundary', () => {
+    const actions = makeActions();
+    const toolCalls = [
+      makeToolCall('placeKnowledgeNode', { kgNodeId: '4.NBT.A.1', description: 'Place value', confidence: 'unexplored', x: 200, y: 300 }),
+      makeToolCall('placeKnowledgeNode', { kgNodeId: '5.NBT.A.1', description: 'Decimal place value', confidence: 'unexplored', x: 500, y: 300 }),
+      makeToolCall('connectKnowledgeNodes', { fromKgNodeId: '4.NBT.A.1', toKgNodeId: '5.NBT.A.1' }),
+    ];
+
+    const kgNodeMap = new Map<string, string>();
+    const { results } = executeToolCalls(toolCalls, actions as never, VIEWPORT, undefined, [], kgNodeMap);
+
+    expect(results[2]!.success).toBe(true);
+
+    const line = actions._created[2]!;
+    const points = line.overrides?.points as number[];
+    // points = [fromX, fromY, toX, toY]
+    const fromX = points[0]!;
+    const toX = points[2]!;
+
+    // kg-node is 220px wide. Node A center = 200+110=310, Node B center = 500+110=610.
+    // fromX should be at right edge of A (>=310) and toX at left edge of B (<=610).
+    // With the old hardcoded 160, fromX would be ~280 (inside the 220px node).
+    expect(fromX).toBeGreaterThanOrEqual(310);
+    expect(toX).toBeLessThanOrEqual(610);
   });
 });
 

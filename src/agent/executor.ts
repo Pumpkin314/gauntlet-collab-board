@@ -1,7 +1,7 @@
-import type { AgentToolCall, AgentMessage, ExecutionResult, ViewportCenter, ProgressCallback } from './types';
+import type { AgentToolCall, AgentMessage, ExecutionResult, ViewportCenter, ProgressCallback, SupportedShapeType } from './types';
 import type { BoardObject, ShapeType } from '../types/board';
 import { TOOL_SCHEMAS } from './tools';
-import { resolveColor } from './capabilities';
+import { resolveColor, SHAPE_DEFAULTS } from './capabilities';
 import { TEMPLATE_REGISTRY } from './templateRegistry';
 import { gridPositions } from './geometryHelpers';
 import { resolveEndpoint } from '../utils/anchorResolve';
@@ -290,10 +290,11 @@ export function executeToolCalls(
     ...actions,
     createObject(type: ShapeType, x: number, y: number, overrides?: Partial<BoardObject>): string {
       const id = actions.createObject(type, x, y, overrides);
+      const defaults = SHAPE_DEFAULTS[type as SupportedShapeType];
       liveObjects.push({
         id, type, x, y,
-        width: (overrides?.width ?? 160) as number,
-        height: (overrides?.height ?? 80) as number,
+        width: (overrides?.width ?? defaults?.width ?? 160) as number,
+        height: (overrides?.height ?? defaults?.height ?? 80) as number,
         zIndex: 0,
         ...overrides,
       } as BoardObject);
