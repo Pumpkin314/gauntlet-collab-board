@@ -1,13 +1,16 @@
 /**
  * Golden Set Evals — Sprint 2b
  *
- * Covers: connectKnowledgeNodes UUID fallback (gs-016) and normal arrow creation (gs-017).
+ * Covers: connectKnowledgeNodes UUID fallback (gs-016), normal arrow creation (gs-017),
+ * same-batch place+connect (gs-019), prompt labels (gs-018), anchor edges (gs-020),
+ * gap expansion pipeline hook (gs-021, gs-022), and prereq x-spread (gs-024).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { executeToolCalls } from '../../src/agent/executor';
 import { buildLearningExplorerPrompt } from '../../src/agent/learningExplorerPrompt';
 import { getAnchorNodes, getEdgesAmong } from '../../src/data/knowledge-graph';
+import { runAgentCommand, getPipelineConfig } from '../../src/agent/pipeline';
 import type { AgentToolCall } from '../../src/agent/types';
 import type { BoardObject } from '../../src/types/board';
 
@@ -211,5 +214,287 @@ describe('getAnchorNodes returns dependency edges (gs-020)', () => {
     // Use two unrelated node IDs that have no edge between them
     const edges = getEdgesAmong(['nonexistent-a', 'nonexistent-b']);
     expect(edges).toEqual([]);
+  });
+});
+
+// ── Gap expansion pipeline hook (gs-021, gs-022) ─────────────────────────────
+// 6.RP.A.2 (UUID: c3126032-...) has 4 KG prerequisites in the real data.
+// We use it as the gap node to validate the expansion hook.
+
+vi.mock('../../src/agent/apiClient', () => ({
+  callAnthropic: vi.fn(),
+}));
+
+import { callAnthropic } from '../../src/agent/apiClient';
+
+/** Minimal Anthropic response shape for mocking. */
+function makeApiResponse2(toolCalls: Array<{ name: string; input: Record<string, unknown> }>) {
+  return {
+    content: toolCalls.map((tc) => ({
+      type: 'tool_use',
+      id: crypto.randomUUID(),
+      name: tc.name,
+      input: tc.input,
+    })),
+    usage: { input_tokens: 10, output_tokens: 20 },
+  };
+}
+
+const GAP_NODE_KG_ID = 'c3126032-2984-5b67-9ed5-2f2f0821e99f'; // 6.RP.A.2
+const GAP_NODE_BOARD_ID = 'gap-board-obj';
+const GAP_NODE_X = 300;
+const GAP_NODE_Y = 400;
+
+function makeGapBoardObject(): BoardObject {
+  return {
+    id: GAP_NODE_BOARD_ID,
+    type: 'kg-node',
+    kgNodeId: GAP_NODE_KG_ID,
+    kgConfidence: 'unexplored',
+    x: GAP_NODE_X, y: GAP_NODE_Y, width: 160, height: 80, zIndex: 1,
+    content: 'Unit rate',
+  } as BoardObject;
+}
+
+function makeGapActions() {
+  const created: Array<{ type: string; x: number; y: number; overrides?: Partial<BoardObject> }> = [];
+  const updated: Array<{ id: string; updates: Partial<BoardObject> }> = [];
+  let nextId = 1;
+  const gapObject = makeGapBoardObject();
+
+  return {
+    createObject(type: string, x: number, y: number, overrides?: Partial<BoardObject>): string {
+      const id = `new-obj-${nextId++}`;
+      created.push({ type, x, y, overrides });
+      return id;
+    },
+    updateObject(id: string, updates: Partial<BoardObject>) {
+      updated.push({ id, updates });
+    },
+    deleteObject: () => {},
+    batchCreate: () => [],
+    /** Returns the board state including the gap node (simulates post-updateNodeConfidence state). */
+    getAllObjects: vi.fn().mockReturnValue([gapObject]),
+    _created: created,
+    _updated: updated,
+  };
+}
+
+describe('Gap expansion pipeline hook (gs-021)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('[gs-021a] updateNodeConfidence(gap) triggers prerequisite placement below the gap node', async () => {
+    const mockedCall = vi.mocked(callAnthropic);
+    mockedCall.mockResolvedValueOnce(
+      makeApiResponse2([{
+        name: 'updateNodeConfidence',
+        input: { kgNodeId: GAP_NODE_KG_ID, confidence: 'gap' },
+      }]),
+    );
+
+    const actions = makeGapActions();
+    const kgNodeMap = new Map([[GAP_NODE_KG_ID, GAP_NODE_BOARD_ID]]);
+    const config = getPipelineConfig('explorer', kgNodeMap, 'diagnostic', null);
+
+    await runAgentCommand(
+      "I don't know this",
+      actions as never,
+      'user-1',
+      VIEWPORT,
+      [],
+      actions.getAllObjects,
+      undefined,
+      undefined,
+      config,
+    );
+
+    // At least one prerequisite node must have been placed
+    const newNodes = actions._created.filter(c => c.type === 'kg-node');
+    expect(newNodes.length).toBeGreaterThan(0);
+
+    // All placed nodes must be at y = GAP_NODE_Y + 200
+    for (const node of newNodes) {
+      expect(node.y).toBe(GAP_NODE_Y + 200);
+    }
+
+    // Prerequisite → gap edges must be drawn
+    const newLines = actions._created.filter(c => c.type === 'line');
+    expect(newLines.length).toBeGreaterThan(0);
+  });
+
+  it('[gs-021b] gap node not on board → expansion is skipped gracefully', async () => {
+    const mockedCall = vi.mocked(callAnthropic);
+    mockedCall.mockResolvedValueOnce(
+      makeApiResponse2([{
+        name: 'updateNodeConfidence',
+        input: { kgNodeId: GAP_NODE_KG_ID, confidence: 'gap' },
+      }]),
+    );
+
+    const actions = makeGapActions();
+    // getAllObjects returns nothing — the gap node cannot be located
+    actions.getAllObjects.mockReturnValue([]);
+
+    const kgNodeMap = new Map([[GAP_NODE_KG_ID, GAP_NODE_BOARD_ID]]);
+    const config = getPipelineConfig('explorer', kgNodeMap, 'diagnostic', null);
+
+    // Should not throw; expansion is silently skipped
+    await expect(
+      runAgentCommand('I have no idea', actions as never, 'user-1', VIEWPORT, [], actions.getAllObjects, undefined, undefined, config),
+    ).resolves.not.toThrow();
+
+    // No prerequisite nodes or edges created
+    expect(actions._created.length).toBe(0);
+  });
+});
+
+describe('Gap expansion deduplication (gs-022)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('[gs-022a] prerequisite already in kgNodeMap is not re-placed', async () => {
+    const mockedCall = vi.mocked(callAnthropic);
+    mockedCall.mockResolvedValueOnce(
+      makeApiResponse2([{
+        name: 'updateNodeConfidence',
+        input: { kgNodeId: GAP_NODE_KG_ID, confidence: 'gap' },
+      }]),
+    );
+
+    // 5.NF.B.3 (UUID 9975ae78-...) is one of 6.RP.A.2's prerequisites — pre-populate it
+    const prereqKgId = '9975ae78-2f08-5d8a-afae-f091931d277f'; // 5.NF.B.3
+    const prereqBoardId = 'existing-prereq-board-id';
+    const gapObject = makeGapBoardObject();
+    const prereqObject: BoardObject = {
+      id: prereqBoardId,
+      type: 'kg-node',
+      kgNodeId: prereqKgId,
+      x: 300, y: 600, width: 160, height: 80, zIndex: 2,
+      content: 'Fraction as division',
+    } as BoardObject;
+
+    const actions = makeGapActions();
+    actions.getAllObjects.mockReturnValue([gapObject, prereqObject]);
+
+    // Both gap node and the prereq are already in the map
+    const kgNodeMap = new Map([
+      [GAP_NODE_KG_ID, GAP_NODE_BOARD_ID],
+      [prereqKgId, prereqBoardId],
+    ]);
+    const config = getPipelineConfig('explorer', kgNodeMap, 'diagnostic', null);
+
+    await runAgentCommand(
+      "I don't know unit rate",
+      actions as never,
+      'user-1',
+      VIEWPORT,
+      [],
+      actions.getAllObjects,
+      undefined,
+      undefined,
+      config,
+    );
+
+    // The already-on-board prereq must NOT be re-placed as a new kg-node
+    const newNodes = actions._created.filter(c => c.type === 'kg-node');
+    const reCreated = newNodes.find(c => c.overrides?.kgNodeId === prereqKgId);
+    expect(reCreated).toBeUndefined();
+
+    // Other (unplaced) prerequisites should still be placed
+    // (6.RP.A.2 has 4 prereqs total; 1 is already on board → 3 new nodes)
+    expect(newNodes.length).toBe(3);
+  });
+
+  it('[gs-024] multiple prereqs from gap expansion have distinct x values', async () => {
+    const mockedCall = vi.mocked(callAnthropic);
+    mockedCall.mockResolvedValueOnce(
+      makeApiResponse2([{
+        name: 'updateNodeConfidence',
+        input: { kgNodeId: GAP_NODE_KG_ID, confidence: 'gap' },
+      }]),
+    );
+
+    const actions = makeGapActions();
+    const kgNodeMap = new Map([[GAP_NODE_KG_ID, GAP_NODE_BOARD_ID]]);
+    const config = getPipelineConfig('explorer', kgNodeMap, 'diagnostic', null);
+
+    await runAgentCommand(
+      "I don't know this",
+      actions as never,
+      'user-1',
+      VIEWPORT,
+      [],
+      actions.getAllObjects,
+      undefined,
+      undefined,
+      config,
+    );
+
+    const newNodes = actions._created.filter(c => c.type === 'kg-node');
+    expect(newNodes.length).toBeGreaterThan(1);
+
+    const xValues = newNodes.map(n => n.x);
+    const uniqueX = new Set(xValues);
+    expect(uniqueX.size).toBe(xValues.length);
+  });
+
+  it('[gs-022b] existing prereq→gap edge is not duplicated', async () => {
+    const mockedCall = vi.mocked(callAnthropic);
+    mockedCall.mockResolvedValueOnce(
+      makeApiResponse2([{
+        name: 'updateNodeConfidence',
+        input: { kgNodeId: GAP_NODE_KG_ID, confidence: 'gap' },
+      }]),
+    );
+
+    const prereqKgId = '9975ae78-2f08-5d8a-afae-f091931d277f'; // 5.NF.B.3
+    const prereqBoardId = 'existing-prereq-board-id';
+    const gapObject = makeGapBoardObject();
+    const prereqObject: BoardObject = {
+      id: prereqBoardId,
+      type: 'kg-node',
+      kgNodeId: prereqKgId,
+      x: 300, y: 600, width: 160, height: 80, zIndex: 2,
+      content: 'Fraction as division',
+    } as BoardObject;
+    // Pre-existing line from prereq → gap
+    const existingLine: BoardObject = {
+      id: 'existing-line-id',
+      type: 'line',
+      fromId: prereqBoardId,
+      toId: GAP_NODE_BOARD_ID,
+      x: 0, y: 0, width: 0, height: 0, zIndex: 0,
+    } as BoardObject;
+
+    const actions = makeGapActions();
+    actions.getAllObjects.mockReturnValue([gapObject, prereqObject, existingLine]);
+
+    const kgNodeMap = new Map([
+      [GAP_NODE_KG_ID, GAP_NODE_BOARD_ID],
+      [prereqKgId, prereqBoardId],
+    ]);
+    const config = getPipelineConfig('explorer', kgNodeMap, 'diagnostic', null);
+
+    await runAgentCommand(
+      "I don't know unit rate",
+      actions as never,
+      'user-1',
+      VIEWPORT,
+      [],
+      actions.getAllObjects,
+      undefined,
+      undefined,
+      config,
+    );
+
+    // No duplicate line for the prereq that already has a connection
+    const newLines = actions._created.filter(c => c.type === 'line');
+    const dupLine = newLines.find(
+      c => c.overrides?.fromId === prereqBoardId && c.overrides?.toId === GAP_NODE_BOARD_ID,
+    );
+    expect(dupLine).toBeUndefined();
   });
 });
