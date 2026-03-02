@@ -1,0 +1,93 @@
+ graph TD
+   subgraph OA["Operations & Algebraic Thinking"]
+     OA_A["2.OA.A\nRepresent & solve add/sub problems"]
+     OA_A1["2.OA.A.1\nAdd/sub within 100 — word problems"]
+     OA_B["2.OA.B\nAdd and subtract within 20"]
+     OA_B2["2.OA.B.2\nFluently add/sub within 20
+ (mental)"]
+     OA_C["2.OA.C\nEqual groups → foundations for ×"]
+     OA_C3["2.OA.C.3\nOdd/even groups up to 20"]
+     OA_C4["2.OA.C.4\nArrays → sum of equal addends"]
+   end
+
+   subgraph NBT["Number & Operations in Base Ten"]
+     NBT_A["2.NBT.A\nUnderstand place value"]
+     NBT_A2["2.NBT.A.2\nCount within 1000; skip-count
+ 5s/10s/100s"]
+     NBT_A1["2.NBT.A.1\n3-digit numbers =
+ hundreds/tens/ones"]
+     NBT_A1a["2.NBT.A.1a\n100 = bundle of ten tens"]
+     NBT_A1b["2.NBT.A.1b\n100–900 = 1–9 hundreds"]
+     NBT_A3["2.NBT.A.3\nRead/write numbers to 1000"]
+     NBT_A4["2.NBT.A.4\nCompare 3-digit numbers with >, =,
+  <"]
+     NBT_B["2.NBT.B\nPlace value — add & subtract"]
+     NBT_B5["2.NBT.B.5\nFluently add/sub within 100"]
+     NBT_B6["2.NBT.B.6\nAdd up to four 2-digit numbers"]
+     NBT_B7["2.NBT.B.7\nAdd/sub within 1000 (models &
+ strategies)"]
+     NBT_B8["2.NBT.B.8\nMentally add/sub 10 or 100"]
+     NBT_B9["2.NBT.B.9\nExplain add/sub strategies (place
+ value)"]
+   end
+
+   subgraph MD["Measurement & Data"]
+     MD_A["2.MD.A\nMeasure & estimate lengths"]
+     MD_A1["2.MD.A.1\nMeasure with
+ rulers/yardsticks/etc."]
+     MD_A2["2.MD.A.2\nMeasure same object in two different
+  units"]
+     MD_A3["2.MD.A.3\nEstimate lengths (in, ft, cm, m)"]
+     MD_A4["2.MD.A.4\nHow much longer? — compare lengths"]
+     MD_B["2.MD.B\nAdd & subtract applied to length"]
+     MD_B5["2.MD.B.5\nAdd/sub within 100 — length word
+ problems"]
+     MD_B6["2.MD.B.6\nNumber line — whole numbers &
+ sums/differences"]
+     MD_C["2.MD.C\nTime & money"]
+     MD_C7["2.MD.C.7\nTime to nearest 5 minutes
+ (a.m./p.m.)"]
+     MD_C8["2.MD.C.8\nWord problems with $, quarters,
+ dimes, nickels, pennies"]
+     MD_D["2.MD.D\nRepresent & interpret data"]
+     MD_D9["2.MD.D.9\nLine plot — measurement data"]
+     MD_D10["2.MD.D.10\nPicture graph & bar graph (up to 4
+  categories)"]
+   end
+
+   subgraph G["Geometry"]
+     G_A["2.G.A\nReason with shapes & attributes"]
+     G_A1["2.G.A.1\nRecognize/draw triangles, quads,
+ pentagons, hexagons, cubes"]
+     G_A2["2.G.A.2\nPartition rectangle into rows &
+ columns of squares"]
+     G_A3["2.G.A.3\nPartition circles & rectangles into
+ halves, thirds, fourths"]
+   end
+
+   subgraph MP["Mathematical Practices (Grade 2)"]
+     MP1["2.MP1 Make sense of problems"]
+     MP2["2.MP2 Reason abstractly"]
+     MP3["2.MP3 Construct arguments"]
+     MP4["2.MP4 Model with math"]
+     MP5["2.MP5 Use tools strategically"]
+     MP6["2.MP6 Attend to precision"]
+     MP7["2.MP7 Look for structure"]
+     MP8["2.MP8 Regularity in repeated reasoning"]
+   end
+
+   %% Prerequisite edges (from KG data)
+   OA_B2 --> NBT_B5
+   NBT_A2 --> NBT_A1
+   NBT_A1 --> NBT_A3
+   NBT_A1 --> NBT_A4
+   NBT_A1 --> NBT_B6
+   NBT_A1 --> NBT_B7
+   NBT_A1 --> NBT_B8
+   NBT_B7 --> NBT_B6
+   MD_A1 --> MD_A2
+   MD_A1 --> MD_A3
+   MD_A3 --> MD_A2
+   MD_A3 --> MD_A4
+   MD_A4 --> MD_B5
+   G_A2 --> G_A3
