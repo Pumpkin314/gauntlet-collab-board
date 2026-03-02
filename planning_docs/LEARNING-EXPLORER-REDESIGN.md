@@ -1,6 +1,6 @@
 # Learning Explorer — Full Redesign Plan
 
-**Status as of 2026-02-27:** Sprint 1 complete. BF-1/BF-2/BF-3 complete (main). Sprint 2 core complete (mode selection, provisional coloring, practice loop — all in prompt+pipeline+executor). Sprint 2.5, Sprints 3–4, and BF-4 pending. Connector bugs documented in planning_docs/LEARNING_CONNECTOR_BUGFIX.md.
+**Status as of 2026-03-01:** Sprint 1 complete. BF-1/BF-2/BF-3 complete (main). BF-3-Bug4 (PR #44) and BF-Conn1 (PR #45) merged. Sprint 2 core complete. BF-Conn2 (re-snap assessment) blocked on manual test; BF-Conn3 (`autoConnectKgEdges`) and BF-4 (self-report batch) pending. Sprint 2.5, Sprints 3–4 pending. See `planning_docs/STATUS-2026-03-01.md` for full handover.
 
 ---
 
