@@ -12,9 +12,11 @@ import {
 import {
   computeAnchorPlacements,
   computeAnchorEdges,
+  computeChildSpawnPlacements,
+  computePrereqSpawnPlacements,
   getWelcomeMessage,
 } from '../agent/explorerSpawn';
-import { getNode, getComponents } from '../data/knowledge-graph-v2/index';
+import { getNode, getChildren, getParents, getComponents, getEdgesAmong } from '../data/knowledge-graph-v2/index';
 import { pickQuizFormat, generateMCQuiz, generateFRQuiz, gradeMCAnswer, gradeFRAnswer } from '../agent/quizGenerator';
 import { useBoardActions } from '../contexts/BoardContext';
 
@@ -45,6 +47,7 @@ export function useExplorerStateMachine(
   const lastQuizRef = useRef<QuizData | null>(null);
 
   const actions = useBoardActions();
+  const drawnEdgesRef = useRef<Set<string>>(new Set());
 
   const appendMessage = useCallback((content: string, role: 'agent' | 'status' = 'agent') => {
     const msg: AgentMessage = {
@@ -56,6 +59,44 @@ export function useExplorerStateMachine(
     setMessages((prev) => [...prev, msg]);
   }, []);
 
+  const spawnPlacementsToBoard = useCallback((placements: ReturnType<typeof computeChildSpawnPlacements>['placements'], grade: string): string[] => {
+    const newKgIds: string[] = [];
+    for (const p of placements) {
+      if (kgNodeMapRef.current.has(p.kgNodeId)) continue;
+      const boardId = actions.createObject('kg-node', p.x, p.y, {
+        content: p.description,
+        color: p.laneColor,
+        kgNodeId: p.kgNodeId,
+        kgConfidence: 'unexplored',
+        kgGradeLevel: grade,
+      });
+      kgNodeMapRef.current.set(p.kgNodeId, boardId);
+      newKgIds.push(p.kgNodeId);
+    }
+    return newKgIds;
+  }, [actions]);
+
+  const drawEdgesForVisibleNodes = useCallback(() => {
+    const allVisibleKgIds = [...kgNodeMapRef.current.keys()];
+    const edges = getEdgesAmong(allVisibleKgIds);
+    for (const edge of edges) {
+      const edgeKey = `${edge.source}->${edge.target}`;
+      if (drawnEdgesRef.current.has(edgeKey)) continue;
+      const fromBoardId = kgNodeMapRef.current.get(edge.source);
+      const toBoardId = kgNodeMapRef.current.get(edge.target);
+      if (fromBoardId && toBoardId) {
+        actions.createObject('connector', 0, 0, {
+          fromId: fromBoardId,
+          toId: toBoardId,
+          color: '#999999',
+          strokeWidth: 2,
+          arrowEnd: true,
+        });
+        drawnEdgesRef.current.add(edgeKey);
+      }
+    }
+  }, [actions]);
+
   const executeSideEffect = useCallback((effect: SideEffect) => {
     switch (effect.type) {
       case 'SPAWN_ANCHORS': {
@@ -66,33 +107,8 @@ export function useExplorerStateMachine(
           viewport.bounds.width,
         );
 
-        const placedKgIds: string[] = [];
-        for (const p of placements) {
-          const boardId = actions.createObject('kg-node', p.x, p.y, {
-            content: p.description,
-            color: p.laneColor,
-            kgNodeId: p.kgNodeId,
-            kgConfidence: 'unexplored',
-            kgGradeLevel: effect.grade,
-          });
-          kgNodeMapRef.current.set(p.kgNodeId, boardId);
-          placedKgIds.push(p.kgNodeId);
-        }
-
-        const edges = computeAnchorEdges(effect.grade, placedKgIds);
-        for (const edge of edges) {
-          const fromBoardId = kgNodeMapRef.current.get(edge.sourceKgNodeId);
-          const toBoardId = kgNodeMapRef.current.get(edge.targetKgNodeId);
-          if (fromBoardId && toBoardId) {
-            actions.createObject('connector', 0, 0, {
-              fromId: fromBoardId,
-              toId: toBoardId,
-              color: '#999999',
-              strokeWidth: 2,
-              arrowEnd: true,
-            });
-          }
-        }
+        spawnPlacementsToBoard(placements, effect.grade);
+        drawEdgesForVisibleNodes();
 
         const welcome = getWelcomeMessage(effect.grade, placements.length);
         appendMessage(welcome);
@@ -118,10 +134,48 @@ export function useExplorerStateMachine(
         break;
       }
 
-      case 'SPAWN_CHILDREN':
-      case 'SPAWN_PREREQS':
-        console.warn(`[ExplorerSM] ${effect.type} not yet implemented (Sprint 4)`);
+      case 'SPAWN_CHILDREN': {
+        const parentBoardId = kgNodeMapRef.current.get(effect.nodeId);
+        if (!parentBoardId) break;
+        const childIds = getChildren(effect.nodeId).filter((id) => !kgNodeMapRef.current.has(id));
+        if (childIds.length === 0) {
+          appendMessage('This topic has no further unlocks to explore yet.');
+          break;
+        }
+        const viewport = getViewportCenter();
+        const parentNode = getNode(effect.nodeId);
+        const grade = stateRef.current.type !== 'CHOOSE_GRADE' ? (stateRef.current as any).grade : '5';
+        const parentPos = { x: viewport.x, y: viewport.y };
+        const { placements, remaining } = computeChildSpawnPlacements(parentPos, childIds, grade, viewport.bounds.width);
+        const newKgIds = spawnPlacementsToBoard(placements, grade);
+        drawEdgesForVisibleNodes();
+        if (remaining > 0) {
+          actions.updateObject(parentBoardId, { kgRemainingChildren: remaining } as any);
+        }
+        appendMessage(`Unlocked ${placements.length} topic${placements.length !== 1 ? 's' : ''}!${remaining > 0 ? ` (+${remaining} more to explore)` : ''}`);
         break;
+      }
+
+      case 'SPAWN_PREREQS': {
+        const childBoardId = kgNodeMapRef.current.get(effect.nodeId);
+        if (!childBoardId) break;
+        const prereqIds = getParents(effect.nodeId).filter((id) => !kgNodeMapRef.current.has(id));
+        if (prereqIds.length === 0) {
+          appendMessage('All prerequisites are already on the board!');
+          break;
+        }
+        const viewport = getViewportCenter();
+        const grade = stateRef.current.type !== 'CHOOSE_GRADE' ? (stateRef.current as any).grade : '5';
+        const childPos = { x: viewport.x, y: viewport.y };
+        const { placements, remaining } = computePrereqSpawnPlacements(childPos, prereqIds, grade, viewport.bounds.width);
+        const newKgIds = spawnPlacementsToBoard(placements, grade);
+        drawEdgesForVisibleNodes();
+        if (remaining > 0) {
+          actions.updateObject(childBoardId, { kgRemainingPrereqs: remaining } as any);
+        }
+        appendMessage(`Found ${placements.length} prerequisite${placements.length !== 1 ? 's' : ''}!${remaining > 0 ? ` (+${remaining} more)` : ''}`);
+        break;
+      }
 
       case 'GENERATE_QUIZ': {
         const { nodeId, forceFormat } = effect;
@@ -183,7 +237,7 @@ export function useExplorerStateMachine(
       case 'PAN_TO_NODE':
         break;
     }
-  }, [getViewportCenter, actions, appendMessage]);
+  }, [getViewportCenter, actions, appendMessage, spawnPlacementsToBoard, drawEdgesForVisibleNodes]);
 
   /** Uses stateRef to avoid stale closures when self-dispatching (e.g. ANCHORS_PLACED). */
   const dispatchEvent = useCallback((event: ExplorerEvent) => {
