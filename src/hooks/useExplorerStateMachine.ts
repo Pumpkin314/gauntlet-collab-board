@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AgentMessage } from '../agent/types';
-import type { Confidence } from '../agent/quizTypes';
+import type { Confidence, QuizData } from '../agent/quizTypes';
 import {
   INITIAL_STATE,
   transition,
+  computeNewConfidence,
   type ExplorerState,
   type ExplorerEvent,
   type SideEffect,
@@ -13,6 +14,8 @@ import {
   computeAnchorEdges,
   getWelcomeMessage,
 } from '../agent/explorerSpawn';
+import { getNode, getComponents } from '../data/knowledge-graph-v2/index';
+import { pickQuizFormat, generateMCQuiz, generateFRQuiz, gradeMCAnswer, gradeFRAnswer } from '../agent/quizGenerator';
 import { useBoardActions } from '../contexts/BoardContext';
 
 const CONFIDENCE_TO_KG: Record<Confidence, string> = {
@@ -39,6 +42,7 @@ export function useExplorerStateMachine(
   const confidenceMapRef = useRef<Map<string, Confidence>>(new Map());
   const kgNodeMapRef = useRef<Map<string, string>>(new Map());
   const stateRef = useRef<ExplorerState>(INITIAL_STATE);
+  const lastQuizRef = useRef<QuizData | null>(null);
 
   const actions = useBoardActions();
 
@@ -119,11 +123,62 @@ export function useExplorerStateMachine(
         console.warn(`[ExplorerSM] ${effect.type} not yet implemented (Sprint 4)`);
         break;
 
-      case 'GENERATE_QUIZ':
-      case 'GRADE_MC':
-      case 'GRADE_FR':
-        console.warn(`[ExplorerSM] ${effect.type} not yet implemented (Sprint 3)`);
+      case 'GENERATE_QUIZ': {
+        const { nodeId, forceFormat } = effect;
+        const node = getNode(nodeId);
+        if (!node) break;
+        const components = getComponents(node.id);
+        const grade = stateRef.current.type !== 'CHOOSE_GRADE' ? (stateRef.current as any).grade : '5';
+        const format = pickQuizFormat(grade, components.length, forceFormat);
+
+        const generateFn = format === 'mc' ? generateMCQuiz : generateFRQuiz;
+        generateFn(node, components, grade)
+          .then((quiz) => {
+            dispatchEvent({ type: 'QUIZ_READY', quiz });
+          })
+          .catch((err) => {
+            console.error('[Explorer] Quiz generation failed:', err);
+            appendMessage('Sorry, I had trouble creating a quiz. Try again!');
+            dispatchEvent({ type: 'CANCEL_QUIZ' });
+          });
         break;
+      }
+
+      case 'GRADE_MC': {
+        const quiz = lastQuizRef.current;
+        if (!quiz) break;
+        const { correct, feedback } = gradeMCAnswer(quiz, effect.answerIndex);
+        const currentConfidence = confidenceMapRef.current.get(effect.nodeId) ?? 'gray';
+        const newConfidence = computeNewConfidence(currentConfidence, correct, quiz.format);
+        dispatchEvent({
+          type: 'QUIZ_GRADED',
+          result: { correct, feedback, newConfidence },
+        });
+        break;
+      }
+
+      case 'GRADE_FR': {
+        const quiz = lastQuizRef.current;
+        if (!quiz) break;
+        const node = getNode(effect.nodeId);
+        if (!node) break;
+        const grade = (stateRef.current as any).grade ?? '5';
+        gradeFRAnswer(quiz, effect.answer, node, grade)
+          .then(({ correct, partial, llmConfidence, feedback }) => {
+            const currentConfidence = confidenceMapRef.current.get(effect.nodeId) ?? 'gray';
+            const newConfidence = computeNewConfidence(currentConfidence, correct, quiz.format, llmConfidence);
+            dispatchEvent({
+              type: 'QUIZ_GRADED',
+              result: { correct, partial, llmConfidence, feedback, newConfidence },
+            });
+          })
+          .catch((err) => {
+            console.error('[Explorer] FR grading failed:', err);
+            appendMessage('Sorry, I had trouble grading your answer. Try again!');
+            dispatchEvent({ type: 'CANCEL_QUIZ' });
+          });
+        break;
+      }
 
       case 'PAN_TO_NODE':
         break;
@@ -134,6 +189,9 @@ export function useExplorerStateMachine(
   const dispatchEvent = useCallback((event: ExplorerEvent) => {
     const { nextState, effects } = transition(stateRef.current, event);
     stateRef.current = nextState;
+    if (nextState.type === 'QUIZ_IN_PROGRESS') {
+      lastQuizRef.current = nextState.quiz;
+    }
     setState(nextState);
     for (const effect of effects) {
       executeSideEffect(effect);
