@@ -25,6 +25,8 @@ import { Minimap } from './Canvas/Minimap';
 import type { ActiveTool, BoardObject } from '../types/board';
 import { getConnectedLines } from '../utils/connectorIndex';
 import { resolveEndpoint } from '../utils/anchorResolve';
+import { useExplorerOptional, ExplorerProvider } from '../contexts/ExplorerContext';
+import NodeActionMenu from './NodeActionMenu';
 
 // ── Register all shape types ───────────────────────────────────────────────────
 registerShape('sticky', {
@@ -185,6 +187,22 @@ function getDescendantIds(frameId: string, allObjects: BoardObject[]): Set<strin
 }
 
 export default function Canvas() {
+  const viewportRef = useRef({ x: 0, y: 0, width: window.innerWidth });
+
+  const getViewportCenter = useCallback(() => ({
+    x: viewportRef.current.x,
+    y: viewportRef.current.y,
+    bounds: { width: viewportRef.current.width },
+  }), []);
+
+  return (
+    <ExplorerProvider getViewportCenter={getViewportCenter}>
+      <CanvasInner viewportRef={viewportRef} />
+    </ExplorerProvider>
+  );
+}
+
+function CanvasInner({ viewportRef }: { viewportRef: React.MutableRefObject<{ x: number; y: number; width: number }> }) {
   const {
     objects, presence, createObject, updateObject,
     deleteObject, deleteAllObjects, updateCursorPosition, batchCreate, batchUpdate, batchDelete, loading,
@@ -194,6 +212,8 @@ export default function Canvas() {
   const isViewer = userRole === 'viewer';
 
   const { selectedIds, select, toggleSelect, setSelection, deselectAll, selectAll } = useSelection();
+
+  const explorer = useExplorerOptional();
 
   const [stagePos,        setStagePos]        = useState({ x: 0, y: 0 });
   const [stageScale,      setStageScale]      = useState(1);
@@ -227,6 +247,16 @@ export default function Canvas() {
   if (!isPanningRef.current) stagePosRef.current = stagePos;
   const stageScaleRef = useRef(stageScale);
   stageScaleRef.current = stageScale;
+
+  // Keep the shared viewport ref in sync for ExplorerProvider
+  const pos = stagePosRef.current;
+  const scale = stageScaleRef.current;
+  viewportRef.current = {
+    x: -pos.x / scale + window.innerWidth / scale / 2,
+    y: -pos.y / scale + window.innerHeight / scale / 2,
+    width: window.innerWidth / scale,
+  };
+
   const [lineCursorPos, setLineCursorPos] = useState({ x: 0, y: 0 });
 
   // ── Window resize tracking ──────────────────────────────────────────────
@@ -800,7 +830,16 @@ export default function Canvas() {
     if (obj?.type !== 'frame') {
       updateObject(id, { zIndex: Date.now() });
     }
-  }, [select, toggleSelect, updateObject, isViewer]);
+
+    if (
+      explorer &&
+      explorer.state.type === 'IDLE' &&
+      obj?.type === 'kg-node' &&
+      (obj as any).kgNodeId
+    ) {
+      explorer.dispatch({ type: 'NODE_CLICKED', nodeId: (obj as any).kgNodeId });
+    }
+  }, [select, toggleSelect, updateObject, isViewer, explorer]);
 
   const handleDeselectClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) {
@@ -1355,6 +1394,41 @@ export default function Canvas() {
         onColorChange={handleColorChange}
         onClose={() => setColorPickerNote(null)}
       />
+
+      {/* Explorer node action menu */}
+      {explorer && explorer.state.type === 'NODE_MENU_OPEN' && (() => {
+        const kgNodeId = explorer.state.nodeId;
+        const boardId = explorer.kgNodeMap.get(kgNodeId);
+        const obj = boardId ? objects.find(o => o.id === boardId) : undefined;
+        if (!obj) return null;
+        const screenX = stagePos.x + obj.x * stageScale;
+        const screenY = stagePos.y + obj.y * stageScale;
+        const confidence = explorer.confidenceMap.get(kgNodeId) ?? 'gray';
+        return (
+          <NodeActionMenu
+            confidence={confidence}
+            screenPosition={{ x: screenX + (obj.width ?? 220) * stageScale, y: screenY }}
+            onAction={(action) => {
+              switch (action) {
+                case 'Quiz me!':
+                case 'Quiz me again!':
+                  explorer.dispatch({ type: 'ACTION_QUIZ' });
+                  break;
+                case "I don't know this":
+                  explorer.dispatch({ type: 'ACTION_DONT_KNOW' });
+                  break;
+                case 'What leads to this?':
+                  explorer.dispatch({ type: 'ACTION_SHOW_PREREQS' });
+                  break;
+                case 'What does this unlock?':
+                  explorer.dispatch({ type: 'ACTION_SHOW_CHILDREN' });
+                  break;
+              }
+            }}
+            onDismiss={() => explorer.dispatch({ type: 'MENU_DISMISSED' })}
+          />
+        );
+      })()}
 
       {/* Selection action menu — HTML overlay, never affects Transformer bbox.
           Hidden while a shape drag is in progress to avoid stale position lag. */}

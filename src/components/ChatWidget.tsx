@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import type { AgentMessage } from '../agent/types';
 import { useAgent } from '../agent/useAgent';
 import type { AgentMode } from '../agent/useAgent';
+import { useExplorerOptional } from '../contexts/ExplorerContext';
+import GradeSelector from './GradeSelector';
 
 interface ChatWidgetProps {
   stagePosRef: React.RefObject<{ x: number; y: number }>;
@@ -37,6 +39,7 @@ const MODE_CONFIG: Record<AgentMode, {
 
 export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }: ChatWidgetProps) {
   const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode } = useAgent(stagePosRef, stageScaleRef);
+  const explorer = useExplorerOptional();
   const [inputValue, setInputValue] = useState('');
   const [clickedOptions, setClickedOptions] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -44,9 +47,12 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
 
   const cfg = MODE_CONFIG[mode];
 
+  const useV2Explorer = mode === 'explorer' && explorer !== null;
+
+  const explorerMessages = explorer?.messages;
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, explorerMessages]);
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
@@ -221,41 +227,70 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
           gap: 8,
         }}
       >
-        {messages.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            color: '#aaa',
-            fontSize: 13,
-            marginTop: 40,
-            lineHeight: 1.5,
-          }}>
-            {cfg.greeting}
-            <br /><br />
-            {cfg.hint}
-          </div>
-        )}
+        {useV2Explorer && explorer.state.type === 'CHOOSE_GRADE' ? (
+          <>
+            <div style={{
+              textAlign: 'center',
+              color: '#aaa',
+              fontSize: 13,
+              marginTop: 20,
+              lineHeight: 1.5,
+            }}>
+              {cfg.greeting}
+            </div>
+            <GradeSelector onSelectGrade={(grade) => explorer.dispatch({ type: 'SELECT_GRADE', grade })} />
+          </>
+        ) : useV2Explorer ? (
+          <>
+            {explorer.messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                accentColor={cfg.color}
+                onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
+                selectedOption={clickedOptions.get(msg.id)}
+              />
+            ))}
+          </>
+        ) : (
+          <>
+            {messages.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                color: '#aaa',
+                fontSize: 13,
+                marginTop: 40,
+                lineHeight: 1.5,
+              }}>
+                {cfg.greeting}
+                <br /><br />
+                {cfg.hint}
+              </div>
+            )}
 
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            accentColor={cfg.color}
-            onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
-            selectedOption={clickedOptions.get(msg.id)}
-          />
-        ))}
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                accentColor={cfg.color}
+                onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
+                selectedOption={clickedOptions.get(msg.id)}
+              />
+            ))}
 
-        {isLoading && !messages.some((m) => m.id.startsWith('streaming-')) && (
-          <div style={{
-            alignSelf: 'flex-start',
-            background: '#f0f0f0',
-            borderRadius: 12,
-            padding: '8px 14px',
-            fontSize: 13,
-            color: '#888',
-          }}>
-            Thinking...
-          </div>
+            {isLoading && !messages.some((m) => m.id.startsWith('streaming-')) && (
+              <div style={{
+                alignSelf: 'flex-start',
+                background: '#f0f0f0',
+                borderRadius: 12,
+                padding: '8px 14px',
+                fontSize: 13,
+                color: '#888',
+              }}>
+                Thinking...
+              </div>
+            )}
+          </>
         )}
 
         <div ref={messagesEndRef} />
