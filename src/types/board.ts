@@ -45,6 +45,8 @@ export interface BoardObject {
   /** 'provisional' = self-reported mastered, pending practice verification */
   kgConfidence?: 'mastered' | 'shaky' | 'gap' | 'unexplored' | 'provisional';
   kgGradeLevel?: string;
+  kgRemainingChildren?: number;
+  kgRemainingPrereqs?: number;
 
   // Ordering
   zIndex: number;
