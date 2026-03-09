@@ -188,6 +188,7 @@ function getDescendantIds(frameId: string, allObjects: BoardObject[]): Set<strin
 
 export default function Canvas() {
   const viewportRef = useRef({ x: 0, y: 0, width: window.innerWidth });
+  const boardId = window.location.pathname.split('/board/')[1]?.split('/')[0];
 
   const getViewportCenter = useCallback(() => ({
     x: viewportRef.current.x,
@@ -196,7 +197,7 @@ export default function Canvas() {
   }), []);
 
   return (
-    <ExplorerProvider getViewportCenter={getViewportCenter}>
+    <ExplorerProvider getViewportCenter={getViewportCenter} boardId={boardId}>
       <CanvasInner viewportRef={viewportRef} />
     </ExplorerProvider>
   );
@@ -226,6 +227,7 @@ function CanvasInner({ viewportRef }: { viewportRef: React.MutableRefObject<{ x:
   const [isDraggingShape, setIsDraggingShape] = useState(false);
   const [lineVariant,     setLineVariant]     = useState<LineVariant>('line');
   const [boardieOpen,     setBoardieOpen]     = useState(false);
+  const [quizLockTooltip, setQuizLockTooltip] = useState<{ x: number; y: number } | null>(null);
 
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -831,13 +833,13 @@ function CanvasInner({ viewportRef }: { viewportRef: React.MutableRefObject<{ x:
       updateObject(id, { zIndex: Date.now() });
     }
 
-    if (
-      explorer &&
-      explorer.state.type === 'IDLE' &&
-      obj?.type === 'kg-node' &&
-      (obj as any).kgNodeId
-    ) {
-      explorer.dispatch({ type: 'NODE_CLICKED', nodeId: (obj as any).kgNodeId });
+    if (explorer && obj?.type === 'kg-node' && (obj as any).kgNodeId) {
+      if (explorer.state.type === 'IDLE') {
+        explorer.dispatch({ type: 'NODE_CLICKED', nodeId: (obj as any).kgNodeId });
+      } else if (explorer.state.type === 'QUIZ_IN_PROGRESS') {
+        setQuizLockTooltip({ x: cursorPosRef.current.x, y: cursorPosRef.current.y });
+        setTimeout(() => setQuizLockTooltip(null), 2000);
+      }
     }
   }, [select, toggleSelect, updateObject, isViewer, explorer]);
 
@@ -1429,6 +1431,27 @@ function CanvasInner({ viewportRef }: { viewportRef: React.MutableRefObject<{ x:
           />
         );
       })()}
+
+      {/* Quiz lock tooltip */}
+      {quizLockTooltip && (
+        <div style={{
+          position: 'absolute',
+          left: quizLockTooltip.x,
+          top: quizLockTooltip.y - 40,
+          transform: 'translateX(-50%)',
+          background: '#333',
+          color: 'white',
+          padding: '6px 12px',
+          borderRadius: 6,
+          fontSize: 12,
+          fontWeight: 500,
+          zIndex: 1300,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          Finish your current quiz first!
+        </div>
+      )}
 
       {/* Selection action menu — HTML overlay, never affects Transformer bbox.
           Hidden while a shape drag is in progress to avoid stale position lag. */}

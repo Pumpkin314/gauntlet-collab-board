@@ -185,6 +185,27 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
           >
             {mode === 'boardie' ? '✨ Learnie' : '🎨 Boardie'}
           </button>
+          {useV2Explorer && explorer.state.type !== 'CHOOSE_GRADE' && (
+            <button
+              onClick={() => {
+                if (window.confirm('Reset your learning map? This will clear all nodes and progress.')) {
+                  explorer.resetExplorer();
+                }
+              }}
+              title="Reset map"
+              style={{
+                background: 'none',
+                border: '1px solid #ddd',
+                cursor: 'pointer',
+                fontSize: 11,
+                color: '#999',
+                padding: '4px 8px',
+                borderRadius: 4,
+              }}
+            >
+              Reset
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               data-testid="boardie-clear"
@@ -266,15 +287,34 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
                 fontSize: 13,
                 color: '#888',
               }}>
-                Generating quiz...
+                Generating quiz<TypingDots />
               </div>
             )}
-            {explorer.state.type === 'QUIZ_IN_PROGRESS' && (
-              <QuizDisplay
-                quiz={explorer.state.quiz}
-                accentColor={cfg.color}
-                onAnswer={(answerIndex) => explorer.dispatch({ type: 'QUIZ_ANSWERED', answerIndex })}
-              />
+            {(explorer.state.type === 'QUIZ_IN_PROGRESS' || explorer.state.type === 'QUIZ_LOADING') && (
+              <>
+                {explorer.state.type === 'QUIZ_IN_PROGRESS' && (
+                  <QuizDisplay
+                    quiz={explorer.state.quiz}
+                    accentColor={cfg.color}
+                    onAnswer={(answerIndex) => explorer.dispatch({ type: 'QUIZ_ANSWERED', answerIndex })}
+                  />
+                )}
+                <button
+                  onClick={() => explorer.dispatch({ type: 'CANCEL_QUIZ' })}
+                  style={{
+                    alignSelf: 'flex-start',
+                    background: 'none',
+                    border: 'none',
+                    color: '#999',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    padding: '4px 0',
+                    marginTop: 4,
+                  }}
+                >
+                  Cancel quiz
+                </button>
+              </>
             )}
             {explorer.state.type === 'QUIZ_RESULT' && (
               <div style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
@@ -560,5 +600,27 @@ function QuizDisplay({ quiz, accentColor, onAnswer }: {
         </div>
       )}
     </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span style={{ letterSpacing: 2 }}>
+      <style>{`
+        @keyframes typingBounce {
+          0%, 60%, 100% { opacity: 0.3; }
+          30% { opacity: 1; }
+        }
+      `}</style>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          style={{
+            animation: `typingBounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+            display: 'inline-block',
+          }}
+        >.</span>
+      ))}
+    </span>
   );
 }

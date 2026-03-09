@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { AgentMessage } from '../agent/types';
 import type { Confidence, QuizData } from '../agent/quizTypes';
+import { saveExplorerState, loadExplorerState, clearExplorerState } from '../services/explorerPersistence';
 import {
   INITIAL_STATE,
   transition,
@@ -33,10 +34,12 @@ export interface UseExplorerStateMachineReturn {
   confidenceMap: Map<string, Confidence>;
   kgNodeMap: Map<string, string>;
   messages: AgentMessage[];
+  resetExplorer: () => void;
 }
 
 export function useExplorerStateMachine(
   getViewportCenter: () => { x: number; y: number; bounds: { width: number } },
+  boardId?: string,
 ): UseExplorerStateMachineReturn {
   const [state, setState] = useState<ExplorerState>(INITIAL_STATE);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -252,9 +255,65 @@ export function useExplorerStateMachine(
     }
   }, [executeSideEffect]);
 
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistState = useCallback(() => {
+    if (!boardId) return;
+    const s = stateRef.current;
+    if (s.type === 'CHOOSE_GRADE') return;
+    const grade = (s as any).grade ?? '';
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveExplorerState(boardId, {
+        grade,
+        stateType: s.type,
+        kgNodeMap: Object.fromEntries(kgNodeMapRef.current),
+        confidenceMap: Object.fromEntries(confidenceMapRef.current),
+        drawnEdges: [...drawnEdgesRef.current],
+      });
+    }, 200);
+  }, [boardId]);
+
   const dispatch = useCallback((event: ExplorerEvent) => {
     dispatchEvent(event);
-  }, [dispatchEvent]);
+    persistState();
+  }, [dispatchEvent, persistState]);
+
+  const resetExplorer = useCallback(() => {
+    for (const boardObjId of kgNodeMapRef.current.values()) {
+      actions.deleteObject(boardObjId);
+    }
+    kgNodeMapRef.current.clear();
+    confidenceMapRef.current.clear();
+    drawnEdgesRef.current.clear();
+    lastQuizRef.current = null;
+    stateRef.current = INITIAL_STATE;
+    setState(INITIAL_STATE);
+    setMessages([]);
+    if (boardId) void clearExplorerState(boardId);
+  }, [actions, boardId]);
+
+  // Restore persisted state on mount
+  useEffect(() => {
+    if (!boardId) return;
+    void loadExplorerState(boardId).then((persisted) => {
+      if (!persisted || !persisted.grade) return;
+      for (const [kgId, confidence] of Object.entries(persisted.confidenceMap)) {
+        confidenceMapRef.current.set(kgId, confidence);
+      }
+      for (const [kgId, boardObjId] of Object.entries(persisted.kgNodeMap)) {
+        kgNodeMapRef.current.set(kgId, boardObjId);
+      }
+      for (const edgeKey of persisted.drawnEdges) {
+        drawnEdgesRef.current.add(edgeKey);
+      }
+      const restored: ExplorerState = { type: 'IDLE', grade: persisted.grade };
+      stateRef.current = restored;
+      setState(restored);
+      appendMessage(`Welcome back! Your Grade ${persisted.grade} map is restored. Click any node to continue.`);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardId]);
 
   return {
     state,
@@ -262,5 +321,6 @@ export function useExplorerStateMachine(
     confidenceMap: confidenceMapRef.current,
     kgNodeMap: kgNodeMapRef.current,
     messages,
+    resetExplorer,
   };
 }
