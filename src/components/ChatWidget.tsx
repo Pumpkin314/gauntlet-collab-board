@@ -1,7 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { AgentMessage } from '../agent/types';
+import type { QuizData } from '../agent/quizTypes';
 import { useAgent } from '../agent/useAgent';
 import type { AgentMode } from '../agent/useAgent';
+import { useExplorerOptional } from '../contexts/ExplorerContext';
+import GradeSelector from './GradeSelector';
 
 interface ChatWidgetProps {
   stagePosRef: React.RefObject<{ x: number; y: number }>;
@@ -37,6 +40,7 @@ const MODE_CONFIG: Record<AgentMode, {
 
 export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }: ChatWidgetProps) {
   const { messages, sendMessage, isLoading, isOpen, toggleOpen, clearMessages, cancelRequest, mode, setMode } = useAgent(stagePosRef, stageScaleRef);
+  const explorer = useExplorerOptional();
   const [inputValue, setInputValue] = useState('');
   const [clickedOptions, setClickedOptions] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -44,9 +48,12 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
 
   const cfg = MODE_CONFIG[mode];
 
+  const useV2Explorer = mode === 'explorer' && explorer !== null;
+
+  const explorerMessages = explorer?.messages;
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, explorerMessages]);
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
@@ -55,9 +62,14 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
 
   const handleSend = useCallback(() => {
     if (!inputValue.trim() || isLoading) return;
+    if (useV2Explorer && explorer.state.type === 'QUIZ_IN_PROGRESS' && explorer.state.quiz.format !== 'mc') {
+      explorer.dispatch({ type: 'QUIZ_FR_ANSWERED', text: inputValue });
+      setInputValue('');
+      return;
+    }
     void sendMessage(inputValue);
     setInputValue('');
-  }, [inputValue, isLoading, sendMessage]);
+  }, [inputValue, isLoading, sendMessage, useV2Explorer, explorer]);
 
   const handleOptionClick = useCallback((option: string) => {
     if (isLoading) return;
@@ -173,6 +185,27 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
           >
             {mode === 'boardie' ? '✨ Learnie' : '🎨 Boardie'}
           </button>
+          {useV2Explorer && explorer.state.type !== 'CHOOSE_GRADE' && (
+            <button
+              onClick={() => {
+                if (window.confirm('Reset your learning map? This will clear all nodes and progress.')) {
+                  explorer.resetExplorer();
+                }
+              }}
+              title="Reset map"
+              style={{
+                background: 'none',
+                border: '1px solid #ddd',
+                cursor: 'pointer',
+                fontSize: 11,
+                color: '#999',
+                padding: '4px 8px',
+                borderRadius: 4,
+              }}
+            >
+              Reset
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               data-testid="boardie-clear"
@@ -221,41 +254,141 @@ export default function ChatWidget({ stagePosRef, stageScaleRef, onOpenChange }:
           gap: 8,
         }}
       >
-        {messages.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            color: '#aaa',
-            fontSize: 13,
-            marginTop: 40,
-            lineHeight: 1.5,
-          }}>
-            {cfg.greeting}
-            <br /><br />
-            {cfg.hint}
-          </div>
-        )}
+        {useV2Explorer && explorer.state.type === 'CHOOSE_GRADE' ? (
+          <>
+            <div style={{
+              textAlign: 'center',
+              color: '#aaa',
+              fontSize: 13,
+              marginTop: 20,
+              lineHeight: 1.5,
+            }}>
+              {cfg.greeting}
+            </div>
+            <GradeSelector onSelectGrade={(grade) => explorer.dispatch({ type: 'SELECT_GRADE', grade })} />
+          </>
+        ) : useV2Explorer ? (
+          <>
+            {explorer.messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                accentColor={cfg.color}
+                onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
+                selectedOption={clickedOptions.get(msg.id)}
+              />
+            ))}
+            {explorer.state.type === 'QUIZ_LOADING' && (
+              <div style={{
+                alignSelf: 'flex-start',
+                background: '#f0f0f0',
+                borderRadius: 12,
+                padding: '8px 14px',
+                fontSize: 13,
+                color: '#888',
+              }}>
+                Generating quiz<TypingDots />
+              </div>
+            )}
+            {(explorer.state.type === 'QUIZ_IN_PROGRESS' || explorer.state.type === 'QUIZ_LOADING') && (
+              <>
+                {explorer.state.type === 'QUIZ_IN_PROGRESS' && (
+                  <QuizDisplay
+                    quiz={explorer.state.quiz}
+                    accentColor={cfg.color}
+                    onAnswer={(answerIndex) => explorer.dispatch({ type: 'QUIZ_ANSWERED', answerIndex })}
+                  />
+                )}
+                <button
+                  onClick={() => explorer.dispatch({ type: 'CANCEL_QUIZ' })}
+                  style={{
+                    alignSelf: 'flex-start',
+                    background: 'none',
+                    border: 'none',
+                    color: '#999',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    padding: '4px 0',
+                    marginTop: 4,
+                  }}
+                >
+                  Cancel quiz
+                </button>
+              </>
+            )}
+            {explorer.state.type === 'QUIZ_RESULT' && (
+              <div style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
+                <div style={{
+                  background: explorer.state.result.correct ? '#E8F5E9' : '#FFF3E0',
+                  color: '#333',
+                  borderRadius: 12,
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                  borderLeft: `4px solid ${explorer.state.result.correct ? '#4CAF50' : '#FF9800'}`,
+                }}>
+                  {explorer.state.result.feedback}
+                </div>
+                <button
+                  onClick={() => explorer.dispatch({ type: 'DISMISS_RESULT' })}
+                  style={{
+                    marginTop: 8,
+                    background: cfg.color,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 16,
+                    padding: '6px 16px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {messages.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                color: '#aaa',
+                fontSize: 13,
+                marginTop: 40,
+                lineHeight: 1.5,
+              }}>
+                {cfg.greeting}
+                <br /><br />
+                {cfg.hint}
+              </div>
+            )}
 
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            accentColor={cfg.color}
-            onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
-            selectedOption={clickedOptions.get(msg.id)}
-          />
-        ))}
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                accentColor={cfg.color}
+                onOptionClick={msg.options && !clickedOptions.has(msg.id) ? handleOptionClick : undefined}
+                selectedOption={clickedOptions.get(msg.id)}
+              />
+            ))}
 
-        {isLoading && !messages.some((m) => m.id.startsWith('streaming-')) && (
-          <div style={{
-            alignSelf: 'flex-start',
-            background: '#f0f0f0',
-            borderRadius: 12,
-            padding: '8px 14px',
-            fontSize: 13,
-            color: '#888',
-          }}>
-            Thinking...
-          </div>
+            {isLoading && !messages.some((m) => m.id.startsWith('streaming-')) && (
+              <div style={{
+                alignSelf: 'flex-start',
+                background: '#f0f0f0',
+                borderRadius: 12,
+                padding: '8px 14px',
+                fontSize: 13,
+                color: '#888',
+              }}>
+                Thinking...
+              </div>
+            )}
+          </>
         )}
 
         <div ref={messagesEndRef} />
@@ -419,5 +552,75 @@ function MessageBubble({ message, accentColor, onOptionClick, selectedOption }: 
         {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>
+  );
+}
+
+const OPTION_LABELS = ['A', 'B', 'C', 'D'];
+
+function QuizDisplay({ quiz, accentColor, onAnswer }: {
+  quiz: QuizData;
+  accentColor: string;
+  onAnswer: (answerIndex: number) => void;
+}) {
+  return (
+    <div style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
+      <div style={{
+        background: '#f0f0f0',
+        color: '#333',
+        borderRadius: 12,
+        padding: '8px 14px',
+        fontSize: 13,
+        lineHeight: 1.5,
+        wordBreak: 'break-word',
+        whiteSpace: 'pre-wrap',
+      }}>
+        {quiz.questionText}
+      </div>
+      {quiz.format === 'mc' && quiz.options && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {quiz.options.map((opt, i) => (
+            <button
+              key={i}
+              onClick={() => onAnswer(i)}
+              style={{
+                background: 'white',
+                color: accentColor,
+                border: `1.5px solid ${accentColor}`,
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              {OPTION_LABELS[i]}. {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span style={{ letterSpacing: 2 }}>
+      <style>{`
+        @keyframes typingBounce {
+          0%, 60%, 100% { opacity: 0.3; }
+          30% { opacity: 1; }
+        }
+      `}</style>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          style={{
+            animation: `typingBounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+            display: 'inline-block',
+          }}
+        >.</span>
+      ))}
+    </span>
   );
 }
