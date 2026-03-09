@@ -10,6 +10,7 @@ export default memo(function KnowledgeNodeShape(props: ShapeProps) {
   const { data, isSelected } = props;
   const isFrontier = data.kgConfidence === 'unexplored';
   const isProvisional = data.kgConfidence === 'provisional';
+  const remainingCount = (data.kgRemainingChildren ?? 0) + (data.kgRemainingPrereqs ?? 0);
 
   return (
     <BaseShape
@@ -62,6 +63,28 @@ export default memo(function KnowledgeNodeShape(props: ShapeProps) {
                 text={`Grade ${data.kgGradeLevel}`}
                 fontSize={9}
                 fill={data.kgConfidence === 'gap' || data.kgConfidence === 'mastered' ? '#fff' : '#555'}
+                align="center"
+                fontStyle="bold"
+              />
+            </Group>
+          )}
+          {/* "+N more" badge */}
+          {remainingCount > 0 && (
+            <Group x={w - 52} y={h - 20}>
+              <Rect
+                width={48}
+                height={16}
+                fill="#7C4DFF"
+                cornerRadius={8}
+              />
+              <Text
+                x={4}
+                y={2}
+                width={40}
+                height={14}
+                text={`+${remainingCount} more`}
+                fontSize={9}
+                fill="#fff"
                 align="center"
                 fontStyle="bold"
               />
