@@ -52,6 +52,14 @@ export function useExplorerStateMachine(
 
   const actions = useBoardActions();
   const drawnEdgesRef = useRef<Set<string>>(new Set());
+  const drawnLineIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Local cache of just-created board objects. getObjectById reads from React
+   * state which hasn't flushed yet after Yjs writes, so we keep a synchronous
+   * lookup for objects we just spawned in the same tick.
+   */
+  const localObjectCacheRef = useRef<Map<string, { id: string; x: number; y: number; width: number; height: number }>>(new Map());
 
   const appendMessage = useCallback((content: string, role: 'agent' | 'status' = 'agent') => {
     const msg: AgentMessage = {
@@ -62,6 +70,9 @@ export function useExplorerStateMachine(
     };
     setMessages((prev) => [...prev, msg]);
   }, []);
+
+  const KG_NODE_WIDTH = 220;
+  const KG_NODE_HEIGHT = 80;
 
   const spawnPlacementsToBoard = useCallback((placements: ReturnType<typeof computeChildSpawnPlacements>['placements'], grade: string): string[] => {
     const newKgIds: string[] = [];
@@ -75,9 +86,16 @@ export function useExplorerStateMachine(
         kgGradeLevel: grade,
       });
       kgNodeMapRef.current.set(p.kgNodeId, boardId);
+      localObjectCacheRef.current.set(boardId, {
+        id: boardId, x: p.x, y: p.y, width: KG_NODE_WIDTH, height: KG_NODE_HEIGHT,
+      });
       newKgIds.push(p.kgNodeId);
     }
     return newKgIds;
+  }, [actions]);
+
+  const getObjectForEdge = useCallback((boardId: string) => {
+    return actions.getObjectById(boardId) ?? localObjectCacheRef.current.get(boardId);
   }, [actions]);
 
   const drawEdgesForVisibleNodes = useCallback(() => {
@@ -90,16 +108,16 @@ export function useExplorerStateMachine(
       const toBoardId = kgNodeMapRef.current.get(edge.target);
       if (!fromBoardId || !toBoardId) continue;
 
-      const fromObj = actions.getObjectById(fromBoardId);
-      const toObj = actions.getObjectById(toBoardId);
+      const fromObj = getObjectForEdge(fromBoardId);
+      const toObj = getObjectForEdge(toBoardId);
       if (!fromObj || !toObj) continue;
 
       const fromCenter = { x: fromObj.x + fromObj.width / 2, y: fromObj.y + fromObj.height / 2 };
       const toCenter = { x: toObj.x + toObj.width / 2, y: toObj.y + toObj.height / 2 };
-      const toPt = resolveEndpoint(toObj, undefined, fromCenter);
-      const fromPt = resolveEndpoint(fromObj, undefined, toPt);
+      const toPt = resolveEndpoint(toObj as any, undefined, fromCenter);
+      const fromPt = resolveEndpoint(fromObj as any, undefined, toPt);
 
-      actions.createObject('line', fromPt.x, fromPt.y, {
+      const lineId = actions.createObject('line', fromPt.x, fromPt.y, {
         points: [fromPt.x, fromPt.y, toPt.x, toPt.y],
         fromId: fromBoardId,
         toId: toBoardId,
@@ -107,9 +125,10 @@ export function useExplorerStateMachine(
         strokeWidth: 2,
         arrowEnd: true,
       });
+      drawnLineIdsRef.current.add(lineId);
       drawnEdgesRef.current.add(edgeKey);
     }
-  }, [actions]);
+  }, [actions, getObjectForEdge]);
 
   const executeSideEffect = useCallback((effect: SideEffect) => {
     switch (effect.type) {
@@ -153,13 +172,16 @@ export function useExplorerStateMachine(
         if (!parentBoardId) break;
         const childIds = getChildren(effect.nodeId).filter((id) => !kgNodeMapRef.current.has(id));
         if (childIds.length === 0) {
+          drawEdgesForVisibleNodes();
           appendMessage('This topic has no further unlocks to explore yet.');
           break;
         }
         const viewport = getViewportCenter();
-        const parentNode = getNode(effect.nodeId);
         const grade = stateRef.current.type !== 'CHOOSE_GRADE' ? (stateRef.current as any).grade : '5';
-        const parentPos = { x: viewport.x, y: viewport.y };
+        const parentObj = getObjectForEdge(parentBoardId);
+        const parentPos = parentObj
+          ? { x: parentObj.x, y: parentObj.y }
+          : { x: viewport.x, y: viewport.y };
         const { placements, remaining } = computeChildSpawnPlacements(parentPos, childIds, grade, viewport.bounds.width);
         const newKgIds = spawnPlacementsToBoard(placements, grade);
         drawEdgesForVisibleNodes();
@@ -175,12 +197,16 @@ export function useExplorerStateMachine(
         if (!childBoardId) break;
         const prereqIds = getParents(effect.nodeId).filter((id) => !kgNodeMapRef.current.has(id));
         if (prereqIds.length === 0) {
+          drawEdgesForVisibleNodes();
           appendMessage('All prerequisites are already on the board!');
           break;
         }
         const viewport = getViewportCenter();
         const grade = stateRef.current.type !== 'CHOOSE_GRADE' ? (stateRef.current as any).grade : '5';
-        const childPos = { x: viewport.x, y: viewport.y };
+        const childObj = getObjectForEdge(childBoardId);
+        const childPos = childObj
+          ? { x: childObj.x, y: childObj.y }
+          : { x: viewport.x, y: viewport.y };
         const { placements, remaining } = computePrereqSpawnPlacements(childPos, prereqIds, grade, viewport.bounds.width);
         const newKgIds = spawnPlacementsToBoard(placements, grade);
         drawEdgesForVisibleNodes();
@@ -251,7 +277,7 @@ export function useExplorerStateMachine(
       case 'PAN_TO_NODE':
         break;
     }
-  }, [getViewportCenter, actions, appendMessage, spawnPlacementsToBoard, drawEdgesForVisibleNodes]);
+  }, [getViewportCenter, actions, appendMessage, spawnPlacementsToBoard, drawEdgesForVisibleNodes, getObjectForEdge]);
 
   /** Uses stateRef to avoid stale closures when self-dispatching (e.g. ANCHORS_PLACED). */
   const dispatchEvent = useCallback((event: ExplorerEvent) => {
@@ -294,9 +320,14 @@ export function useExplorerStateMachine(
     for (const boardObjId of kgNodeMapRef.current.values()) {
       actions.deleteObject(boardObjId);
     }
+    for (const lineId of drawnLineIdsRef.current) {
+      actions.deleteObject(lineId);
+    }
     kgNodeMapRef.current.clear();
     confidenceMapRef.current.clear();
     drawnEdgesRef.current.clear();
+    drawnLineIdsRef.current.clear();
+    localObjectCacheRef.current.clear();
     lastQuizRef.current = null;
     stateRef.current = INITIAL_STATE;
     setState(INITIAL_STATE);
