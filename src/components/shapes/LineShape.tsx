@@ -42,7 +42,7 @@ export default memo(function LineShape({
       group.clearCache();
     } else {
       requestAnimationFrame(() => {
-        if (groupRef.current && !isSelected) groupRef.current.cache();
+        if (groupRef.current && !isSelected) groupRef.current.cache({ pixelRatio: 1, offset: 12 });
       });
     }
   }, [isSelected, data.points, data.strokeColor, data.color, data.arrowStart, data.arrowEnd]);

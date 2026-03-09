@@ -1052,7 +1052,7 @@ function CanvasInner({ viewportRef }: { viewportRef: React.MutableRefObject<{ x:
       connUpdates.push({ id: entry.lineId, changes: { points: pts, x: pts[0], y: pts[1] } });
 
       // Re-cache
-      requestAnimationFrame(() => { entry.lineNode?.cache(); });
+      requestAnimationFrame(() => { entry.lineNode?.cache({ pixelRatio: 1, offset: 12 }); });
     }
     if (connUpdates.length > 0) batchUpdate(connUpdates);
     transformConnectorCacheRef.current = [];
