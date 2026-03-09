@@ -20,6 +20,7 @@ import {
 import { getNode, getChildren, getParents, getComponents, getEdgesAmong } from '../data/knowledge-graph-v2/index';
 import { pickQuizFormat, generateMCQuiz, generateFRQuiz, gradeMCAnswer, gradeFRAnswer } from '../agent/quizGenerator';
 import { useBoardActions } from '../contexts/BoardContext';
+import { resolveEndpoint } from '../utils/anchorResolve';
 
 const CONFIDENCE_TO_KG: Record<Confidence, string> = {
   gray: 'unexplored',
@@ -87,16 +88,26 @@ export function useExplorerStateMachine(
       if (drawnEdgesRef.current.has(edgeKey)) continue;
       const fromBoardId = kgNodeMapRef.current.get(edge.source);
       const toBoardId = kgNodeMapRef.current.get(edge.target);
-      if (fromBoardId && toBoardId) {
-        actions.createObject('connector', 0, 0, {
-          fromId: fromBoardId,
-          toId: toBoardId,
-          color: '#999999',
-          strokeWidth: 2,
-          arrowEnd: true,
-        });
-        drawnEdgesRef.current.add(edgeKey);
-      }
+      if (!fromBoardId || !toBoardId) continue;
+
+      const fromObj = actions.getObjectById(fromBoardId);
+      const toObj = actions.getObjectById(toBoardId);
+      if (!fromObj || !toObj) continue;
+
+      const fromCenter = { x: fromObj.x + fromObj.width / 2, y: fromObj.y + fromObj.height / 2 };
+      const toCenter = { x: toObj.x + toObj.width / 2, y: toObj.y + toObj.height / 2 };
+      const toPt = resolveEndpoint(toObj, undefined, fromCenter);
+      const fromPt = resolveEndpoint(fromObj, undefined, toPt);
+
+      actions.createObject('line', fromPt.x, fromPt.y, {
+        points: [fromPt.x, fromPt.y, toPt.x, toPt.y],
+        fromId: fromBoardId,
+        toId: toBoardId,
+        color: '#999999',
+        strokeWidth: 2,
+        arrowEnd: true,
+      });
+      drawnEdgesRef.current.add(edgeKey);
     }
   }, [actions]);
 
