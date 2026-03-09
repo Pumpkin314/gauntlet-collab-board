@@ -11,6 +11,7 @@ export interface ExplorerContextValue {
   confidenceMap: Map<string, Confidence>;
   kgNodeMap: Map<string, string>;
   messages: AgentMessage[];
+  resetExplorer: () => void;
 }
 
 const ExplorerCtx = createContext<ExplorerContextValue | null>(null);
@@ -18,11 +19,13 @@ const ExplorerCtx = createContext<ExplorerContextValue | null>(null);
 export function ExplorerProvider({
   children,
   getViewportCenter,
+  boardId,
 }: {
   children: ReactNode;
   getViewportCenter: () => { x: number; y: number; bounds: { width: number } };
+  boardId?: string;
 }) {
-  const sm = useExplorerStateMachine(getViewportCenter);
+  const sm = useExplorerStateMachine(getViewportCenter, boardId);
   return (
     <ExplorerCtx.Provider value={sm}>
       {children}
