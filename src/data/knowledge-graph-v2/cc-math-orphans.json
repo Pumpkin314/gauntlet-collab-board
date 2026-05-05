@@ -1,0 +1,1170 @@
+[
+  {
+    "id": "0376b604-e8c0-574d-a592-05e1c8916053",
+    "code": "7.SP.C.8.c",
+    "description": "Design and use a simulation to generate frequencies for compound events. *For example, use random digits as a simulation tool to approximate the answer to the question: If 40% of donors have type A blood, what is the probability that it will take at least 4 donors to find one with type A blood?*",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.SP.C",
+    "domainDescription": "Investigate chance processes and develop, use, and evaluate probability models."
+  },
+  {
+    "id": "03ec3f00-3206-545e-9c04-7a0b9da826ab",
+    "code": "HSF-LE.A.1.a",
+    "description": "Prove that linear functions grow by equal differences over equal intervals, and that exponential functions grow by equal factors over equal intervals.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-LE.A",
+    "domainDescription": "Construct and compare linear, quadratic, and exponential models and solve problems"
+  },
+  {
+    "id": "0902b8b2-25b4-538e-b4e5-4233209824e7",
+    "code": "1.NBT.B.2.c",
+    "description": "*Understand that the two digits of a two-digit number represent amounts of tens and ones. Understand the following as special cases:* the numbers 10, 20, 30, 40, 50, 60, 70, 80, 90 refer to one, two, three, four, five, six, seven, eight, or nine tens (and 0 ones).",
+    "gradeLevel": [
+      "1"
+    ],
+    "domain": "1.NBT.B",
+    "domainDescription": "Understand place value."
+  },
+  {
+    "id": "09576c1b-60b6-56c6-bd24-627be3f8dfd5",
+    "code": "HSN-VM.C.9",
+    "description": "(+) Understand that, unlike multiplication of numbers, matrix multiplication for square matrices is not a commutative operation, but still satisfies the associative and distributive properties.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "095e181f-bb20-5bcb-b8e7-d74ca93d96b9",
+    "code": "2.NBT.A.1.a",
+    "description": "*Understand that the three digits of a three-digit number represent amounts of hundreds, tens, and ones; e.g., 706 equals 7 hundreds, 0 tens, and 6 ones. Understand the following as special cases:* 100 can be thought of as a bundle of ten tens \u2014 called a \"hundred.\"",
+    "gradeLevel": [
+      "2"
+    ],
+    "domain": "2.NBT.A",
+    "domainDescription": "Understand place value."
+  },
+  {
+    "id": "0f30eaa6-1afe-51e0-9837-3096a36c3b95",
+    "code": "HSF-LE.A.1.b",
+    "description": "Recognize situations in which one quantity changes at a constant rate per unit interval relative to another.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-LE.A",
+    "domainDescription": "Construct and compare linear, quadratic, and exponential models and solve problems"
+  },
+  {
+    "id": "0fa1390b-5bbc-564e-a6b4-360c0bc46d6e",
+    "code": "4.MD.C.5.b",
+    "description": "*Recognize angles as geometric shapes that are formed wherever two rays share a common endpoint, and understand concepts of angle measurement:* an angle that turns through $n$ one-degree angles is said to have an angle measure of $n$ degrees.",
+    "gradeLevel": [
+      "4"
+    ],
+    "domain": "4.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of angle and measure angles."
+  },
+  {
+    "id": "1025752b-3ab5-58a7-8e7b-005db228b2cb",
+    "code": "HSS-MD.B.5.b",
+    "description": "Evaluate and compare strategies on the basis of expected values. *For example, compare a high-deductible versus a low-deductible automobile insurance policy using various, but reasonable, chances of having a minor or a major accident.*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.B",
+    "domainDescription": "Use probability to evaluate outcomes of decisions"
+  },
+  {
+    "id": "11b5056d-010f-53b9-9bb5-786d3d666e9d",
+    "code": "HSG-SRT.A.1.b",
+    "description": "*Verify experimentally the properties of dilations given by a center and a scale factor:* the dilation of a line segment is longer or shorter in the ratio given by the scale factor.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSG-SRT.A",
+    "domainDescription": "Understand similarity in terms of similarity transformations"
+  },
+  {
+    "id": "11f3a8ac-00bd-5431-84df-0e5a667689ee",
+    "code": "HSN-VM.C.8",
+    "description": "(+) Add, subtract, and multiply matrices of appropriate dimensions.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "15302ca5-a815-555a-9dbe-90e5ef347a3f",
+    "code": "HSF-LE.A.1.c",
+    "description": "Recognize situations in which a quantity grows or decays by a constant percent rate per unit interval relative to another.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-LE.A",
+    "domainDescription": "Construct and compare linear, quadratic, and exponential models and solve problems"
+  },
+  {
+    "id": "168d39ce-cc95-5f7e-9bf9-512dd5ca35a9",
+    "code": "HSN-VM.A.2",
+    "description": "(+) Find the components of a vector by subtracting the coordinates of an initial point from the coordinates of a terminal point.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.A",
+    "domainDescription": "Represent and model with vector quantities."
+  },
+  {
+    "id": "19bac67b-648d-5cb8-8dd5-ecbba72a895c",
+    "code": "8.G.A.1.b",
+    "description": "*Verify experimentally the properties of rotations, reflections, and translations* angles are taken to angles of the same measure.",
+    "gradeLevel": [
+      "8"
+    ],
+    "domain": "8.G.A",
+    "domainDescription": "Understand congruence and similarity using physical models, transparencies, or geometry software."
+  },
+  {
+    "id": "1c776638-5c8c-51f9-852f-3a9e5926343b",
+    "code": "HSS-MD.B.6",
+    "description": "(+) Use probabilities to make fair decisions (e.g., drawing by lots, using a random number generator).",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.B",
+    "domainDescription": "Use probability to evaluate outcomes of decisions"
+  },
+  {
+    "id": "1f783739-69a3-54c4-afae-d6d7ff5f3aaa",
+    "code": "4.MD.C.5.a",
+    "description": "*Recognize angles as geometric shapes that are formed wherever two rays share a common endpoint, and understand concepts of angle measurement:* an angle is measured with reference to a circle with its center at the common endpoint of the rays, by considering the fraction of the circular arc between the points where the two rays intersect the circle. An angle that turns through 1/360 of a circle is called a \"one-degree angle,\" and can be used to measure angles.",
+    "gradeLevel": [
+      "4"
+    ],
+    "domain": "4.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of angle and measure angles."
+  },
+  {
+    "id": "1fe18441-a28a-546f-a068-c74fd0d1ed50",
+    "code": "HSS-MD.A.3",
+    "description": "(+) Develop a probability distribution for a random variable defined for a sample space in which theoretical probabilities can be calculated; find the expected value. *For example, find the theoretical probability distribution for the number of correct answers obtained by guessing on all five questions of a multiple-choice test where each question has four choices, and find the expected grade under various grading schemes.*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.A",
+    "domainDescription": "Calculate expected values and use them to solve problems"
+  },
+  {
+    "id": "21ad12d8-060b-5d3b-8611-ec33db639d19",
+    "code": "HSF-BF.A.1.c",
+    "description": "(+) Compose functions. *For example, if T(y) is the temperature in the atmosphere as a function of height, and h(t) is the height of a weather balloon as a function of time, then T(h(t)) is the temperature at the location of the weather balloon as a function of time.*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-BF.A",
+    "domainDescription": "Build a function that models a relationship between two quantities."
+  },
+  {
+    "id": "221f156a-ae32-52d0-988d-3921394f853a",
+    "code": "HSS-MD.A.1",
+    "description": "(+) Define a random variable for a quantity of interest by assigning a numerical value to each event in a sample space; graph the corresponding probability distribution using the same graphical displays as for data distributions.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.A",
+    "domainDescription": "Calculate expected values and use them to solve problems"
+  },
+  {
+    "id": "22976e80-3d9a-5f2f-94f6-9a6349e8bb1c",
+    "code": "HSF-BF.B.4.a",
+    "description": "Solve an equation of the form f(x) = c for a simple function f that has an inverse and write an expression for the inverse. *For example, $f(x) = 2x^{3}$ or $f(x) = \\frac{(x+1)}{(x\u20141)}$ for $x \\neq 1$.*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-BF.B",
+    "domainDescription": "Build new functions from existing functions"
+  },
+  {
+    "id": "26a356ee-9820-5bed-9f80-3d1664ea51d5",
+    "code": "HSS-MD.A.4",
+    "description": "(+) Develop a probability distribution for a random variable defined for a sample space in which probabilities are assigned empirically; find the expected value. *For example, find a current data distribution on the number of TV sets per household in the United States, and calculate the expected number of sets per household. How many TV sets would you expect to find in 100 randomly selected households?*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.A",
+    "domainDescription": "Calculate expected values and use them to solve problems"
+  },
+  {
+    "id": "29afabcd-7158-5e9a-b98f-9bfc2d045654",
+    "code": "HSS-MD.B.7",
+    "description": "(+) Analyze decisions and strategies using probability concepts (e.g., product testing, medical testing, pulling a hockey goalie at the end of a game).",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.B",
+    "domainDescription": "Use probability to evaluate outcomes of decisions"
+  },
+  {
+    "id": "2b557d73-b8e1-5d4e-9387-0cf0b641908f",
+    "code": "3.NF.A.3.b",
+    "description": "Recognize and generate simple equivalent fractions, e.g., $\\frac{1}{2} = \\frac{2}{4}$, $\\frac{4}{6} = \\frac{2}{3}$). Explain why the fractions are equivalent, e.g., by using a visual fraction model.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.NF.A",
+    "domainDescription": "Develop understanding of fractions as numbers."
+  },
+  {
+    "id": "2ba48d02-35c9-585e-986e-142109ce6a2e",
+    "code": "HSN-VM.B.5.a",
+    "description": "Represent scalar multiplication graphically by scaling vectors and possibly reversing their direction; perform scalar multiplication component-wise, e.g., as $c(v_{x}, v_{y}) = (cv_{x}, cv_{y})$.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "2ed1d2aa-c3f0-551d-9ceb-c1931c1e432a",
+    "code": "3.MD.A.1",
+    "description": "Tell and write time to the nearest minute and measure time intervals in minutes. Solve word problems involving addition and subtraction of time intervals in minutes, e.g., by representing the problem on a number line diagram.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.MD.A",
+    "domainDescription": "Solve problems involving measurement and estimation of intervals of time, liquid volumes, and masses of objects."
+  },
+  {
+    "id": "2f43387e-8a89-5d5d-8a2e-9aa7cbcba332",
+    "code": "1.NBT.B.2.a",
+    "description": "*Understand that the two digits of a two-digit number represent amounts of tens and ones. Understand the following as special cases:* 10 can be thought of as a bundle of ten ones \u2014 called a \"ten.\"",
+    "gradeLevel": [
+      "1"
+    ],
+    "domain": "1.NBT.B",
+    "domainDescription": "Understand place value."
+  },
+  {
+    "id": "2f598f07-ccbb-52b7-a961-5639dd557c44",
+    "code": "3.NF.A.2.b",
+    "description": "Represent a fraction $\\frac{a}{b}$ on a number line diagram by marking off a lengths $\\frac{1}{b}$ from 0. Recognize that the resulting interval has size $\\frac{a}{b}$ and that its endpoint locates the number $\\frac{a}{b}$ on the number line.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.NF.A",
+    "domainDescription": "Develop understanding of fractions as numbers."
+  },
+  {
+    "id": "35819393-a4e8-5f4a-91af-970b1bb513c3",
+    "code": "3.MD.C.5.a",
+    "description": "A square with side length 1 unit, called \"a unit square,\" is said to have \"one square unit\" of area, and can be used to measure area.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of area and relate area to multiplication and to addition."
+  },
+  {
+    "id": "3bf66623-814f-508e-970f-78a756951800",
+    "code": "5.NF.B.4.a",
+    "description": "Interpret the product $(\\frac{a}{b}) \\times q$ as a parts of a partition of $q$ into b equal parts; equivalently, as the result of a sequence of operations $a \\times q \\div b$. *For example, use a visual fraction model to show $(\\frac{2}{3}) \\times 4 = 8 \\div 3$, and create a story context for this equation. Do the same with $(\\frac{2}{3}) \\times (\\frac{4}{5}) = \\frac{8}{15}$. (In general, $(\\frac{a}{b}) \\times (\\frac{c}{d}) = \\frac{ac}{bd}$.)*",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "3e17c849-3f86-59b9-876c-98b5beda6735",
+    "code": "7.RP.A.2.a",
+    "description": "Decide whether two quantities are in a proportional relationship, e.g., by testing for equivalent ratios in a table or graphing on a coordinate plane and observing whether the graph is a straight line through the origin.",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.RP.A",
+    "domainDescription": "Analyze proportional relationships and use them to solve real-world and mathematical problems."
+  },
+  {
+    "id": "3e9d67f8-d3da-5f48-8fcc-b288a5c3fa3a",
+    "code": "HSF-BF.B.4.b",
+    "description": "(+) Verify by composition that one function is the inverse of another.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-BF.B",
+    "domainDescription": "Build new functions from existing functions"
+  },
+  {
+    "id": "416ba9ff-039f-5a97-bf02-ff55407f94fa",
+    "code": "1.NBT.B.2.b",
+    "description": "*Understand that the two digits of a two-digit number represent amounts of tens and ones. Understand the following as special cases:* the numbers from 11 to 19 are composed of a ten and one, two, three, four, five, six, seven, eight, or nine ones.",
+    "gradeLevel": [
+      "1"
+    ],
+    "domain": "1.NBT.B",
+    "domainDescription": "Understand place value."
+  },
+  {
+    "id": "44193d7a-42a0-5bde-ae59-16c14eb6229e",
+    "code": "K.CC.B.4",
+    "description": "Understand the relationship between numbers and quantities; connect counting to cardinality.",
+    "gradeLevel": [
+      "K"
+    ],
+    "domain": "K.CC.B",
+    "domainDescription": "Count to tell the number of objects."
+  },
+  {
+    "id": "45845725-c424-5979-935e-799020ffdbdb",
+    "code": "8.EE.C.8.a",
+    "description": "Understand that solutions to a system of two linear equations in two variables correspond to points of intersection of their graphs, because points of intersection satisfy both equations simultaneously.",
+    "gradeLevel": [
+      "8"
+    ],
+    "domain": "8.EE.C",
+    "domainDescription": "Analyze and solve linear equations and pairs of simultaneous linear equations."
+  },
+  {
+    "id": "4b88f541-86f8-53c9-9f17-156b1ad9c754",
+    "code": "HSN-VM.B.4",
+    "description": "(+) Add and subtract vectors.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "4c04378f-d4bd-54de-a596-ace8c45f2f81",
+    "code": "HSN-VM.A.1",
+    "description": "(+) Recognize vector quantities as having both magnitude and direction. Represent vector quantities by directed line segments, and use appropriate symbols for vectors and their magnitudes (e.g., v, |v|, ||v||, v).",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.A",
+    "domainDescription": "Represent and model with vector quantities."
+  },
+  {
+    "id": "4c181bcc-caa5-51e7-a90f-0a74f0c5c33f",
+    "code": "HSS-MD.B.5",
+    "description": "(+) Weigh the possible outcomes of a decision by assigning probabilities to payoff values and finding expected values.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.B",
+    "domainDescription": "Use probability to evaluate outcomes of decisions"
+  },
+  {
+    "id": "4cfca3f8-8bac-5c0b-a255-a7f029f24c7a",
+    "code": "HSS-MD.B.5.a",
+    "description": "Find the expected payoff for a game of chance. *For example, find the expected winnings from a state lottery ticket or a game at a fast-food restaurant.*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.B",
+    "domainDescription": "Use probability to evaluate outcomes of decisions"
+  },
+  {
+    "id": "4faa6aea-ae53-5dea-acc3-9dd39628b49b",
+    "code": "HSA-SSE.A.1.a",
+    "description": "Interpret parts of an expression, such as terms, factors, and coefficients.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSA-SSE.A",
+    "domainDescription": "Interpret the structure of expressions"
+  },
+  {
+    "id": "57058c37-ea9f-5c32-a382-d4dc74bae716",
+    "code": "6.NS.C.7",
+    "description": "Understand ordering and absolute value of rational numbers.",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.NS.C",
+    "domainDescription": "Apply and extend previous understandings of numbers to the system of rational numbers."
+  },
+  {
+    "id": "57da55cb-b83e-5197-bc09-851845f2d6a8",
+    "code": "6.SP.B.5.a",
+    "description": "*Summarize numerical data sets in relation to their context, such as by* reporting the number of observations.",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.SP.B",
+    "domainDescription": "Summarize and describe distributions."
+  },
+  {
+    "id": "580f8e12-4fc7-545e-a830-5ccc27012edb",
+    "code": "HSN-VM.C.12",
+    "description": "(+) Work with $2 \\times 2$ matrices as transformations of the plane, and interpret the absolute value of the determinant in terms of area.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "5e384a5a-405c-589b-b80f-81ab08cc5278",
+    "code": "6.SP.B.5.d",
+    "description": "*Summarize numerical data sets in relation to their context, such as by* relating the choice of measures of center and variability to the shape of the data distribution and the context in which the data were gathered.",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.SP.B",
+    "domainDescription": "Summarize and describe distributions."
+  },
+  {
+    "id": "5edb49d2-788d-5071-9fd1-1d156a823933",
+    "code": "HSN-VM.C.7",
+    "description": "(+) Multiply matrices by scalars to produce new matrices, e.g., as when all of the payoffs in a game are doubled.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "5f11bbee-0514-592b-bc96-61ebf6fcec7f",
+    "code": "5.NBT.A.3.b",
+    "description": "Compare two decimals to thousandths based on meanings of the digits in each place, using >, =, and < symbols to record the results of comparisons.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NBT.A",
+    "domainDescription": "Understand the place value system."
+  },
+  {
+    "id": "5fa6d6be-71b8-5f87-aa8b-c1ed9e3cf9b0",
+    "code": "3.NF.A.3.a",
+    "description": "Understand two fractions as equivalent (equal) if they are the same size, or the same point on a number line.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.NF.A",
+    "domainDescription": "Develop understanding of fractions as numbers."
+  },
+  {
+    "id": "624141af-7924-5e45-a0f6-1333bc55ec88",
+    "code": "HSN-VM.B.4.b",
+    "description": "Given two vectors in magnitude and direction form, determine the magnitude and direction of their sum.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "64ba0f2e-487e-5938-867f-576ee03619ea",
+    "code": "3.NF.A.3.d",
+    "description": "Compare two fractions with the same numerator or the same denominator by reasoning about their size. Recognize that comparisons are valid only when the two fractions refer to the same whole. Record the results of comparisons with the symbols >, =, or <, and justify the conclusions, e.g., by using a visual fraction model.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.NF.A",
+    "domainDescription": "Develop understanding of fractions as numbers."
+  },
+  {
+    "id": "64ebfe7e-0c10-57d4-a609-615ffba60411",
+    "code": "K.CC.A.3",
+    "description": "Write numbers from 0 to 20. Represent a number of objects with a written numeral 0-20 (with 0 representing a count of no objects).",
+    "gradeLevel": [
+      "K"
+    ],
+    "domain": "K.CC.A",
+    "domainDescription": "Know number names and the count sequence."
+  },
+  {
+    "id": "6eb96849-b17d-56ab-843f-2bef3d095405",
+    "code": "5.NBT.A.3.a",
+    "description": "Read and write decimals to thousandths using base-ten numerals, number names, and expanded form, e.g., $347.392 = 3 \\times 100 + 4 \\times 10 + 7 \\times 1 + 3 \\times (\\frac{1}{10}) + 9 \\times (\\frac{1}{100}) + 2 \\times (\\frac{1}{1000})$.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NBT.A",
+    "domainDescription": "Understand the place value system."
+  },
+  {
+    "id": "761bc2ba-93b5-5de4-9ec5-0c98fac26303",
+    "code": "5.NF.B.5.b",
+    "description": "*Interpret multiplication as scaling (resizing), by* explaining why multiplying a given number by a fraction greater than 1 results in a product greater than the given number (recognizing multiplication by whole numbers greater than 1 as a familiar case); explaining why multiplying a given number by a fraction less than 1 results in a product smaller than the given number; and relating the principle of fraction equivalence $\\frac{a}{b} = \\frac{(n \\times a)}{(n \\times b)}$ to the effect of multiplying $\\frac{a}{b}$ by 1.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "79005d15-215f-5257-84af-50f1809c6129",
+    "code": "HSF-IF.C.7",
+    "description": "Graph functions expressed symbolically and show key features of the graph, by hand in simple cases and using technology for more complicated cases.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-IF.C",
+    "domainDescription": "Analyze functions using different representations"
+  },
+  {
+    "id": "7a305b19-df0f-54de-90c0-b6af56fbd293",
+    "code": "6.EE.A.2.a",
+    "description": "Write expressions that record operations with numbers and with letters standing for numbers. *For example, express the calculation \"Subtract y from 5\" as 5 - y.*",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.EE.A",
+    "domainDescription": "Apply and extend previous understandings of arithmetic to algebraic expressions."
+  },
+  {
+    "id": "7a5250d4-a635-5b90-8702-d1d3cc2214e1",
+    "code": "HSA-SSE.A.1.b",
+    "description": "Interpret complicated expressions by viewing one or more of their parts as a single entity. *For example, interpret $P(1+r)^{n}$ as the product of P and a factor not depending on P.*",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSA-SSE.A",
+    "domainDescription": "Interpret the structure of expressions"
+  },
+  {
+    "id": "7ef75c23-5d70-5765-831c-a9e227b95db7",
+    "code": "3.MD.C.7",
+    "description": "Relate area to the operations of multiplication and addition.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of area and relate area to multiplication and to addition."
+  },
+  {
+    "id": "80133c27-fadc-5e80-bb7a-1668cb884ec8",
+    "code": "5.MD.C.3.b",
+    "description": "A solid figure which can be packed without gaps or overlaps using n unit cubes is said to have a volume of n cubic units.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of volume and relate volume to multiplication and to addition."
+  },
+  {
+    "id": "82301928-3823-5cf8-a51f-c407011803c7",
+    "code": "3.MD.C.5.b",
+    "description": "A plane figure which can be covered without gaps or overlaps by n unit squares is said to have an area of n square units.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of area and relate area to multiplication and to addition."
+  },
+  {
+    "id": "82fdfb13-e8ad-5a79-b745-978b9102003d",
+    "code": "7.RP.A.2.c",
+    "description": "Represent proportional relationships by equations. *For example, if total cost t is proportional to the number n of items purchased at a constant price p, the relationship between the total cost and the number of items can be expressed as t = pn.*",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.RP.A",
+    "domainDescription": "Analyze proportional relationships and use them to solve real-world and mathematical problems."
+  },
+  {
+    "id": "905232e2-a99d-5d43-8aba-19bd6f182731",
+    "code": "6.SP.B.5.c",
+    "description": "*Summarize numerical data sets in relation to their context, such as by* giving quantitative measures of center (median and/or mean) and variability (interquartile range and/or mean absolute deviation), as well as describing any overall pattern and any striking deviations from the overall pattern with reference to the context in which the data were gathered.",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.SP.B",
+    "domainDescription": "Summarize and describe distributions."
+  },
+  {
+    "id": "9229b492-ed22-5985-9d16-f00e542581a1",
+    "code": "7.SP.C.8.b",
+    "description": "Represent sample spaces for compound events using methods such as organized lists, tables and tree diagrams. For an event described in everyday language (e.g., \"rolling double sixes\"), identify the outcomes in the sample space which compose the event.",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.SP.C",
+    "domainDescription": "Investigate chance processes and develop, use, and evaluate probability models."
+  },
+  {
+    "id": "923c0d07-77d4-5b5d-9fd3-00ec0854db43",
+    "code": "7.SP.C.7.b",
+    "description": "Develop a probability model (which may not be uniform) by observing frequencies in data generated from a chance process. *For example, find the approximate probability that a spinning penny will land heads up or that a tossed paper cup will land open-end down. Do the outcomes for the spinning penny appear to be equally likely based on the observed frequencies?*",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.SP.C",
+    "domainDescription": "Investigate chance processes and develop, use, and evaluate probability models."
+  },
+  {
+    "id": "972e8e15-cee5-5ad4-9940-ab4128a5c1c4",
+    "code": "3.NF.A.2.a",
+    "description": "Represent a fraction $\\frac{1}{b}$ on a number line diagram by defining the interval from 0 to 1 as the whole and partitioning it into b equal parts. Recognize that each part has size $\\frac{1}{b}$ and that the endpoint of the part based at 0 locates the number $\\frac{1}{b}$ on the number line.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.NF.A",
+    "domainDescription": "Develop understanding of fractions as numbers."
+  },
+  {
+    "id": "9967da78-11f9-5439-9361-383824b20c1e",
+    "code": "HSF-IF.C.8",
+    "description": "Write a function defined by an expression in different but equivalent forms to reveal and explain different properties of the function.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-IF.C",
+    "domainDescription": "Analyze functions using different representations"
+  },
+  {
+    "id": "9ad6b0fc-e482-56e9-9d72-9f3e0b8a6f67",
+    "code": "HSS-ID.B.6",
+    "description": "Represent data on two quantitative variables on a scatter plot, and describe how the variables are related.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-ID.B",
+    "domainDescription": "Summarize, represent, and interpret data on two categorical and quantitative variables"
+  },
+  {
+    "id": "a38faffa-9c52-51b3-b934-6eb61a78d3d5",
+    "code": "6.EE.A.2.c",
+    "description": "Evaluate expressions at specific values of their variables. Include expressions that arise from formulas used in real-world problems. Perform arithmetic operations, including those involving whole-number exponents, in the conventional order when there are no parentheses to specify a particular order (Order of Operations). *For example, use the formulas $V = s^{3}$ and $A = 6 s^2$ to find the volume and surface area of a cube with sides of length $s = \\frac{1}{2}$.*",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.EE.A",
+    "domainDescription": "Apply and extend previous understandings of arithmetic to algebraic expressions."
+  },
+  {
+    "id": "a6cedb8a-9038-5ef0-9dff-21abaf8bc500",
+    "code": "HSN-VM.B.4.a",
+    "description": "Add vectors end-to-end, component-wise, and by the parallelogram rule. Understand that the magnitude of a sum of two vectors is typically not the sum of the magnitudes.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "a8ada090-c86a-5050-9e2f-858e1e53e4c2",
+    "code": "7.SP.C.7.a",
+    "description": "Develop a uniform probability model by assigning equal probability to all outcomes, and use the model to determine probabilities of events. *For example, if a student is selected at random from a class, find the probability that Jane will be selected and the probability that a girl will be selected.*",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.SP.C",
+    "domainDescription": "Investigate chance processes and develop, use, and evaluate probability models."
+  },
+  {
+    "id": "aaa67467-b679-59a8-bbeb-6706232a0715",
+    "code": "5.NF.B.7.b",
+    "description": "Interpret division of a whole number by a unit fraction, and compute such quotients. *For example, create a story context for $4 \\div (\\frac{1}{5})$, and use a visual fraction model to show the quotient. Use the relationship between multiplication and division to explain that $4 \\div (\\frac{1}{5}) = 20$ because $20 \u00d7 (\\frac{1}{5}) = 4$.*",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "ab3f9261-b89d-58c9-aae6-ab8312d688c7",
+    "code": "8.G.A.1.a",
+    "description": "*Verify experimentally the properties of rotations, reflections, and translations:* lines are taken to lines, and line segments to line segments of the same length.",
+    "gradeLevel": [
+      "8"
+    ],
+    "domain": "8.G.A",
+    "domainDescription": "Understand congruence and similarity using physical models, transparencies, or geometry software."
+  },
+  {
+    "id": "abd823d6-5de6-5cf9-967d-26e391c62794",
+    "code": "HSA-SSE.B.3",
+    "description": "Choose and produce an equivalent form of an expression to reveal and explain properties of the quantity represented by the expression.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSA-SSE.B",
+    "domainDescription": "Write expressions in equivalent forms to solve problems"
+  },
+  {
+    "id": "ad077157-124f-54a3-a4b3-29d85affcbb1",
+    "code": "6.EE.A.2.b",
+    "description": "Identify parts of an expression using mathematical terms (sum, term, product, factor, quotient, coefficient); view one or more parts of an expression as a single entity. *For example, describe the expression $2(8 + 7)$ as a product of two factors; view (8 + 7) as both a single entity and a sum of two terms.*",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.EE.A",
+    "domainDescription": "Apply and extend previous understandings of arithmetic to algebraic expressions."
+  },
+  {
+    "id": "b113286f-aeb0-5622-9a4e-8ede8ff50644",
+    "code": "HSN-VM.C.6",
+    "description": "(+) Use matrices to represent and manipulate data, e.g., to represent payoffs or incidence relationships in a network.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "b20ef024-5651-5f61-bc0e-bd344a169b14",
+    "code": "6.NS.C.6",
+    "description": "Understand a rational number as a point on the number line. Extend number line diagrams and coordinate axes familiar from previous grades to represent points on the line and in the plane with negative number coordinates.",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.NS.C",
+    "domainDescription": "Apply and extend previous understandings of numbers to the system of rational numbers."
+  },
+  {
+    "id": "b3472952-912c-56c8-af30-6a9d1f92c649",
+    "code": "HSA-REI.B.4",
+    "description": "Solve quadratic equations in one variable.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSA-REI.B",
+    "domainDescription": "Solve equations and inequalities in one variable"
+  },
+  {
+    "id": "bddca711-2602-5f9b-af13-1cbd5abc07fc",
+    "code": "5.MD.C.3.a",
+    "description": "A cube with side length 1 unit, called a \"unit cube,\" is said to have \"one cubic unit\" of volume, and can be used to measure volume.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of volume and relate volume to multiplication and to addition."
+  },
+  {
+    "id": "be76c654-5867-582e-8294-4efc56d1d953",
+    "code": "HSN-VM.B.5",
+    "description": "(+) Multiply a vector by a scalar.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "c2de3eda-fcb5-5b4e-9bba-785a06e4201d",
+    "code": "HSS-MD.A.2",
+    "description": "(+) Calculate the expected value of a random variable; interpret it as the mean of the probability distribution.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSS-MD.A",
+    "domainDescription": "Calculate expected values and use them to solve problems"
+  },
+  {
+    "id": "c41f2797-9dda-5fcd-b24c-d75191f4a5b0",
+    "code": "6.SP.B.5.b",
+    "description": "*Summarize numerical data sets in relation to their context, such as by* describing the nature of the attribute under investigation, including how it was measured and its units of measurement.",
+    "gradeLevel": [
+      "6"
+    ],
+    "domain": "6.SP.B",
+    "domainDescription": "Summarize and describe distributions."
+  },
+  {
+    "id": "c43e6ef5-7773-5750-b5db-b053515f04fa",
+    "code": "HSN-VM.B.5.b",
+    "description": "Compute the magnitude of a scalar multiple cv using ||cv|| = |c|v. Compute the direction of cv knowing that when $|c|v \\neq 0$, the direction of cv is either along v (for c > 0) or against v (for c < 0).",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "c7c0e167-bb2b-525b-89f7-0bea1608513c",
+    "code": "8.EE.C.8.c",
+    "description": "Solve real-world and mathematical problems leading to two linear equations in two variables. *For example, given coordinates for two pairs of points, determine whether the line through the first pair of points intersects the line through the second pair.*",
+    "gradeLevel": [
+      "8"
+    ],
+    "domain": "8.EE.C",
+    "domainDescription": "Analyze and solve linear equations and pairs of simultaneous linear equations."
+  },
+  {
+    "id": "c84cc6c5-f504-5d78-9e5c-0095f520bd27",
+    "code": "5.NF.B.7.a",
+    "description": "Interpret division of a unit fraction by a non-zero whole number, and compute such quotients. *For example, create a story context for $(\\frac{1}{3}) \\div 4$, and use a visual fraction model to show the quotient. Use the relationship between multiplication and division to explain that $(\\frac{1}{3}) \\div 4 = \\frac{1}{12}$ because $(\\frac{1}{12}) \\times 4 = \\frac{1}{3}$.*",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "c9ff753e-76b3-59a4-8562-32487259a11e",
+    "code": "HSA-REI.C.9",
+    "description": "(+) Find the inverse of a matrix if it exists and use it to solve systems of linear equations (using technology for matrices of dimension $3 \\times 3$ or greater).",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSA-REI.C",
+    "domainDescription": "Solve systems of equations"
+  },
+  {
+    "id": "cb75ba2c-43ef-5c13-87a8-2990a977ab03",
+    "code": "HSF-BF.A.1",
+    "description": "Write a function that describes a relationship between two quantities.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-BF.A",
+    "domainDescription": "Build a function that models a relationship between two quantities."
+  },
+  {
+    "id": "cf6eacf0-856c-5b47-8ede-af6573a5ce4e",
+    "code": "7.RP.A.2.b",
+    "description": "Identify the constant of proportionality (unit rate) in tables, graphs, equations, diagrams, and verbal descriptions of proportional relationships.",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.RP.A",
+    "domainDescription": "Analyze proportional relationships and use them to solve real-world and mathematical problems."
+  },
+  {
+    "id": "d0b7d56d-8184-54d3-b227-a482cb974831",
+    "code": "5.NF.B.4.b",
+    "description": "Find the area of a rectangle with fractional side lengths by tiling it with unit squares of the appropriate unit fraction side lengths, and show that the area is the same as would be found by multiplying the side lengths. Multiply fractional side lengths to find areas of rectangles, and represent fraction products as rectangular areas.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "da7b7697-3332-5d0d-848e-61baceccfc7d",
+    "code": "HSG-SRT.A.1.a",
+    "description": "*Verify experimentally the properties of dilations given by a center and a scale factor:* a dilation takes a line not passing through the center of the dilation to a parallel line, and leaves a line passing through the center unchanged.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSG-SRT.A",
+    "domainDescription": "Understand similarity in terms of similarity transformations"
+  },
+  {
+    "id": "e0242380-15ee-5bd3-898c-0ccc96f9e653",
+    "code": "HSN-VM.A.3",
+    "description": "(+) Solve problems involving velocity and other quantities that can be represented by vectors.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.A",
+    "domainDescription": "Represent and model with vector quantities."
+  },
+  {
+    "id": "e1410cc7-0283-5fd3-ab82-94d9886401ae",
+    "code": "5.NF.B.7.c",
+    "description": "Solve real world problems involving division of unit fractions by non-zero whole numbers and division of whole numbers by unit fractions, e.g., by using visual fraction models and equations to represent the problem. *For example, how much chocolate will each person get if 3 people share $\\frac{1}{2}$ lb of chocolate equally? How many $\\frac{1}{3}$-cup servings are in 2 cups of raisins?*",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "e238d71c-ca43-5243-9f09-11a396507a45",
+    "code": "HSN-VM.B.4.c",
+    "description": "Understand vector subtraction v - w as v + (-w), where -w is the additive inverse of w, with the same magnitude as w and pointing in the opposite direction. Represent vector subtraction graphically by connecting the tips in the appropriate order, and perform vector subtraction component-wise.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.B",
+    "domainDescription": "Perform operations on vectors."
+  },
+  {
+    "id": "e50d6501-3273-5633-b3c0-2483b7720e59",
+    "code": "HSN-VM.C.10",
+    "description": "(+) Understand that the zero and identity matrices play a role in matrix addition and multiplication similar to the role of 0 and 1 in the real numbers. The determinant of a square matrix is nonzero if and only if the matrix has a multiplicative inverse.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "e62d8be0-2146-5b5a-800d-db76bf1d8ca9",
+    "code": "5.MD.C.5",
+    "description": "Relate volume to the operations of multiplication and addition and solve real world and mathematical problems involving volume.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.MD.C",
+    "domainDescription": "Geometric measurement: understand concepts of volume and relate volume to multiplication and to addition."
+  },
+  {
+    "id": "e946b36d-784a-5254-bcc1-14cd0f8c2877",
+    "code": "HSA-REI.C.8",
+    "description": "(+) Represent a system of linear equations as a single matrix equation in a vector variable.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSA-REI.C",
+    "domainDescription": "Solve systems of equations"
+  },
+  {
+    "id": "e9c6bbc4-24c1-565f-a4d4-c1c505f59b41",
+    "code": "4.NF.B.3",
+    "description": "Understand a fraction $\\frac{a}{b}$ with a > 1 as a sum of fractions $\\frac{1}{b}$.",
+    "gradeLevel": [
+      "4"
+    ],
+    "domain": "4.NF.B",
+    "domainDescription": "Build fractions from unit fractions by applying and extending previous understandings of operations on whole numbers."
+  },
+  {
+    "id": "edc37a90-fbc4-5141-a96c-743419e57327",
+    "code": "8.EE.C.8.b",
+    "description": "Solve systems of two linear equations in two variables algebraically, and estimate solutions by graphing the equations. Solve simple cases by inspection. *For example, 3x + 2y = 5 and 3x + 2y = 6 have no solution because 3x + 2y cannot simultaneously be 5 and 6.*",
+    "gradeLevel": [
+      "8"
+    ],
+    "domain": "8.EE.C",
+    "domainDescription": "Analyze and solve linear equations and pairs of simultaneous linear equations."
+  },
+  {
+    "id": "ee0bf2ee-fcf2-58cc-b151-06eefc3a7a74",
+    "code": "7.RP.A.2.d",
+    "description": "Explain what a point (x, y) on the graph of a proportional relationship means in terms of the situation, with special attention to the points (0, 0) and (1, r) where r is the unit rate.",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.RP.A",
+    "domainDescription": "Analyze proportional relationships and use them to solve real-world and mathematical problems."
+  },
+  {
+    "id": "ef001e22-4544-5436-a7bd-d6aa4eab5859",
+    "code": "3.NF.A.3.c",
+    "description": "Express whole numbers as fractions, and recognize fractions that are equivalent to whole numbers.",
+    "gradeLevel": [
+      "3"
+    ],
+    "domain": "3.NF.A",
+    "domainDescription": "Develop understanding of fractions as numbers."
+  },
+  {
+    "id": "f2a92de7-8237-5af3-aa9c-cb854c54a493",
+    "code": "8.G.A.1.c",
+    "description": "*Verify experimentally the properties of rotations, reflections, and translations* parallel lines are taken to parallel lines.",
+    "gradeLevel": [
+      "8"
+    ],
+    "domain": "8.G.A",
+    "domainDescription": "Understand congruence and similarity using physical models, transparencies, or geometry software."
+  },
+  {
+    "id": "f4107acc-3e46-5969-9e64-345de0dc7b61",
+    "code": "5.NF.B.5.a",
+    "description": "*Interpret multiplication as scaling (resizing), by* comparing the size of a product to the size of one factor on the basis of the size of the other factor, without performing the indicated multiplication.",
+    "gradeLevel": [
+      "5"
+    ],
+    "domain": "5.NF.B",
+    "domainDescription": "Apply and extend previous understandings of multiplication and division to multiply and divide fractions."
+  },
+  {
+    "id": "f68db5d9-200e-5783-a9cb-22313d6c2cfd",
+    "code": "HSF-BF.B.4.d",
+    "description": "(+) Produce an invertible function from a non-invertible function by restricting the domain.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-BF.B",
+    "domainDescription": "Build new functions from existing functions"
+  },
+  {
+    "id": "f6e3db4c-3f7d-5660-a52b-18b3941e9abc",
+    "code": "HSF-BF.B.4.c",
+    "description": "(+) Read values of an inverse function from a graph or a table, given that the function has an inverse.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSF-BF.B",
+    "domainDescription": "Build new functions from existing functions"
+  },
+  {
+    "id": "f9d1890b-e760-5b31-92be-6aea8ea5c016",
+    "code": "7.SP.C.8.a",
+    "description": "Understand that, just as with simple events, the probability of a compound event is the fraction of outcomes in the sample space for which the compound event occurs.",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.SP.C",
+    "domainDescription": "Investigate chance processes and develop, use, and evaluate probability models."
+  },
+  {
+    "id": "fb1fea17-e2c8-5e49-b0cb-eb3e40a0dff6",
+    "code": "HSN-VM.C.11",
+    "description": "(+) Multiply a vector (regarded as a matrix with one column) by a matrix of suitable dimensions to produce another vector. Work with matrices as transformations of vectors.",
+    "gradeLevel": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "domain": "HSN-VM.C",
+    "domainDescription": "Perform operations on matrices and use matrices in applications."
+  },
+  {
+    "id": "fbff39a6-0075-5afa-b997-bb365b23902d",
+    "code": "7.NS.A.1",
+    "description": "Apply and extend previous understandings of addition and subtraction to add and subtract rational numbers; represent addition and subtraction on a horizontal or vertical number line diagram.",
+    "gradeLevel": [
+      "7"
+    ],
+    "domain": "7.NS.A",
+    "domainDescription": "Apply and extend previous understandings of operations with fractions to add, subtract, multiply, and divide rational numbers."
+  },
+  {
+    "id": "fd202998-949a-5f67-b651-74d1ab27fde9",
+    "code": "2.NBT.A.1.b",
+    "description": "*Understand that the three digits of a three-digit number represent amounts of hundreds, tens, and ones; e.g., 706 equals 7 hundreds, 0 tens, and 6 ones. Understand the following as special cases:* the numbers 100, 200, 300, 400, 500, 600, 700, 800, 900 refer to one, two, three, four, five, six, seven, eight, or nine hundreds (and 0 tens and 0 ones).",
+    "gradeLevel": [
+      "2"
+    ],
+    "domain": "2.NBT.A",
+    "domainDescription": "Understand place value."
+  }
+]

@@ -50,3 +50,8 @@ debug_screenshots/
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Knowledge graph raw data (>100MB, exceeds GitHub file size limit)
+src/data/knowledge-graph/nodes.jsonl
+src/data/knowledge-graph/relationships.jsonl
+src/data/knowledge-graph/cc_math_rels_border.jsonl

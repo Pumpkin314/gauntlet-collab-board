@@ -1,0 +1,15 @@
+{
+  "name": "bayesian-diagnostic",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "tsx diagnostic.ts",
+    "start:defaults": "tsx diagnostic.ts --defaults",
+    "test": "tsx test-engine.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}
